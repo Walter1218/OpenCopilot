@@ -37,13 +37,15 @@ class ModelScannerWorker(QThread):
                 result = subprocess.run(["openclaw", "agents", "list", "--json"], capture_output=True, text=True)
                 output = result.stdout
                 json_start = output.find('[')
-                if json_start != -1:
-                    data = json.loads(output[json_start:])
+                json_end = output.rfind(']')
+                if json_start != -1 and json_end != -1 and json_end > json_start:
+                    data = json.loads(output[json_start:json_end+1])
                     models = [agent.get("name", agent.get("id")) for agent in data if "id" in agent]
                     self.api_base = "openclaw-cli" # 更新标志
                     self.finished.emit(models, "")
                     return
             except Exception as e:
+                print(f"OpenClaw CLI probe failed: {e}")
                 pass # 回退到普通的 HTTP 探测
                 
         models = []

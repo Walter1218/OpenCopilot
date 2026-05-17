@@ -10,12 +10,59 @@ from pynput import mouse
 
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, 
-    QLabel, QFrame, QGraphicsDropShadowEffect, QPushButton, QDialog, QRadioButton, QLineEdit, QButtonGroup, QMessageBox, QTabWidget
+    QLabel, QFrame, QGraphicsDropShadowEffect, QPushButton, QDialog, QRadioButton, QLineEdit, QButtonGroup, QMessageBox, QTabWidget, QComboBox
 )
+import httpx
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QTimer, QRect, QPointF, QEvent
 from PyQt6.QtGui import QCursor, QColor, QPainter, QPen
 
 from llm_provider import ProviderFactory, load_config, save_config
+
+# ==========================================
+# 后台模型探测线程
+# ==========================================
+class ModelScannerWorker(QThread):
+    scan_finished = pyqtSignal(list, str)  # 返回模型列表或错误信息
+
+    def __init__(self, api_base):
+        super().__init__()
+        self.api_base = api_base.strip().rstrip('/')
+
+    def run(self):
+        models = []
+        error_msg = ""
+        try:
+            with httpx.Client(timeout=5.0, verify=False) as client:
+                # 策略 1: 尝试标准的 OpenAI 接口 /models
+                try:
+                    url = f"{self.api_base}/models"
+                    response = client.get(url)
+                    if response.status_code == 200:
+                        data = response.json()
+                        if "data" in data:
+                            models = [m.get("id") for m in data["data"] if "id" in m]
+                except Exception as e:
+                    pass
+
+                # 策略 2: 如果为空，尝试 Ollama 原生接口 /api/tags
+                if not models:
+                    try:
+                        base_url = self.api_base.replace('/v1', '')
+                        url = f"{base_url}/api/tags"
+                        response = client.get(url)
+                        if response.status_code == 200:
+                            data = response.json()
+                            if "models" in data:
+                                models = [m.get("name") for m in data["models"] if "name" in m]
+                    except Exception as e:
+                        pass
+                
+                if not models:
+                    error_msg = "连接成功，但未扫描到任何模型。请确保第三方智能体已加载模型。"
+        except Exception as e:
+            error_msg = f"连接失败: {str(e)}\n请检查 API Base URL 是否正确以及服务是否启动。"
+
+        self.scan_finished.emit(models, error_msg)
 
 # ==========================================
 # 设置对话框 UI
@@ -52,14 +99,21 @@ class SettingsDialog(QDialog):
         local_layout.setContentsMargins(20, 0, 0, 10)
         
         local_layout.addWidget(QLabel("API Base URL:"))
+        
+        api_layout = QHBoxLayout()
         self.input_api_base = QLineEdit()
         self.input_api_base.setPlaceholderText("例如: http://localhost:11434/v1")
-        local_layout.addWidget(self.input_api_base)
+        self.btn_scan = QPushButton("🔍 探测模型")
+        self.btn_scan.clicked.connect(self.start_scan)
+        api_layout.addWidget(self.input_api_base)
+        api_layout.addWidget(self.btn_scan)
+        local_layout.addLayout(api_layout)
         
         local_layout.addWidget(QLabel("Model Name:"))
-        self.input_model = QLineEdit()
-        self.input_model.setPlaceholderText("例如: hermes 或 openclaw")
-        local_layout.addWidget(self.input_model)
+        self.combo_model = QComboBox()
+        self.combo_model.setEditable(True)  # 允许手动输入以防探测不到
+        self.combo_model.setPlaceholderText("例如: hermes 或 openclaw")
+        local_layout.addWidget(self.combo_model)
         
         layout.addWidget(self.local_config_frame)
         
@@ -88,8 +142,37 @@ class SettingsDialog(QDialog):
             self.radio_minimax.setChecked(True)
             
         self.input_api_base.setText(self.config.get("local_api_base", "http://localhost:11434/v1"))
-        self.input_model.setText(self.config.get("local_model", "llama3"))
+        
+        saved_model = self.config.get("local_model", "")
+        if saved_model:
+            self.combo_model.addItem(saved_model)
+            self.combo_model.setCurrentText(saved_model)
+            
         self.update_ui_state()
+
+    def start_scan(self):
+        api_base = self.input_api_base.text().strip()
+        if not api_base:
+            QMessageBox.warning(self, "警告", "请先输入 API Base URL")
+            return
+            
+        self.btn_scan.setEnabled(False)
+        self.btn_scan.setText("探测中...")
+        
+        self.scanner = ModelScannerWorker(api_base)
+        self.scanner.scan_finished.connect(self.on_scan_finished)
+        self.scanner.start()
+
+    def on_scan_finished(self, models, error_msg):
+        self.btn_scan.setEnabled(True)
+        self.btn_scan.setText("🔍 探测模型")
+        
+        if error_msg:
+            QMessageBox.critical(self, "探测失败", error_msg)
+        else:
+            self.combo_model.clear()
+            self.combo_model.addItems(models)
+            QMessageBox.information(self, "探测成功", f"成功发现 {len(models)} 个本地模型，请在下拉列表中选择。")
 
     def update_ui_state(self):
         self.local_config_frame.setEnabled(self.radio_local.isChecked())
@@ -97,7 +180,7 @@ class SettingsDialog(QDialog):
     def save_settings(self):
         self.config["provider_type"] = "local" if self.radio_local.isChecked() else "minimax"
         self.config["local_api_base"] = self.input_api_base.text().strip()
-        self.config["local_model"] = self.input_model.text().strip()
+        self.config["local_model"] = self.combo_model.currentText().strip()
         
         save_config(self.config)
         self.config_updated.emit()

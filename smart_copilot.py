@@ -257,7 +257,33 @@ class AICardWindow(QWidget):
         self.current_text = text
         # 考虑到高DPI，使用 QCursor.pos() 获得准确逻辑坐标
         pos = QCursor.pos()
-        self.move(pos.x() + 15, pos.y() + 15)
+        
+        # 获取当前鼠标所在的屏幕
+        screen = QApplication.screenAt(pos)
+        if not screen:
+            screen = QApplication.primaryScreen()
+        screen_rect = screen.geometry()
+        
+        card_w = self.width()
+        card_h = self.height()
+        
+        # 默认显示在鼠标右下方
+        target_x = pos.x() + 15
+        target_y = pos.y() + 15
+        
+        # 边缘碰撞检测：如果右侧超出屏幕，则翻转显示在鼠标左侧
+        if target_x + card_w > screen_rect.right():
+            target_x = pos.x() - card_w - 15
+            
+        # 边缘碰撞检测：如果底部超出屏幕，则翻转显示在鼠标上方
+        if target_y + card_h > screen_rect.bottom():
+            target_y = pos.y() - card_h - 15
+            
+        # 终极安全边界保护：确保无论如何卡片都不会超出当前屏幕的可视区域
+        target_x = max(screen_rect.left(), min(target_x, screen_rect.right() - card_w))
+        target_y = max(screen_rect.top(), min(target_y, screen_rect.bottom() - card_h))
+        
+        self.move(target_x, target_y)
         self.show()
         self.trigger_ai("auto")
 

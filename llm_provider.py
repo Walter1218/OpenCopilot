@@ -208,7 +208,7 @@ class ProviderFactory:
             )
         elif provider_type == "openclaw":
             return OpenClawCLIProvider(
-                agent_name=config.get("local_model", "main")
+                agent_name=config.get("agent_name", "main")
             )
         else:
             return MiniMaxProvider()

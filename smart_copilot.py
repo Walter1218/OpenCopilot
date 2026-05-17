@@ -9,8 +9,8 @@ from collections import deque
 from pynput import mouse
 
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QTextEdit, 
-    QLabel, QFrame, QGraphicsDropShadowEffect
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, 
+    QLabel, QFrame, QGraphicsDropShadowEffect, QPushButton
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QTimer, QRect, QPointF
 from PyQt6.QtGui import QCursor, QColor, QPainter, QPen
@@ -41,21 +41,29 @@ class AIWorker(QThread):
     text_updated = pyqtSignal(str)
     finished_signal = pyqtSignal()
 
-    def __init__(self, provider, prompt):
+    def __init__(self, provider, prompt, action_type="auto"):
         super().__init__()
         self.provider = provider
         self.prompt = prompt
+        self.action_type = action_type
         self._is_running = True
 
     def run(self):
         try:
-            system_prompt = (
-                "你是一个强大的AI划词助手。请对用户提供的文本进行处理：\n"
-                "1. 如果是外语，请翻译为中文。\n"
-                "2. 如果是代码，请简要解释代码的作用。\n"
-                "3. 如果是普通文本，请进行简明扼要的总结或解释。\n"
-                "输出要求：排版清晰，直接输出结果，不要说多余的客套话。"
-            )
+            if self.action_type == "translate":
+                system_prompt = "你是一个金牌翻译官。请将用户提供的文本翻译为中文（如果是中文则翻译为英文）。要求信达雅，只输出翻译结果，不带任何解释和废话。"
+            elif self.action_type == "code":
+                system_prompt = "你是一个资深架构师。请对用户提供的代码进行深度解析：\n1. 总结这段代码的核心功能。\n2. 指出潜在的漏洞或优化空间。\n要求排版清晰，直接输出解析结果。"
+            elif self.action_type == "polish":
+                system_prompt = "你是一个资深编辑。请对用户提供的文本进行润色，修正语病，提升表达的专业度和流畅度，使其更具逻辑性。只输出润色后的结果，不解释。"
+            else:
+                system_prompt = (
+                    "你是一个强大的AI划词助手。请对用户提供的文本进行处理：\n"
+                    "1. 如果是外语，请翻译为中文。\n"
+                    "2. 如果是代码，请简要解释代码的作用。\n"
+                    "3. 如果是普通文本，请进行简明扼要的总结或解释。\n"
+                    "输出要求：排版清晰，直接输出结果，不要说多余的客套话。"
+                )
             
             full_text = ""
             for chunk in self.provider.stream_chat(self.prompt, system_prompt=system_prompt):
@@ -144,6 +152,7 @@ class AICardWindow(QWidget):
         super().__init__()
         self.provider = provider
         self.worker = None
+        self.current_text = ""
         self.initUI()
 
     def initUI(self):
@@ -156,7 +165,7 @@ class AICardWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
 
-        self.resize(380, 260)
+        self.resize(400, 300)
         self.frame = QFrame(self)
         self.frame.setStyleSheet("""
             QFrame {
@@ -165,7 +174,7 @@ class AICardWindow(QWidget):
                 border: 1px solid rgba(100, 100, 100, 100);
             }
         """)
-        self.frame.resize(360, 240)
+        self.frame.resize(380, 280)
         self.frame.move(10, 10)
         
         shadow = QGraphicsDropShadowEffect()
@@ -180,6 +189,47 @@ class AICardWindow(QWidget):
         self.title_label = QLabel("✨ MiniMax Copilot", self)
         self.title_label.setStyleSheet("color: #4da6ff; font-weight: bold; font-size: 14px; background: transparent; border: none;")
         layout.addWidget(self.title_label)
+        
+        # --- 新增快捷指令工具栏 ---
+        self.btn_layout = QHBoxLayout()
+        self.btn_layout.setContentsMargins(0, 5, 0, 5)
+        self.btn_layout.setSpacing(8)
+        
+        button_style = """
+            QPushButton {
+                background-color: rgba(60, 60, 70, 200);
+                color: #ddd;
+                border-radius: 10px;
+                padding: 4px 10px;
+                font-size: 12px;
+                border: 1px solid rgba(100, 100, 100, 100);
+            }
+            QPushButton:hover {
+                background-color: rgba(80, 80, 100, 255);
+                color: #fff;
+                border: 1px solid #4da6ff;
+            }
+        """
+        
+        self.btn_auto = QPushButton("✨ 自动")
+        self.btn_trans = QPushButton("🌐 翻译")
+        self.btn_code = QPushButton("💻 代码解析")
+        self.btn_polish = QPushButton("✍️ 润色")
+        
+        for btn in [self.btn_auto, self.btn_trans, self.btn_code, self.btn_polish]:
+            btn.setStyleSheet(button_style)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.btn_layout.addWidget(btn)
+            
+        self.btn_layout.addStretch()
+        layout.addLayout(self.btn_layout)
+        
+        # 绑定点击事件
+        self.btn_auto.clicked.connect(lambda: self.trigger_ai("auto"))
+        self.btn_trans.clicked.connect(lambda: self.trigger_ai("translate"))
+        self.btn_code.clicked.connect(lambda: self.trigger_ai("code"))
+        self.btn_polish.clicked.connect(lambda: self.trigger_ai("polish"))
+        # ------------------------
 
         self.text_edit = QTextEdit(self)
         self.text_edit.setReadOnly(True)
@@ -204,19 +254,25 @@ class AICardWindow(QWidget):
         layout.addWidget(self.text_edit)
 
     def show_card(self, text, x, y):
+        self.current_text = text
         # 考虑到高DPI，使用 QCursor.pos() 获得准确逻辑坐标
         pos = QCursor.pos()
         self.move(pos.x() + 15, pos.y() + 15)
-        
+        self.show()
+        self.trigger_ai("auto")
+
+    def trigger_ai(self, action_type):
+        if not self.current_text:
+            return
+            
         self.text_edit.clear()
         self.text_edit.setPlainText("正在思考...\n")
-        self.show()
-
+        
         if self.worker and self.worker.isRunning():
             self.worker.stop()
             self.worker.wait()
 
-        self.worker = AIWorker(self.provider, text)
+        self.worker = AIWorker(self.provider, self.current_text, action_type)
         self.worker.text_updated.connect(self.on_text_updated)
         self.worker.start()
 

@@ -10,9 +10,9 @@ from pynput import mouse
 
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, 
-    QLabel, QFrame, QGraphicsDropShadowEffect, QPushButton, QDialog, QRadioButton, QLineEdit, QButtonGroup, QMessageBox
+    QLabel, QFrame, QGraphicsDropShadowEffect, QPushButton, QDialog, QRadioButton, QLineEdit, QButtonGroup, QMessageBox, QTabWidget
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QThread, QTimer, QRect, QPointF
+from PyQt6.QtCore import Qt, pyqtSignal, QThread, QTimer, QRect, QPointF, QEvent
 from PyQt6.QtGui import QCursor, QColor, QPainter, QPen
 
 from llm_provider import ProviderFactory, load_config, save_config
@@ -38,7 +38,7 @@ class SettingsDialog(QDialog):
         self.btn_group = QButtonGroup(self)
         
         self.radio_minimax = QRadioButton("MiniMax (云端)")
-        self.radio_local = QRadioButton("Local (本地大模型/Ollama等)")
+        self.radio_local = QRadioButton("第三方智能体 (OpenClaw / Hermes / Ollama等)")
         
         self.btn_group.addButton(self.radio_minimax)
         self.btn_group.addButton(self.radio_local)
@@ -58,7 +58,7 @@ class SettingsDialog(QDialog):
         
         local_layout.addWidget(QLabel("Model Name:"))
         self.input_model = QLineEdit()
-        self.input_model.setPlaceholderText("例如: llama3")
+        self.input_model.setPlaceholderText("例如: hermes 或 openclaw")
         local_layout.addWidget(self.input_model)
         
         layout.addWidget(self.local_config_frame)
@@ -175,6 +175,41 @@ class AIWorker(QThread):
     def stop(self):
         self._is_running = False
 
+class ChatWorker(QThread):
+    text_updated = pyqtSignal(str)
+    finished_signal = pyqtSignal()
+
+    def __init__(self, provider, messages):
+        super().__init__()
+        self.provider = provider
+        self.messages = messages
+        self._is_running = True
+
+    def run(self):
+        try:
+            full_text = ""
+            for chunk in self.provider.stream_chat_with_history(self.messages):
+                if not self._is_running:
+                    break
+                full_text += chunk
+                
+                # 过滤掉已闭合的 <think>...</think> 标签块
+                display_text = re.sub(r'<think>.*?</think>', '', full_text, flags=re.DOTALL)
+                
+                # 如果存在未闭合的 <think> 标签，说明模型正在深度思考中
+                if '<think>' in display_text:
+                    display_text = display_text.split('<think>')[0] + "\n\n[🤔 AI正在深度思考中...]"
+                    
+                self.text_updated.emit(display_text.strip())
+                
+        except Exception as e:
+            self.text_updated.emit(f"\n[错误]: {str(e)}")
+            
+        self.finished_signal.emit()
+
+    def stop(self):
+        self._is_running = False
+
 # ==========================================
 # 2. 鼠标与剪贴板监听线程
 # ==========================================
@@ -239,7 +274,9 @@ class AICardWindow(QWidget):
         super().__init__()
         self.provider = provider
         self.worker = None
+        self.chat_worker = None
         self.current_text = ""
+        self.chat_history = []  # 存储多轮对话历史
         self.initUI()
 
     def initUI(self):
@@ -295,19 +332,46 @@ class AICardWindow(QWidget):
         title_layout.addStretch()
         title_layout.addWidget(self.btn_settings)
         layout.addLayout(title_layout)
+
+        # --- TabWidget ---
+        self.tabs = QTabWidget(self.frame)
+        self.tabs.setStyleSheet("""
+            QTabWidget::pane { border: none; }
+            QTabBar::tab {
+                background: rgba(40, 40, 45, 200);
+                color: #aaa;
+                padding: 6px 12px;
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
+                margin-right: 2px;
+            }
+            QTabBar::tab:selected {
+                background: rgba(60, 60, 70, 240);
+                color: #fff;
+                font-weight: bold;
+            }
+        """)
+        layout.addWidget(self.tabs)
+
+        # ==========================
+        # Tab 1: 快捷划词
+        # ==========================
+        self.tab_quick = QWidget()
+        quick_layout = QVBoxLayout(self.tab_quick)
+        quick_layout.setContentsMargins(0, 10, 0, 0)
         
-        # --- 新增快捷指令工具栏 ---
+        # 快捷指令工具栏
         self.btn_layout = QHBoxLayout()
-        self.btn_layout.setContentsMargins(0, 5, 0, 5)
+        self.btn_layout.setContentsMargins(0, 0, 0, 5)
         self.btn_layout.setSpacing(8)
         
         button_style = """
             QPushButton {
                 background-color: rgba(60, 60, 70, 200);
                 color: #ddd;
-                border-radius: 10px;
-                padding: 4px 10px;
-                font-size: 12px;
+                border-radius: 8px;
+                padding: 4px 8px;
+                font-size: 11px;
                 border: 1px solid rgba(100, 100, 100, 100);
             }
             QPushButton:hover {
@@ -328,16 +392,15 @@ class AICardWindow(QWidget):
             self.btn_layout.addWidget(btn)
             
         self.btn_layout.addStretch()
-        layout.addLayout(self.btn_layout)
+        quick_layout.addLayout(self.btn_layout)
         
         # 绑定点击事件
         self.btn_auto.clicked.connect(lambda: self.trigger_ai("auto"))
         self.btn_trans.clicked.connect(lambda: self.trigger_ai("translate"))
         self.btn_code.clicked.connect(lambda: self.trigger_ai("code"))
         self.btn_polish.clicked.connect(lambda: self.trigger_ai("polish"))
-        # ------------------------
 
-        self.text_edit = QTextEdit(self)
+        self.text_edit = QTextEdit(self.tab_quick)
         self.text_edit.setReadOnly(True)
         self.text_edit.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse | Qt.TextInteractionFlag.TextSelectableByKeyboard)
         self.text_edit.setStyleSheet("""
@@ -357,7 +420,147 @@ class AICardWindow(QWidget):
                 border-radius: 3px;
             }
         """)
-        layout.addWidget(self.text_edit)
+        quick_layout.addWidget(self.text_edit)
+
+        # 追问按钮
+        ask_more_layout = QHBoxLayout()
+        self.btn_ask_more = QPushButton("💬 进一步追问")
+        self.btn_ask_more.setStyleSheet(button_style)
+        self.btn_ask_more.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_ask_more.clicked.connect(self.jump_to_chat)
+        ask_more_layout.addStretch()
+        ask_more_layout.addWidget(self.btn_ask_more)
+        quick_layout.addLayout(ask_more_layout)
+
+        # ==========================
+        # Tab 2: 连续对话
+        # ==========================
+        self.tab_chat = QWidget()
+        chat_layout = QVBoxLayout(self.tab_chat)
+        chat_layout.setContentsMargins(0, 10, 0, 0)
+
+        self.chat_display = QTextEdit(self.tab_chat)
+        self.chat_display.setReadOnly(True)
+        self.chat_display.setStyleSheet(self.text_edit.styleSheet())
+        chat_layout.addWidget(self.chat_display)
+
+        input_layout = QHBoxLayout()
+        self.chat_input = QLineEdit(self.tab_chat)
+        self.chat_input.setPlaceholderText("输入消息，按 Enter 发送...")
+        self.chat_input.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(30, 30, 35, 200);
+                color: #fff;
+                border: 1px solid rgba(100, 100, 100, 150);
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 13px;
+            }
+            QLineEdit:focus {
+                border: 1px solid #4da6ff;
+            }
+        """)
+        self.chat_input.returnPressed.connect(self.send_chat_message)
+        
+        self.btn_send = QPushButton("发送", self.tab_chat)
+        self.btn_send.setStyleSheet("""
+            QPushButton {
+                background-color: #4da6ff;
+                color: #000;
+                border-radius: 4px;
+                padding: 4px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #66b3ff;
+            }
+        """)
+        self.btn_send.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_send.clicked.connect(self.send_chat_message)
+
+        input_layout.addWidget(self.chat_input)
+        input_layout.addWidget(self.btn_send)
+        chat_layout.addLayout(input_layout)
+
+        self.tabs.addTab(self.tab_quick, "⚡️ 快捷划词")
+        self.tabs.addTab(self.tab_chat, "💬 连续对话")
+
+    def jump_to_chat(self):
+        # 提取当前划词上下文和 AI 回复，并切换到聊天 Tab
+        system_msg = "你是一个强大的AI助手，以下是用户刚才划选的内容以及你给出的解释，请基于此继续回答用户的问题。"
+        context = f"【用户划选内容】:\n{self.current_text}\n\n【你的初步回答】:\n{self.text_edit.toPlainText()}"
+        
+        self.chat_history = [
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": "请看看这段内容：\n" + self.current_text},
+            {"role": "assistant", "content": self.text_edit.toPlainText()}
+        ]
+        
+        self.chat_display.clear()
+        self.append_chat_message("系统", "已将上下文带入，您可以继续追问。")
+        self.tabs.setCurrentIndex(1)
+        self.chat_input.setFocus()
+
+    def send_chat_message(self):
+        user_text = self.chat_input.text().strip()
+        if not user_text:
+            return
+            
+        self.chat_input.clear()
+        self.append_chat_message("你", user_text)
+        
+        if not self.chat_history:
+            self.chat_history.append({"role": "system", "content": "你是一个强大的AI助手，请帮助用户解决问题。"})
+            
+        self.chat_history.append({"role": "user", "content": user_text})
+        
+        self.append_chat_message("AI", "正在思考...", is_temp=True)
+        
+        if self.chat_worker and self.chat_worker.isRunning():
+            self.chat_worker.stop()
+            self.chat_worker.wait()
+
+        self.chat_worker = ChatWorker(self.provider, self.chat_history)
+        self.chat_worker.text_updated.connect(self.on_chat_updated)
+        self.chat_worker.finished_signal.connect(self.on_chat_finished)
+        self.chat_worker.start()
+
+    def append_chat_message(self, role, text, is_temp=False):
+        color = "#4da6ff" if role == "你" else "#42f554" if role == "AI" else "#aaaaaa"
+        
+        cursor = self.chat_display.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        self.chat_display.setTextCursor(cursor)
+        
+        if is_temp:
+            self._temp_chat_pos = cursor.position()
+            self.chat_display.insertHtml(f'<b style="color:{color};">{role}:</b> {text}<br><br>')
+        else:
+            self.chat_display.insertHtml(f'<b style="color:{color};">{role}:</b> {text}<br><br>')
+            
+        scrollbar = self.chat_display.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+
+    def on_chat_updated(self, text):
+        cursor = self.chat_display.textCursor()
+        cursor.setPosition(self._temp_chat_pos)
+        cursor.movePosition(cursor.MoveOperation.End, cursor.MoveMode.KeepAnchor)
+        cursor.removeSelectedText()
+        
+        # 重新插入更新后的文本
+        cursor.insertHtml(f'<b style="color:#42f554;">AI:</b> {text}<br><br>')
+        
+        scrollbar = self.chat_display.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+
+    def on_chat_finished(self):
+        # 记录 AI 最终的完整回复到历史记录
+        cursor = self.chat_display.textCursor()
+        cursor.setPosition(self._temp_chat_pos)
+        cursor.movePosition(cursor.MoveOperation.End, cursor.MoveMode.KeepAnchor)
+        final_text = cursor.selectedText().replace("AI: ", "").strip()
+        
+        self.chat_history.append({"role": "assistant", "content": final_text})
 
     def open_settings(self):
         dialog = SettingsDialog(self)

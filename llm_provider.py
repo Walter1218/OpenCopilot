@@ -28,6 +28,9 @@ def save_config(config):
 class BaseProvider:
     def stream_chat(self, prompt: str, system_prompt: str = ""):
         raise NotImplementedError
+        
+    def stream_chat_with_history(self, messages: list):
+        raise NotImplementedError
 
 class MiniMaxProvider(BaseProvider):
     def __init__(self, api_key: str = None):
@@ -78,6 +81,19 @@ class MiniMaxProvider(BaseProvider):
             if chunk.choices and chunk.choices[0].delta.content:
                 yield chunk.choices[0].delta.content
 
+    def stream_chat_with_history(self, messages: list):
+        model = self.default_model
+
+        response = self.client.chat.completions.create(
+            model=model,
+            messages=messages,
+            stream=True
+        )
+        
+        for chunk in response:
+            if chunk.choices and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
+
 
 class LocalProvider(BaseProvider):
     def __init__(self, api_base: str, model: str):
@@ -112,6 +128,21 @@ class LocalProvider(BaseProvider):
                     yield chunk.choices[0].delta.content
         except Exception as e:
             yield f"\n[连接本地大模型失败]: {str(e)}\n请检查：\n1. API Base URL 是否正确 (如 http://localhost:11434/v1)\n2. 模型名称 ({self.model}) 是否已经在本地下载运行。"
+
+    def stream_chat_with_history(self, messages: list):
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                stream=True,
+                temperature=0.7
+            )
+            
+            for chunk in response:
+                if chunk.choices and hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+        except Exception as e:
+            yield f"\n[连接本地大模型失败]: {str(e)}\n请检查第三方智能体配置或服务状态。"
 
 class ProviderFactory:
     @staticmethod

@@ -39,7 +39,7 @@ class MiniMaxProvider(BaseProvider):
             api_key=self.api_key,
             base_url="https://api.minimax.chat/v1"
         )
-        self.default_model = "MiniMax-Text-01"
+        self.default_model = "MiniMax-M2.7"
 
     def chat(self, prompt: str, model: str = None, system_prompt: str = "") -> tuple[str, dict]:
         model = model or self.default_model

@@ -1,14 +1,20 @@
 import time
 import logging
+from logging.handlers import RotatingFileHandler
 from pynput import mouse
 
-# 配置日志记录：将轨迹保存在当前目录下的 mouse_tracking.log 文件中
-logging.basicConfig(
-    filename='mouse_tracking.log',
-    level=logging.INFO,
-    format='%(asctime)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
+# 配置日志记录：使用轮转文件处理器，限制单个文件大小并保留备份数
+log_formatter = logging.Formatter('%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+
+# maxBytes=5*1024*1024 表示单个文件最大 5MB
+# backupCount=3 表示最多保留 3 个历史备份文件 (mouse_tracking.log.1, mouse_tracking.log.2 等)
+# 这样总日志占用空间最大被严格限制在约 20MB 以内
+handler = RotatingFileHandler('mouse_tracking.log', maxBytes=5*1024*1024, backupCount=3, encoding='utf-8')
+handler.setFormatter(log_formatter)
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+logger.addHandler(handler)
 
 # 节流控制：避免频繁写入导致 CPU 和磁盘 IO 占用过高
 LAST_TIME = 0

@@ -47,3 +47,7 @@ venv/
 *.zip
 *.rar
 *.bak
+
+# Config
+config.json
+

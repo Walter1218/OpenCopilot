@@ -162,9 +162,18 @@ class OpenClawCLIProvider(BaseProvider):
             yield "[OpenClaw 智能体正在思考并执行任务，请稍候...]\n\n"
             
             cmd = ["openclaw", "agent", "--agent", self.agent_name, "-m", content, "--json"]
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            # 使用 os.environ 传递当前环境变量，确保权限和路径一致
+            env = os.environ.copy()
+            result = subprocess.run(cmd, capture_output=True, text=True, env=env)
             
             output = result.stdout
+            
+            # 记录详细日志以供排查
+            if result.returncode != 0:
+                print(f"[OpenClaw Error] Return Code: {result.returncode}")
+                print(f"[OpenClaw Error] STDERR: {result.stderr}")
+                print(f"[OpenClaw Error] STDOUT: {output}")
             
             # 使用正则精准提取返回的 JSON 对象，避免被日志干扰
             import re

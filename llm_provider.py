@@ -96,17 +96,15 @@ class MiniMaxProvider(BaseProvider):
 
 
 class LocalProvider(BaseProvider):
-    def __init__(self, api_base: str, model: str):
+    def __init__(self, api_base: str, model: str, api_key: str = "sk-local"):
         self.api_base = api_base
         self.model = model
-        # 对于本地模型（如 Ollama, LMStudio），需要正确配置 client
-        # Ollama 兼容 openai 接口时，可能对空的或无效的 headers 比较敏感，或者由于默认超时等问题返回 500
-        # 这里加上更宽松的配置
+        # 对于本地模型（如 Ollama, LMStudio, OpenClaw 等），需要正确配置 client
         import httpx
         self.client = OpenAI(
-            api_key="ollama", # 随便填一个非空字符，Ollama 要求不能为纯空或 None
+            api_key=api_key, # 默认为非空字符串，以防 OpenAI SDK 报错
             base_url=self.api_base,
-            http_client=httpx.Client(verify=False) # 关闭 SSL 验证，以防本地 https 自签证书问题
+            http_client=httpx.Client(verify=False) # 关闭 SSL 验证
         )
 
     def stream_chat(self, prompt: str, system_prompt: str = ""):
@@ -151,7 +149,8 @@ class ProviderFactory:
         if config.get("provider_type") == "local":
             return LocalProvider(
                 api_base=config.get("local_api_base", "http://localhost:11434/v1"),
-                model=config.get("local_model", "llama3")
+                model=config.get("local_model", "llama3"),
+                api_key=config.get("local_api_key", "sk-local")
             )
         else:
             return MiniMaxProvider()

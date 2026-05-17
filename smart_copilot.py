@@ -127,6 +127,12 @@ class SettingsDialog(QDialog):
         self.combo_model.setPlaceholderText("例如: hermes 或 openclaw")
         local_layout.addWidget(self.combo_model)
         
+        local_layout.addWidget(QLabel("API Key (选填):"))
+        self.input_api_key = QLineEdit()
+        self.input_api_key.setPlaceholderText("如果第三方网关需要认证，请在此填写")
+        self.input_api_key.setEchoMode(QLineEdit.EchoMode.Password)
+        local_layout.addWidget(self.input_api_key)
+        
         layout.addWidget(self.local_config_frame)
         
         # 绑定事件
@@ -159,6 +165,8 @@ class SettingsDialog(QDialog):
         if saved_model:
             self.combo_model.addItem(saved_model)
             self.combo_model.setCurrentText(saved_model)
+            
+        self.input_api_key.setText(self.config.get("local_api_key", ""))
             
         self.update_ui_state()
 
@@ -193,6 +201,7 @@ class SettingsDialog(QDialog):
         self.config["provider_type"] = "local" if self.radio_local.isChecked() else "minimax"
         self.config["local_api_base"] = self.input_api_base.text().strip()
         self.config["local_model"] = self.combo_model.currentText().strip()
+        self.config["local_api_key"] = self.input_api_key.text().strip()
         
         save_config(self.config)
         self.config_updated.emit()

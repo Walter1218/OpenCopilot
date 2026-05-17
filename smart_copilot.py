@@ -4,6 +4,7 @@ import time
 import platform
 import pyautogui
 import pyperclip
+import re
 from collections import deque
 from pynput import mouse
 
@@ -37,7 +38,7 @@ class Ripple:
 # 1. 后台大模型请求线程 (避免阻塞UI)
 # ==========================================
 class AIWorker(QThread):
-    chunk_received = pyqtSignal(str)
+    text_updated = pyqtSignal(str)
     finished_signal = pyqtSignal()
 
     def __init__(self, provider, prompt):
@@ -56,13 +57,23 @@ class AIWorker(QThread):
                 "输出要求：排版清晰，直接输出结果，不要说多余的客套话。"
             )
             
+            full_text = ""
             for chunk in self.provider.stream_chat(self.prompt, system_prompt=system_prompt):
                 if not self._is_running:
                     break
-                self.chunk_received.emit(chunk)
+                full_text += chunk
+                
+                # 过滤掉已闭合的 <think>...</think> 标签块
+                display_text = re.sub(r'<think>.*?</think>', '', full_text, flags=re.DOTALL)
+                
+                # 如果存在未闭合的 <think> 标签，说明模型正在深度思考中
+                if '<think>' in display_text:
+                    display_text = display_text.split('<think>')[0] + "\n\n[🤔 AI正在深度思考中...]"
+                    
+                self.text_updated.emit(display_text.strip())
                 
         except Exception as e:
-            self.chunk_received.emit(f"\n[错误]: {str(e)}")
+            self.text_updated.emit(f"\n[错误]: {str(e)}")
             
         self.finished_signal.emit()
 
@@ -198,7 +209,7 @@ class AICardWindow(QWidget):
         self.move(pos.x() + 15, pos.y() + 15)
         
         self.text_edit.clear()
-        self.text_edit.insertPlainText("正在思考...\n")
+        self.text_edit.setPlainText("正在思考...\n")
         self.show()
 
         if self.worker and self.worker.isRunning():
@@ -206,13 +217,14 @@ class AICardWindow(QWidget):
             self.worker.wait()
 
         self.worker = AIWorker(self.provider, text)
-        self.worker.chunk_received.connect(self.on_chunk)
+        self.worker.text_updated.connect(self.on_text_updated)
         self.worker.start()
 
-    def on_chunk(self, chunk):
-        if self.text_edit.toPlainText() == "正在思考...\n":
-            self.text_edit.clear()
-        self.text_edit.insertPlainText(chunk)
+    def on_text_updated(self, text):
+        if not text:
+            self.text_edit.setPlainText("正在思考...\n")
+        else:
+            self.text_edit.setPlainText(text)
         scrollbar = self.text_edit.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 

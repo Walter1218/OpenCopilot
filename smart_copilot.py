@@ -34,12 +34,14 @@ class ModelScannerWorker(QThread):
             try:
                 import subprocess
                 import json
+                import re
                 result = subprocess.run(["openclaw", "agents", "list", "--json"], capture_output=True, text=True)
                 output = result.stdout
-                json_start = output.find('[')
-                json_end = output.rfind(']')
-                if json_start != -1 and json_end != -1 and json_end > json_start:
-                    data = json.loads(output[json_start:json_end+1])
+                
+                # 使用正则精确提取 JSON 数组，避免被前后的日志干扰
+                match = re.search(r"\[\s*\{.*?\}\s*\]", output, re.DOTALL)
+                if match:
+                    data = json.loads(match.group(0))
                     models = [agent.get("name", agent.get("id")) for agent in data if "id" in agent]
                     self.api_base = "openclaw-cli" # 更新标志
                     self.finished.emit(models, "")

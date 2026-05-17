@@ -165,11 +165,17 @@ class OpenClawCLIProvider(BaseProvider):
             result = subprocess.run(cmd, capture_output=True, text=True)
             
             output = result.stdout
-            json_start = output.find('{')
-            if json_start != -1:
-                json_str = output[json_start:]
+            
+            # 使用正则精准提取返回的 JSON 对象，避免被日志干扰
+            import re
+            match = re.search(r"\{\s*\"runId\".*?\}\s*\}$", output, re.DOTALL)
+            if not match:
+                # 尝试更通用的 JSON 对象匹配
+                match = re.search(r"\{.*?\}", output, re.DOTALL)
+                
+            if match:
                 try:
-                    data = json.loads(json_str)
+                    data = json.loads(match.group(0))
                     payloads = data.get("result", {}).get("payloads", [])
                     if payloads:
                         final_text = payloads[0].get("text", "")

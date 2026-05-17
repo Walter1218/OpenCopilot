@@ -29,6 +29,23 @@ class ModelScannerWorker(QThread):
         self.api_base = api_base.strip().rstrip('/')
 
     def run(self):
+        # 如果用户选择探测 OpenClaw CLI，直接通过命令行获取 agents
+        if "openclaw" in self.api_base.lower() or "cli" in self.api_base.lower() or not self.api_base.startswith("http"):
+            try:
+                import subprocess
+                import json
+                result = subprocess.run(["openclaw", "agents", "list", "--json"], capture_output=True, text=True)
+                output = result.stdout
+                json_start = output.find('[')
+                if json_start != -1:
+                    data = json.loads(output[json_start:])
+                    models = [agent.get("name", agent.get("id")) for agent in data if "id" in agent]
+                    self.api_base = "openclaw-cli" # 更新标志
+                    self.finished.emit(models, "")
+                    return
+            except Exception as e:
+                pass # 回退到普通的 HTTP 探测
+                
         models = []
         error_msg = ""
         try:
@@ -193,7 +210,7 @@ class SettingsDialog(QDialog):
             QMessageBox.critical(self, "探测失败", error_msg)
         else:
             # 如果是自动推导的网关端口，同步更新输入框
-            if ":18791" in self.scanner.api_base:
+            if ":18791" in self.scanner.api_base or "openclaw-cli" in self.scanner.api_base:
                 self.input_api_base.setText(self.scanner.api_base)
                 
             self.combo_model.clear()

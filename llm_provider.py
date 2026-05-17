@@ -142,51 +142,51 @@ class LocalProvider(BaseProvider):
         except Exception as e:
             yield f"\n[连接本地大模型失败]: {str(e)}\n请检查第三方智能体配置或服务状态。"
 
-class OpenClawGatewayProvider(BaseProvider):
-    def __init__(self, api_base: str, api_key: str):
-        self.api_base = api_base.rstrip('/')
-        self.api_key = api_key
+class OpenClawCLIProvider(BaseProvider):
+    def __init__(self, agent_name: str = "main"):
+        self.agent_name = agent_name or "main"
         
     def stream_chat(self, prompt: str, system_prompt: str = ""):
-        # Agent 不区分系统提示和普通提示，合并发送
         full_message = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
-        return self._send_to_gateway(full_message)
+        return self._run_cli(full_message)
         
     def stream_chat_with_history(self, messages: list):
-        # 提取历史记录中的最新一条或合并
         content = "\n".join([m.get("content", "") for m in messages])
-        return self._send_to_gateway(content)
+        return self._run_cli(content)
         
-    def _send_to_gateway(self, content: str):
-        import httpx
-        url = f"{self.api_base}/api/v1/messages/send"
-        
-        headers = {
-            "Content-Type": "application/json"
-        }
-        if self.api_key:
-            headers["x-api-key"] = self.api_key
-            
-        payload = {
-            "content": content,
-            "agent": "main", # 默认使用主 Agent
-            "channel": "feishu" # 兼容它的 channel 参数
-        }
+    def _run_cli(self, content: str):
+        import subprocess
+        import json
         
         try:
-            with httpx.Client(timeout=60.0, verify=False) as client:
-                # 修复：由于它是通过 query string 传递内容，改用 params 而不是 json
-                response = client.post(url, params=payload, headers=headers)
-                if response.status_code == 200:
-                    data = response.json()
-                    result = data.get("result", "") or str(data)
-                    # 简单切片模拟流式效果
-                    for i in range(0, len(result), 5):
-                        yield result[i:i+5]
-                else:
-                    yield f"\n[Agent网关请求失败]: HTTP {response.status_code}\n{response.text}"
+            yield "[OpenClaw 智能体正在思考并执行任务，请稍候...]\n\n"
+            
+            cmd = ["openclaw", "agent", "--agent", self.agent_name, "-m", content, "--json"]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            output = result.stdout
+            json_start = output.find('{')
+            if json_start != -1:
+                json_str = output[json_start:]
+                try:
+                    data = json.loads(json_str)
+                    payloads = data.get("result", {}).get("payloads", [])
+                    if payloads:
+                        final_text = payloads[0].get("text", "")
+                        # 简单切片模拟流式打字效果
+                        for i in range(0, len(final_text), 3):
+                            yield final_text[i:i+3]
+                    else:
+                        yield "Agent 执行完毕，但没有返回文本。"
+                except json.JSONDecodeError:
+                    yield f"\n[解析 OpenClaw 返回数据失败]: \n{output}"
+            else:
+                yield f"\n[Agent 执行失败，可能发生了内部错误]:\n{result.stderr or output}"
+                
+        except FileNotFoundError:
+            yield "\n[未找到 openclaw 命令]: 请确保 OpenClaw 已安装并在系统的 PATH 环境变量中。"
         except Exception as e:
-            yield f"\n[连接Agent网关失败]: {str(e)}\n请检查网关是否已启动并确认 API Key 是否正确。"
+            yield f"\n[调用 OpenClaw 失败]: {str(e)}"
 
 class ProviderFactory:
     @staticmethod
@@ -201,9 +201,8 @@ class ProviderFactory:
                 api_key=config.get("local_api_key", "sk-local")
             )
         elif provider_type == "openclaw":
-            return OpenClawGatewayProvider(
-                api_base=config.get("local_api_base", "http://127.0.0.1:18791"),
-                api_key=config.get("local_api_key", "")
+            return OpenClawCLIProvider(
+                agent_name=config.get("local_model", "main")
             )
         else:
             return MiniMaxProvider()

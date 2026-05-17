@@ -142,15 +142,68 @@ class LocalProvider(BaseProvider):
         except Exception as e:
             yield f"\n[连接本地大模型失败]: {str(e)}\n请检查第三方智能体配置或服务状态。"
 
+class OpenClawGatewayProvider(BaseProvider):
+    def __init__(self, api_base: str, api_key: str):
+        self.api_base = api_base.rstrip('/')
+        self.api_key = api_key
+        
+    def stream_chat(self, prompt: str, system_prompt: str = ""):
+        # Agent 不区分系统提示和普通提示，合并发送
+        full_message = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+        return self._send_to_gateway(full_message)
+        
+    def stream_chat_with_history(self, messages: list):
+        # 提取历史记录中的最新一条或合并
+        content = "\n".join([m.get("content", "") for m in messages])
+        return self._send_to_gateway(content)
+        
+    def _send_to_gateway(self, content: str):
+        import httpx
+        url = f"{self.api_base}/api/v1/messages/send"
+        
+        headers = {
+            "Content-Type": "application/json"
+        }
+        if self.api_key:
+            headers["x-api-key"] = self.api_key
+            
+        payload = {
+            "content": content,
+            "agent": "main", # 默认使用主 Agent
+            "channel": "feishu" # 兼容它的 channel 参数
+        }
+        
+        try:
+            with httpx.Client(timeout=60.0, verify=False) as client:
+                # 修复：由于它是通过 query string 传递内容，改用 params 而不是 json
+                response = client.post(url, params=payload, headers=headers)
+                if response.status_code == 200:
+                    data = response.json()
+                    result = data.get("result", "") or str(data)
+                    # 简单切片模拟流式效果
+                    for i in range(0, len(result), 5):
+                        yield result[i:i+5]
+                else:
+                    yield f"\n[Agent网关请求失败]: HTTP {response.status_code}\n{response.text}"
+        except Exception as e:
+            yield f"\n[连接Agent网关失败]: {str(e)}\n请检查网关是否已启动并确认 API Key 是否正确。"
+
 class ProviderFactory:
     @staticmethod
     def create_provider():
         config = load_config()
-        if config.get("provider_type") == "local":
+        provider_type = config.get("provider_type")
+        
+        if provider_type == "local":
             return LocalProvider(
                 api_base=config.get("local_api_base", "http://localhost:11434/v1"),
                 model=config.get("local_model", "llama3"),
                 api_key=config.get("local_api_key", "sk-local")
+            )
+        elif provider_type == "openclaw":
+            return OpenClawGatewayProvider(
+                api_base=config.get("local_api_base", "http://127.0.0.1:18791"),
+                api_key=config.get("local_api_key", "")
             )
         else:
             return MiniMaxProvider()

@@ -51,9 +51,10 @@ class ModelScannerWorker(QThread):
                         base_url = self.api_base.replace('/v1', '')
                         response = client.get(base_url)
                         if response.status_code == 200 and "openclaw" in response.text.lower():
-                            # 对于这种带有 Web 界面的服务，它的模型名通常在前端或用户手动配置，
-                            # 如果我们确认它是 OpenClaw，可以提供一个默认标识提示用户
-                            models = ["openclaw-model (自动探测)"]
+                            # 如果识别出是 18789 面板端口，自动推导底层的 18791 API 端口
+                            if ":18789" in base_url:
+                                self.api_base = base_url.replace(":18789", ":18791")
+                            models = ["openclaw-agent (网关模式)"]
                     except Exception as e:
                         pass
                 
@@ -191,15 +192,27 @@ class SettingsDialog(QDialog):
         if error_msg:
             QMessageBox.critical(self, "探测失败", error_msg)
         else:
+            # 如果是自动推导的网关端口，同步更新输入框
+            if ":18791" in self.scanner.api_base:
+                self.input_api_base.setText(self.scanner.api_base)
+                
             self.combo_model.clear()
             self.combo_model.addItems(models)
-            QMessageBox.information(self, "探测成功", f"成功发现 {len(models)} 个本地模型，请在下拉列表中选择。")
+            QMessageBox.information(self, "探测成功", f"成功发现智能体，请在下拉列表中确认并保存。")
 
     def update_ui_state(self):
         self.local_config_frame.setEnabled(self.radio_local.isChecked())
 
     def save_settings(self):
-        self.config["provider_type"] = "local" if self.radio_local.isChecked() else "minimax"
+        provider_type = "minimax"
+        if self.radio_local.isChecked():
+            # 判断是否是特殊的 OpenClaw 网关模式
+            if "openclaw" in self.combo_model.currentText().lower():
+                provider_type = "openclaw"
+            else:
+                provider_type = "local"
+                
+        self.config["provider_type"] = provider_type
         self.config["local_api_base"] = self.input_api_base.text().strip()
         self.config["local_model"] = self.combo_model.currentText().strip()
         self.config["local_api_key"] = self.input_api_key.text().strip()

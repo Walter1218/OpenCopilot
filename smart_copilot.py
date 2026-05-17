@@ -85,7 +85,8 @@ class SettingsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("大模型配置 (LLM Settings)")
-        self.setFixedSize(400, 250)
+        # 移除 setFixedSize，改用 setMinimumSize 让布局引擎自动计算合适高度
+        self.setMinimumSize(450, 320)
         self.config = load_config()
         self.initUI()
 

@@ -45,6 +45,18 @@ class ModelScannerWorker(QThread):
                     pass
 
                 # 策略 2: 如果为空，尝试 Ollama 原生接口 /api/tags
+                # 策略 3: 如果还是空，探测类似 OpenClaw Control 这样的 Web 界面
+                if not models:
+                    try:
+                        base_url = self.api_base.replace('/v1', '')
+                        response = client.get(base_url)
+                        if response.status_code == 200 and "openclaw" in response.text.lower():
+                            # 对于这种带有 Web 界面的服务，它的模型名通常在前端或用户手动配置，
+                            # 如果我们确认它是 OpenClaw，可以提供一个默认标识提示用户
+                            models = ["openclaw-model (自动探测)"]
+                    except Exception as e:
+                        pass
+                
                 if not models:
                     try:
                         base_url = self.api_base.replace('/v1', '')

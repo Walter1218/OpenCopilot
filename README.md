@@ -1,79 +1,59 @@
-# ASU: Advanced System Utilities
+# ASU (Advanced System Utilities) 🚀
+**全局智能交互增强引擎 & 桌面级 AI Copilot**
 
-本项目包含三个用于鼠标监控与交互增强的独立工具脚本。
+ASU 是一个致力于探索**下一代人机交互模式**的系统级工具集。它将底层硬件事件监听（鼠标/键盘）、高帧率 GUI 特效渲染与最前沿的 LLM (大语言模型) 能力深度结合，旨在打造“不打断用户心流”的极致 AI 体验。
 
-## 1. 环境准备
+## 💡 创新点与核心优势
 
-建议使用 Python 3.8+ 虚拟环境：
+1. **“零上下文切换”的全局 Copilot (Zero-Context-Switch)**
+   - 彻底摒弃了传统 AI 助手“复制 -> 打开网页 -> 粘贴 -> 提问”的繁琐流程。
+   - **所划即所得**：在屏幕任意位置（浏览器、IDE、微信等）划选文本，AI 智能卡片立即在鼠标旁精准弹出，完全不抢夺当前工作区的焦点。
+2. **多意图精准打击 (Interactive Action Toolbar)**
+   - 摒弃了让 AI 盲目猜测意图的泛泛而谈。创新性引入悬浮快捷指令栏，用户可一键将上下文切换至垂直专业模式（金牌翻译、架构师代码解析、资深编辑润色），极大地提升了 AI 输出的信噪比。
+3. **沉浸式视觉增强 (Cyberpunk UI/UX)**
+   - 将系统级动态光标特效（彗星拖尾、点击水波纹）与智能卡片融合在同一个透明全屏画布体系中，提供赛博朋克般的沉浸式操作体验。
+4. **图层解耦架构 (Layer Separation Architecture)**
+   - 完美解决了 GUI 开发中经典的“鼠标穿透 vs 焦点抢夺”矛盾。底层采用独立图层分离技术：特效层负责全局穿透渲染，卡片层负责局部事件拦截与交互（滚动、文本选中复制），兼顾了视觉与实用性。
+
+---
+
+## 📦 核心模块
+
+### 🌟 1. 智能悬浮划词 Copilot (`smart_copilot.py`) [旗舰功能]
+本项目的集大成者。整合了全局划词、MiniMax 深度思考模型、交互式指令栏与全局光标特效。
+- **启动方式**：`python smart_copilot.py`
+- **操作指南**：
+  1. 运行后，在任意地方拖拽划选一段文字。
+  2. 松开鼠标，暗黑风格的 AI 卡片将自动弹出并流式输出结果（已自动过滤 `<think>` 标签，确保结果纯净）。
+  3. 点击卡片顶部的 `[✨ 自动] [🌐 翻译] [💻 代码解析] [✍️ 润色]` 按钮，可实时重定向 AI 意图。
+  4. 卡片内容支持鼠标滚轮浏览及复制，点击屏幕外部任意区域即刻隐藏。
+
+### 🧠 2. MiniMax LLM 驱动引擎 (`minimax_provider.py`)
+- 作为底层的 AI 大脑，原生对接 `MiniMax-M2.7`。
+- 支持 Token Plan 精准计费拦截，完美兼容流式输出（Stream）。
+- **配置方法**：根目录创建 `.env` 文件，填入 `MINIMAX_API_KEY=sk-xxxx` 即可。
+
+### 🎯 3. 基础能力积木 (可独立运行)
+- **鼠标轨迹守护者 (`mouse_tracker.py`)**：后台静默记录鼠标轨迹，内置防抖节流与日志轮转机制（单文件5MB，最多保留3个备份，总容量限制20MB以内），极其轻量。
+- **全屏动态光标 (`dynamic_cursor.py`)**：提供跨屏幕的精准坐标映射和独立的鼠标跟随动画渲染层。
+- **文本劫持器 (`text_selector.py`)**：系统底层的拖拽行为监听与剪贴板接管模块。
+
+---
+
+## 🛠️ 环境准备与安装
+
+建议使用 Python 3.8+ 虚拟环境运行：
 
 ```bash
+# 1. 创建并激活虚拟环境
 python3 -m venv venv
 source venv/bin/activate
+
+# 2. 安装核心依赖
 pip install -r requirements.txt
 ```
 
-### 依赖库说明 (`requirements.txt`)
-- `pynput`: 用于全局监听鼠标的移动和点击事件。
-- `PyQt6`: 用于绘制无边框、鼠标穿透的透明悬浮窗特效。
-- `pyautogui` & `pyperclip`: 用于触发系统级按键和剪贴板读写。
-- `openai`: 用于对接 MiniMax 兼容 OpenAI 格式的 LLM API 接口。
-
----
-
-## 2. 工具列表
-
-### 2.1 MiniMax LLM 接口模块 (`minimax_provider.py`)
-- **功能**：作为本项目核心的 LLM API Provider 模块，集成了 MiniMax 的大语言模型能力。
-- **特性**：
-  - 采用 OpenAI 兼容格式调用 `https://api.minimax.chat/v1` 接口。
-  - 支持最新的 `MiniMax-M2.7` 模型。
-  - 完美适配并返回 MiniMax **Token Plan**（计费与配额）的 Tokens 消耗统计（包含 prompt_tokens, completion_tokens 等）。
-  - 支持同步对话与流式输出（Stream）两种模式。
-  - 自动从 `.env` 文件加载密钥。
-- **用法示例**：
-  1. 将项目根目录下的 `.env.example` 复制并重命名为 `.env`。
-  2. 在 `.env` 中填入你的 MiniMax API Key: `MINIMAX_API_KEY=sk-xxxx`。
-  3. 在代码中调用：
-  ```python
-  from minimax_provider import MiniMaxProvider
-  
-  provider = MiniMaxProvider() # 自动读取 .env 中的 Key
-  content, usage = provider.chat("你好", model="MiniMax-M2.7")
-  print("回答:", content, "消耗:", usage)
-  ```
-
-### 2.2 鼠标轨迹后台记录器 (`mouse_tracker.py`)
-- **功能**：静默监听全局鼠标的移动、点击、滚动，并以 `0.1秒` 节流的频率写入日志。
-- **产出**：在当前目录下生成 `mouse_tracking.log` 文件。
-- **启动方式**：
-  ```bash
-  python mouse_tracker.py
-  ```
-
-### 2.3 屏幕动态光标特效 (`dynamic_cursor.py`)
-- **功能**：在屏幕上绘制一个跟随鼠标移动的科幻蓝色十字准星，具备呼吸灯动画、彗星拖尾特效以及点击时的橙色水波纹特效。
-- **技术亮点**：
-  - 支持 macOS Retina 高 DPI 屏幕下的坐标精准映射。
-  - 支持多显示器全屏无缝覆盖。
-  - 使用了 `BypassWindowManagerHint` 防止窗口在 macOS 失去焦点时被隐藏。
-- **启动方式**：
-  ```bash
-  python dynamic_cursor.py
-  ```
-
-### 2.4 全局划词捕获器 (`text_selector.py`)
-- **功能**：监听鼠标拖拽事件，当检测到用户在任意窗口中划选了文本后，自动触发复制快捷键（基于 `pyautogui`），并通过剪贴板获取该文本打印到终端。
-- **启动方式**：
-  ```bash
-  python text_selector.py
-  ```
-
----
-
-## 3. 权限提示 (针对 macOS)
-
-首次运行以上任何脚本时，系统可能弹出权限请求：
-1. **辅助功能 (Accessibility)**：需要授权给终端 (Terminal/IDE) 以便 `pynput` 获取鼠标事件。
-2. **屏幕录制/键盘访问**：为了使 `pyautogui` 能发送复制快捷键。
-
-*注意：本指南基于当前最新的代码实现，删除了此前关于 AppleScript 和基础准星等过时信息，保障时效性。*
+### ⚠️ macOS 权限提示
+作为系统级增强工具，首次运行脚本时需在 macOS `系统设置 -> 隐私与安全性` 中授予终端或 IDE 以下权限：
+1. **辅助功能 (Accessibility)**：用于全局鼠标位置与按键拦截。
+2. **屏幕录制/键盘访问**：用于触发系统级文本抓取。

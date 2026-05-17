@@ -83,10 +83,14 @@ class LocalProvider(BaseProvider):
     def __init__(self, api_base: str, model: str):
         self.api_base = api_base
         self.model = model
-        # 对于本地模型（如 Ollama, LMStudio），通常不需要真实的 API Key
+        # 对于本地模型（如 Ollama, LMStudio），需要正确配置 client
+        # Ollama 兼容 openai 接口时，可能对空的或无效的 headers 比较敏感，或者由于默认超时等问题返回 500
+        # 这里加上更宽松的配置
+        import httpx
         self.client = OpenAI(
-            api_key="local-placeholder",
-            base_url=self.api_base
+            api_key="ollama", # 随便填一个非空字符，Ollama 要求不能为纯空或 None
+            base_url=self.api_base,
+            http_client=httpx.Client(verify=False) # 关闭 SSL 验证，以防本地 https 自签证书问题
         )
 
     def stream_chat(self, prompt: str, system_prompt: str = ""):
@@ -99,14 +103,15 @@ class LocalProvider(BaseProvider):
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                stream=True
+                stream=True,
+                temperature=0.7 # 明确指定一些常见参数，防止本地大模型解析默认值时出错
             )
             
             for chunk in response:
-                if chunk.choices and chunk.choices[0].delta.content:
+                if chunk.choices and hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content:
                     yield chunk.choices[0].delta.content
         except Exception as e:
-            yield f"\n[连接本地大模型失败]: {str(e)}\n请检查配置的 API 地址是否正确，以及本地服务是否已启动。"
+            yield f"\n[连接本地大模型失败]: {str(e)}\n请检查：\n1. API Base URL 是否正确 (如 http://localhost:11434/v1)\n2. 模型名称 ({self.model}) 是否已经在本地下载运行。"
 
 class ProviderFactory:
     @staticmethod

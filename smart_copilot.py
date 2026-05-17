@@ -10,12 +10,99 @@ from pynput import mouse
 
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, 
-    QLabel, QFrame, QGraphicsDropShadowEffect, QPushButton
+    QLabel, QFrame, QGraphicsDropShadowEffect, QPushButton, QDialog, QRadioButton, QLineEdit, QButtonGroup, QMessageBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QTimer, QRect, QPointF
 from PyQt6.QtGui import QCursor, QColor, QPainter, QPen
 
-from minimax_provider import MiniMaxProvider
+from llm_provider import ProviderFactory, load_config, save_config
+
+# ==========================================
+# 设置对话框 UI
+# ==========================================
+class SettingsDialog(QDialog):
+    config_updated = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("大模型配置 (LLM Settings)")
+        self.setFixedSize(400, 250)
+        self.config = load_config()
+        self.initUI()
+
+    def initUI(self):
+        layout = QVBoxLayout(self)
+        
+        # 引擎选择
+        layout.addWidget(QLabel("<b>选择大模型引擎:</b>"))
+        self.btn_group = QButtonGroup(self)
+        
+        self.radio_minimax = QRadioButton("MiniMax (云端)")
+        self.radio_local = QRadioButton("Local (本地大模型/Ollama等)")
+        
+        self.btn_group.addButton(self.radio_minimax)
+        self.btn_group.addButton(self.radio_local)
+        
+        layout.addWidget(self.radio_minimax)
+        layout.addWidget(self.radio_local)
+        
+        # 本地配置项
+        self.local_config_frame = QFrame()
+        local_layout = QVBoxLayout(self.local_config_frame)
+        local_layout.setContentsMargins(20, 0, 0, 10)
+        
+        local_layout.addWidget(QLabel("API Base URL:"))
+        self.input_api_base = QLineEdit()
+        self.input_api_base.setPlaceholderText("例如: http://localhost:11434/v1")
+        local_layout.addWidget(self.input_api_base)
+        
+        local_layout.addWidget(QLabel("Model Name:"))
+        self.input_model = QLineEdit()
+        self.input_model.setPlaceholderText("例如: llama3")
+        local_layout.addWidget(self.input_model)
+        
+        layout.addWidget(self.local_config_frame)
+        
+        # 绑定事件
+        self.radio_minimax.toggled.connect(self.update_ui_state)
+        self.radio_local.toggled.connect(self.update_ui_state)
+        
+        # 底部按钮
+        btn_layout = QHBoxLayout()
+        self.btn_save = QPushButton("保存配置")
+        self.btn_cancel = QPushButton("取消")
+        btn_layout.addStretch()
+        btn_layout.addWidget(self.btn_cancel)
+        btn_layout.addWidget(self.btn_save)
+        layout.addLayout(btn_layout)
+        
+        self.btn_save.clicked.connect(self.save_settings)
+        self.btn_cancel.clicked.connect(self.reject)
+        
+        self.load_current_settings()
+
+    def load_current_settings(self):
+        if self.config.get("provider_type") == "local":
+            self.radio_local.setChecked(True)
+        else:
+            self.radio_minimax.setChecked(True)
+            
+        self.input_api_base.setText(self.config.get("local_api_base", "http://localhost:11434/v1"))
+        self.input_model.setText(self.config.get("local_model", "llama3"))
+        self.update_ui_state()
+
+    def update_ui_state(self):
+        self.local_config_frame.setEnabled(self.radio_local.isChecked())
+
+    def save_settings(self):
+        self.config["provider_type"] = "local" if self.radio_local.isChecked() else "minimax"
+        self.config["local_api_base"] = self.input_api_base.text().strip()
+        self.config["local_model"] = self.input_model.text().strip()
+        
+        save_config(self.config)
+        self.config_updated.emit()
+        self.accept()
+        QMessageBox.information(self, "成功", "配置已保存，下一次划词将生效！")
 
 # ==========================================
 # 特效类：水波纹
@@ -186,9 +273,28 @@ class AICardWindow(QWidget):
         layout = QVBoxLayout(self.frame)
         layout.setContentsMargins(15, 15, 15, 15)
 
-        self.title_label = QLabel("✨ MiniMax Copilot", self)
+        title_layout = QHBoxLayout()
+        self.title_label = QLabel("✨ Smart Copilot", self)
         self.title_label.setStyleSheet("color: #4da6ff; font-weight: bold; font-size: 14px; background: transparent; border: none;")
-        layout.addWidget(self.title_label)
+        
+        self.btn_settings = QPushButton("⚙️", self)
+        self.btn_settings.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                border: none;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                color: #fff;
+            }
+        """)
+        self.btn_settings.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_settings.clicked.connect(self.open_settings)
+        
+        title_layout.addWidget(self.title_label)
+        title_layout.addStretch()
+        title_layout.addWidget(self.btn_settings)
+        layout.addLayout(title_layout)
         
         # --- 新增快捷指令工具栏 ---
         self.btn_layout = QHBoxLayout()
@@ -252,6 +358,14 @@ class AICardWindow(QWidget):
             }
         """)
         layout.addWidget(self.text_edit)
+
+    def open_settings(self):
+        dialog = SettingsDialog(self)
+        dialog.config_updated.connect(self.reload_provider)
+        dialog.exec()
+
+    def reload_provider(self):
+        self.provider = ProviderFactory.create_provider()
 
     def show_card(self, text, x, y):
         self.current_text = text
@@ -425,7 +539,7 @@ class CursorOverlay(QWidget):
 # ==========================================
 class CopilotManager:
     def __init__(self):
-        self.provider = MiniMaxProvider()
+        self.provider = ProviderFactory.create_provider()
         
         # 实例化两个独立的图层：
         # 1. 光标特效图层（全屏、鼠标穿透）

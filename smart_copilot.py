@@ -44,7 +44,7 @@ class ModelScannerWorker(QThread):
                     data = json.loads(match.group(0))
                     models = [agent.get("name", agent.get("id")) for agent in data if "id" in agent]
                     self.api_base = "openclaw-cli" # 更新标志
-                    self.finished.emit(models, "")
+                    self.scan_finished.emit(models, "")
                     return
             except Exception as e:
                 print(f"OpenClaw CLI probe failed: {e}")
@@ -96,7 +96,7 @@ class ModelScannerWorker(QThread):
         except Exception as e:
             error_msg = f"连接失败: {str(e)}\n请检查 API Base URL 是否正确以及服务是否启动。"
 
-        self.scan_finished.emit(models, error_msg)
+        self.scan_finished.emit(models, error_msg)  # emit signal
 
 # ==========================================
 # 设置对话框 UI
@@ -106,137 +106,165 @@ class SettingsDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("大模型配置 (LLM Settings)")
-        # 移除 setFixedSize，改用 setMinimumSize 让布局引擎自动计算合适高度
-        self.setMinimumSize(450, 320)
+        self.setWindowTitle("⚙️ ASU 引擎设置")
+        self.setMinimumSize(500, 400)
         self.config = load_config()
-        self.initUI()
-
-    def initUI(self):
+        self.setup_ui()
+        
+    def setup_ui(self):
+        from PyQt6.QtWidgets import QGroupBox, QStackedWidget, QFormLayout
         layout = QVBoxLayout(self)
         
-        # 引擎选择
-        layout.addWidget(QLabel("<b>选择大模型引擎:</b>"))
-        self.btn_group = QButtonGroup(self)
+        # 1. 引擎类型选择 (QButtonGroup)
+        type_group = QGroupBox("选择 AI 引擎类型")
+        type_layout = QHBoxLayout()
+        self.radio_minimax = QRadioButton("云端 LLM (MiniMax)")
+        self.radio_custom = QRadioButton("本地/第三方 LLM (Ollama/vLLM)")
+        self.radio_agent = QRadioButton("本地智能体 (OpenClaw Agent)")
         
-        self.radio_minimax = QRadioButton("MiniMax (云端)")
-        self.radio_local = QRadioButton("第三方智能体 (OpenClaw / Hermes / Ollama等)")
+        type_layout.addWidget(self.radio_minimax)
+        type_layout.addWidget(self.radio_custom)
+        type_layout.addWidget(self.radio_agent)
+        type_group.setLayout(type_layout)
+        layout.addWidget(type_group)
         
-        self.btn_group.addButton(self.radio_minimax)
-        self.btn_group.addButton(self.radio_local)
+        # 2. 动态面板 (QStackedWidget)
+        self.stacked_widget = QStackedWidget()
         
-        layout.addWidget(self.radio_minimax)
-        layout.addWidget(self.radio_local)
+        # 面板 A: MiniMax
+        self.page_minimax = QWidget()
+        layout_minimax = QFormLayout(self.page_minimax)
+        self.input_minimax_key = QLineEdit(self.config.get("minimax_api_key", ""))
+        self.input_minimax_key.setEchoMode(QLineEdit.EchoMode.PasswordEchoOnEdit)
+        self.input_minimax_key.setPlaceholderText("请输入 MiniMax API Key")
+        layout_minimax.addRow("API Key:", self.input_minimax_key)
+        layout_minimax.addRow(QLabel("默认模型: MiniMax-M2.7"))
         
-        # 本地配置项
-        self.local_config_frame = QFrame()
-        local_layout = QVBoxLayout(self.local_config_frame)
-        local_layout.setContentsMargins(20, 0, 0, 10)
+        # 面板 B: Custom LLM (Ollama 等)
+        self.page_custom = QWidget()
+        layout_custom = QFormLayout(self.page_custom)
+        self.input_custom_base = QLineEdit(self.config.get("local_api_base", "http://localhost:11434/v1"))
+        self.input_custom_base.setPlaceholderText("例如: http://localhost:11434/v1")
+        self.input_custom_key = QLineEdit(self.config.get("local_api_key", ""))
+        self.input_custom_key.setEchoMode(QLineEdit.EchoMode.PasswordEchoOnEdit)
+        self.input_custom_key.setPlaceholderText("API Key (Ollama可不填)")
         
-        local_layout.addWidget(QLabel("API Base URL:"))
+        custom_probe_layout = QHBoxLayout()
+        self.btn_custom_scan = QPushButton("🔍 探测模型")
+        self.btn_custom_scan.clicked.connect(self.scan_custom_models)
+        self.combo_custom_model = QComboBox()
+        self.combo_custom_model.setEditable(True)
+        self.combo_custom_model.setCurrentText(self.config.get("local_model", "llama3"))
+        custom_probe_layout.addWidget(self.combo_custom_model, stretch=1)
+        custom_probe_layout.addWidget(self.btn_custom_scan)
         
-        api_layout = QHBoxLayout()
-        self.input_api_base = QLineEdit()
-        self.input_api_base.setPlaceholderText("例如: http://localhost:11434/v1")
-        self.btn_scan = QPushButton("🔍 探测模型")
-        self.btn_scan.clicked.connect(self.start_scan)
-        api_layout.addWidget(self.input_api_base)
-        api_layout.addWidget(self.btn_scan)
-        local_layout.addLayout(api_layout)
+        layout_custom.addRow("API Base URL:", self.input_custom_base)
+        layout_custom.addRow("API Key (选填):", self.input_custom_key)
+        layout_custom.addRow("可用模型:", custom_probe_layout)
         
-        local_layout.addWidget(QLabel("Model Name:"))
-        self.combo_model = QComboBox()
-        self.combo_model.setEditable(True)  # 允许手动输入以防探测不到
-        self.combo_model.setPlaceholderText("例如: hermes 或 openclaw")
-        local_layout.addWidget(self.combo_model)
+        # 面板 C: OpenClaw Agent
+        self.page_agent = QWidget()
+        layout_agent = QFormLayout(self.page_agent)
+        layout_agent.addRow(QLabel("说明: 将通过系统原生 openclaw CLI 调度智能体，无需配置端口。"))
         
-        local_layout.addWidget(QLabel("API Key (选填):"))
-        self.input_api_key = QLineEdit()
-        self.input_api_key.setPlaceholderText("如果第三方网关需要认证，请在此填写")
-        self.input_api_key.setEchoMode(QLineEdit.EchoMode.Password)
-        local_layout.addWidget(self.input_api_key)
+        agent_probe_layout = QHBoxLayout()
+        self.btn_agent_scan = QPushButton("🔍 获取本机智能体")
+        self.btn_agent_scan.clicked.connect(self.scan_agents)
+        self.combo_agent_name = QComboBox()
+        self.combo_agent_name.setEditable(True)
+        self.combo_agent_name.setCurrentText(self.config.get("agent_name", "main"))
+        agent_probe_layout.addWidget(self.combo_agent_name, stretch=1)
+        agent_probe_layout.addWidget(self.btn_agent_scan)
         
-        layout.addWidget(self.local_config_frame)
+        layout_agent.addRow("目标 Agent:", agent_probe_layout)
         
-        # 绑定事件
+        # 添加到 StackedWidget
+        self.stacked_widget.addWidget(self.page_minimax)
+        self.stacked_widget.addWidget(self.page_custom)
+        self.stacked_widget.addWidget(self.page_agent)
+        layout.addWidget(self.stacked_widget)
+        
+        # 3. 底部按钮
+        btn_box = QHBoxLayout()
+        btn_save = QPushButton("保存并关闭")
+        btn_save.clicked.connect(self.save_settings)
+        btn_box.addStretch()
+        btn_box.addWidget(btn_save)
+        layout.addLayout(btn_box)
+        
+        # 信号连接与状态初始化
         self.radio_minimax.toggled.connect(self.update_ui_state)
-        self.radio_local.toggled.connect(self.update_ui_state)
+        self.radio_custom.toggled.connect(self.update_ui_state)
+        self.radio_agent.toggled.connect(self.update_ui_state)
         
-        # 底部按钮
-        btn_layout = QHBoxLayout()
-        self.btn_save = QPushButton("保存配置")
-        self.btn_cancel = QPushButton("取消")
-        btn_layout.addStretch()
-        btn_layout.addWidget(self.btn_cancel)
-        btn_layout.addWidget(self.btn_save)
-        layout.addLayout(btn_layout)
-        
-        self.btn_save.clicked.connect(self.save_settings)
-        self.btn_cancel.clicked.connect(self.reject)
-        
-        self.load_current_settings()
-
-    def load_current_settings(self):
-        if self.config.get("provider_type") == "local":
-            self.radio_local.setChecked(True)
+        provider_type = self.config.get("provider_type", "minimax")
+        if provider_type == "local":
+            self.radio_custom.setChecked(True)
+        elif provider_type == "openclaw":
+            self.radio_agent.setChecked(True)
         else:
             self.radio_minimax.setChecked(True)
             
-        self.input_api_base.setText(self.config.get("local_api_base", "http://localhost:11434/v1"))
-        
-        saved_model = self.config.get("local_model", "")
-        if saved_model:
-            self.combo_model.addItem(saved_model)
-            self.combo_model.setCurrentText(saved_model)
-            
-        self.input_api_key.setText(self.config.get("local_api_key", ""))
-            
         self.update_ui_state()
 
-    def start_scan(self):
-        api_base = self.input_api_base.text().strip()
-        if not api_base:
-            QMessageBox.warning(self, "警告", "请先输入 API Base URL")
-            return
-            
-        self.btn_scan.setEnabled(False)
-        self.btn_scan.setText("探测中...")
-        
-        self.scanner = ModelScannerWorker(api_base)
-        self.scanner.scan_finished.connect(self.on_scan_finished)
-        self.scanner.start()
+    def update_ui_state(self):
+        if self.radio_minimax.isChecked():
+            self.stacked_widget.setCurrentWidget(self.page_minimax)
+        elif self.radio_custom.isChecked():
+            self.stacked_widget.setCurrentWidget(self.page_custom)
+        elif self.radio_agent.isChecked():
+            self.stacked_widget.setCurrentWidget(self.page_agent)
 
-    def on_scan_finished(self, models, error_msg):
-        self.btn_scan.setEnabled(True)
-        self.btn_scan.setText("🔍 探测模型")
+    def scan_custom_models(self):
+        self.btn_custom_scan.setEnabled(False)
+        self.btn_custom_scan.setText("扫描中...")
+        self.scanner = ModelScannerWorker(self.input_custom_base.text().strip())
+        self.scanner.scan_finished.connect(self.on_custom_scan_finished)
+        self.scanner.start()
         
+    def on_custom_scan_finished(self, models, error_msg):
+        self.btn_custom_scan.setEnabled(True)
+        self.btn_custom_scan.setText("🔍 探测模型")
         if error_msg:
             QMessageBox.critical(self, "探测失败", error_msg)
         else:
-            # 如果是自动推导的网关端口，同步更新输入框
             if ":18791" in self.scanner.api_base or "openclaw-cli" in self.scanner.api_base:
-                self.input_api_base.setText(self.scanner.api_base)
-                
-            self.combo_model.clear()
-            self.combo_model.addItems(models)
-            QMessageBox.information(self, "探测成功", f"成功发现智能体，请在下拉列表中确认并保存。")
-
-    def update_ui_state(self):
-        self.local_config_frame.setEnabled(self.radio_local.isChecked())
+                self.input_custom_base.setText(self.scanner.api_base)
+            self.combo_custom_model.clear()
+            self.combo_custom_model.addItems(models)
+            QMessageBox.information(self, "探测成功", "已更新本地 LLM 列表。")
+            
+    def scan_agents(self):
+        self.btn_agent_scan.setEnabled(False)
+        self.btn_agent_scan.setText("扫描中...")
+        self.scanner = ModelScannerWorker("openclaw-cli")
+        self.scanner.scan_finished.connect(self.on_agent_scan_finished)
+        self.scanner.start()
+        
+    def on_agent_scan_finished(self, models, error_msg):
+        self.btn_agent_scan.setEnabled(True)
+        self.btn_agent_scan.setText("🔍 获取本机智能体")
+        if error_msg:
+            QMessageBox.critical(self, "获取失败", error_msg)
+        else:
+            self.combo_agent_name.clear()
+            self.combo_agent_name.addItems(models)
+            QMessageBox.information(self, "获取成功", "已更新 OpenClaw 智能体列表。")
 
     def save_settings(self):
-        provider_type = "minimax"
-        if self.radio_local.isChecked():
-            # 判断是否是特殊的 OpenClaw 网关模式
-            if "openclaw" in self.combo_model.currentText().lower():
-                provider_type = "openclaw"
-            else:
-                provider_type = "local"
-                
+        if self.radio_minimax.isChecked():
+            provider_type = "minimax"
+        elif self.radio_custom.isChecked():
+            provider_type = "local"
+        else:
+            provider_type = "openclaw"
+            
         self.config["provider_type"] = provider_type
-        self.config["local_api_base"] = self.input_api_base.text().strip()
-        self.config["local_model"] = self.combo_model.currentText().strip()
-        self.config["local_api_key"] = self.input_api_key.text().strip()
+        self.config["minimax_api_key"] = self.input_minimax_key.text().strip()
+        self.config["local_api_base"] = self.input_custom_base.text().strip()
+        self.config["local_model"] = self.combo_custom_model.currentText().strip()
+        self.config["local_api_key"] = self.input_custom_key.text().strip()
+        self.config["agent_name"] = self.combo_agent_name.currentText().strip()
         
         save_config(self.config)
         self.config_updated.emit()

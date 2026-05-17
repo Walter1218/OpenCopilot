@@ -29,11 +29,15 @@ pip install -r requirements.txt
   - 支持最新的 `MiniMax-M2.7` 模型。
   - 完美适配并返回 MiniMax **Token Plan**（计费与配额）的 Tokens 消耗统计（包含 prompt_tokens, completion_tokens 等）。
   - 支持同步对话与流式输出（Stream）两种模式。
+  - 自动从 `.env` 文件加载密钥。
 - **用法示例**：
+  1. 将项目根目录下的 `.env.example` 复制并重命名为 `.env`。
+  2. 在 `.env` 中填入你的 MiniMax API Key: `MINIMAX_API_KEY=sk-xxxx`。
+  3. 在代码中调用：
   ```python
   from minimax_provider import MiniMaxProvider
   
-  provider = MiniMaxProvider(api_key="你的API_KEY")
+  provider = MiniMaxProvider() # 自动读取 .env 中的 Key
   content, usage = provider.chat("你好", model="MiniMax-M2.7")
   print("回答:", content, "消耗:", usage)
   ```

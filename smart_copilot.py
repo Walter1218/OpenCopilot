@@ -133,11 +133,14 @@ class SettingsDialog(QDialog):
         # 面板 A: MiniMax
         self.page_minimax = QWidget()
         layout_minimax = QFormLayout(self.page_minimax)
-        self.input_minimax_key = QLineEdit(self.config.get("minimax_api_key", ""))
+        
+        import os
+        default_minimax_key = self.config.get("minimax_api_key") or os.environ.get("MINIMAX_API_KEY", "")
+        self.input_minimax_key = QLineEdit(default_minimax_key)
         self.input_minimax_key.setEchoMode(QLineEdit.EchoMode.PasswordEchoOnEdit)
-        self.input_minimax_key.setPlaceholderText("请输入 MiniMax API Key")
+        self.input_minimax_key.setPlaceholderText("请输入 MiniMax API Key (若已在 .env 配置可留空)")
         layout_minimax.addRow("API Key:", self.input_minimax_key)
-        layout_minimax.addRow(QLabel("默认模型: MiniMax-M2.7"))
+        layout_minimax.addRow(QLabel("默认模型: MiniMax-Text-01"))
         
         # 面板 B: Custom LLM (Ollama 等)
         self.page_custom = QWidget()

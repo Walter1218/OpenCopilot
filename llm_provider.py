@@ -34,9 +34,11 @@ class BaseProvider:
 
 class MiniMaxProvider(BaseProvider):
     def __init__(self, api_key: str = None):
-        self.api_key = api_key or os.environ.get("MINIMAX_API_KEY")
+        # 优先使用传入的 api_key，其次使用 config 中的，最后回退到环境变量
+        config = load_config()
+        self.api_key = api_key or config.get("minimax_api_key") or os.environ.get("MINIMAX_API_KEY")
         if not self.api_key:
-            print("警告: 未找到 MINIMAX_API_KEY 环境变量，请在 .env 文件中设置。")
+            print("警告: 未找到 MINIMAX_API_KEY 环境变量或配置，请在 .env 文件中或设置面板中设置。")
         self.base_url = "https://api.minimax.chat/v1/text/chatcompletion_v2"
         self.default_model = "MiniMax-Text-01" # MiniMax新推荐模型
 

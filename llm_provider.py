@@ -147,12 +147,28 @@ class OpenClawCLIProvider(BaseProvider):
         self.agent_name = agent_name or "main"
         
     def stream_chat(self, prompt: str, system_prompt: str = ""):
-        full_message = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+        if system_prompt:
+            # 针对 OpenClaw Agent 模式，采用更强指令格式避免被自带 Persona 覆盖
+            full_message = f"请严格执行以下【系统指令】，忽略其他不相关的默认设定：\n\n【系统指令】\n{system_prompt}\n\n【待处理的用户输入】\n{prompt}"
+        else:
+            full_message = prompt
         return self._run_cli(full_message)
         
     def stream_chat_with_history(self, messages: list):
-        content = "\n".join([m.get("content", "") for m in messages])
-        return self._run_cli(content)
+        # 格式化多轮对话历史，带上角色前缀，帮助 Agent 理解上下文
+        formatted_messages = []
+        for m in messages:
+            role = m.get("role", "user")
+            content = m.get("content", "")
+            if role == "system":
+                formatted_messages.append(f"【系统指令】\n{content}")
+            elif role == "assistant":
+                formatted_messages.append(f"【AI回复】\n{content}")
+            else:
+                formatted_messages.append(f"【用户输入】\n{content}")
+                
+        final_content = "\n\n".join(formatted_messages)
+        return self._run_cli(final_content)
         
     def _run_cli(self, content: str):
         import subprocess

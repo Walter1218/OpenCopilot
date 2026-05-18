@@ -1,18 +1,29 @@
 import time
-import pyperclip
+import subprocess
 import threading
 import platform
-import pyautogui
-from pynput import mouse
+from pynput import mouse, keyboard
+import queue
 
 class TextSelector:
     def __init__(self):
         self.is_dragging = False
         self.drag_start = None
         self.drag_end = None
+        self.task_queue = queue.Queue()
         
-        self.old_clipboard = pyperclip.paste()
+        self.old_clipboard = self._get_clipboard()
         self.is_mac = platform.system() == 'Darwin'
+        self.keyboard_controller = keyboard.Controller()
+
+    def _get_clipboard(self):
+        try:
+            if platform.system() == 'Darwin':
+                return subprocess.check_output(['pbpaste'], text=True)
+            else:
+                return ""
+        except Exception:
+            return ""
 
     def on_click(self, x, y, button, pressed):
         if button == mouse.Button.left:
@@ -30,20 +41,28 @@ class TextSelector:
                         
                         if dx > 10 or dy > 10:
                             print(f"[Debug] 检测到拖拽动作，距离: dx={dx:.1f}, dy={dy:.1f}，准备获取文本...", flush=True)
-                            threading.Timer(0.2, self.capture_selected_text).start()
+                            self.task_queue.put("CAPTURE")
 
     def capture_selected_text(self):
         try:
-            # 使用 pyautogui 来模拟按键，它通常更可靠且跨平台
             if self.is_mac:
-                pyautogui.hotkey('command', 'c')
+                with self.keyboard_controller.pressed(keyboard.Key.cmd):
+                    self.keyboard_controller.press('c')
+                    self.keyboard_controller.release('c')
             else:
-                pyautogui.hotkey('ctrl', 'c')
+                with self.keyboard_controller.pressed(keyboard.Key.ctrl):
+                    self.keyboard_controller.press('c')
+                    self.keyboard_controller.release('c')
             
-            # 等待剪贴板写入完成
             time.sleep(0.2)
-            
-            new_clipboard = pyperclip.paste()
+            self._read_clipboard()
+                
+        except Exception as e:
+            print(f"获取选中文本失败: {e}", flush=True)
+
+    def _read_clipboard(self):
+        try:
+            new_clipboard = self._get_clipboard()
             
             if new_clipboard and new_clipboard != self.old_clipboard:
                 print("\n" + "="*40)
@@ -55,17 +74,29 @@ class TextSelector:
                 print("[Debug] 剪贴板内容未发生改变，或者未选中文本。", flush=True)
                 
         except Exception as e:
-            print(f"获取选中文本失败: {e}", flush=True)
+            print(f"读取剪贴板失败: {e}", flush=True)
 
 if __name__ == "__main__":
     selector = TextSelector()
     
-    print("📝 划词捕获程序(PyAutoGUI版)已启动...")
+    print("📝 划词捕获程序(安全线程版)已启动...")
     print("操作方法：用鼠标左键在任意窗口【划选一段文本】，程序会自动捕获它。")
     print("🛑 按 Ctrl+C 停止监控。")
     
+    # 启动后台监听线程
+    listener = mouse.Listener(on_click=selector.on_click)
+    listener.start()
+
     try:
-        with mouse.Listener(on_click=selector.on_click) as listener:
-            listener.join()
+        # 主线程循环处理任务
+        while True:
+            try:
+                task = selector.task_queue.get(timeout=0.1)
+                if task == "CAPTURE":
+                    time.sleep(0.2)
+                    selector.capture_selected_text()
+            except queue.Empty:
+                pass
     except KeyboardInterrupt:
         print("\n⏹️ 监控已停止。")
+        listener.stop()

@@ -2,11 +2,10 @@ import sys
 import threading
 import time
 import platform
-import pyautogui
-import pyperclip
+import subprocess
 import re
 from collections import deque
-from pynput import mouse
+from pynput import mouse, keyboard
 
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, 
@@ -381,16 +380,30 @@ class ChatWorker(QThread):
 # 2. 鼠标与剪贴板监听线程
 # ==========================================
 class MouseListenerWorker(QThread):
+    mouse_moved = pyqtSignal(int, int)
     text_selected = pyqtSignal(str)
     global_click = pyqtSignal(int, int)
-    mouse_moved = pyqtSignal(int, int)
+    capture_requested = pyqtSignal()
 
     def __init__(self):
         super().__init__()
         self.is_dragging = False
         self.drag_start = None
-        self.old_clipboard = pyperclip.paste()
+        self.old_clipboard = self._get_clipboard()
         self.is_mac = platform.system() == 'Darwin'
+        self.keyboard_controller = keyboard.Controller()
+        # Connect the signal to the slot (this executes in the thread that created the QThread, i.e., main thread)
+        self.capture_requested.connect(self.execute_capture)
+
+    def _get_clipboard(self):
+        try:
+            if platform.system() == 'Darwin':
+                return subprocess.check_output(['pbpaste'], text=True)
+            else:
+                # Add Windows/Linux clipboard command if needed in future
+                return ""
+        except Exception:
+            return ""
 
     def run(self):
         def on_move(x, y):
@@ -412,26 +425,39 @@ class MouseListenerWorker(QThread):
                             dy = abs(drag_end[1] - self.drag_start[1])
                             
                             if dx > 10 or dy > 10:
-                                threading.Timer(0.2, self.capture_selected_text).start()
+                                # Safe: emits signal to be handled in main GUI thread
+                                self.capture_requested.emit()
 
         with mouse.Listener(on_move=on_move, on_click=on_click) as listener:
             listener.join()
 
-    def capture_selected_text(self):
+    def execute_capture(self):
+        # This now runs in the main GUI thread!
+        QTimer.singleShot(200, self._do_hotkey_and_read)
+
+    def _do_hotkey_and_read(self):
         try:
             if self.is_mac:
-                pyautogui.hotkey('command', 'c')
+                with self.keyboard_controller.pressed(keyboard.Key.cmd):
+                    self.keyboard_controller.press('c')
+                    self.keyboard_controller.release('c')
             else:
-                pyautogui.hotkey('ctrl', 'c')
-                
-            time.sleep(0.2)
-            new_clipboard = pyperclip.paste()
-            
+                with self.keyboard_controller.pressed(keyboard.Key.ctrl):
+                    self.keyboard_controller.press('c')
+                    self.keyboard_controller.release('c')
+            # Wait for clipboard to update
+            QTimer.singleShot(200, self._read_clipboard)
+        except Exception as e:
+            print(f"划词快捷键捕获失败: {e}")
+
+    def _read_clipboard(self):
+        try:
+            new_clipboard = self._get_clipboard()
             if new_clipboard and new_clipboard != self.old_clipboard:
                 self.old_clipboard = new_clipboard
                 self.text_selected.emit(new_clipboard)
         except Exception as e:
-            print(f"划词捕获失败: {e}")
+            print(f"读取剪贴板失败: {e}")
 
 # ==========================================
 # 3. 智能悬浮卡片 (独立图层，可交互)
@@ -905,10 +931,13 @@ class CursorOverlay(QWidget):
 
 
 # ==========================================
-# 5. 总调度管理器
+# 5. 总调度管理器与生命周期管理
 # ==========================================
 class CopilotManager:
     def __init__(self):
+        self.openclaw_process = None
+        self._check_and_start_openclaw()
+        
         self.provider = ProviderFactory.create_provider()
         
         # 实例化两个独立的图层：
@@ -923,6 +952,33 @@ class CopilotManager:
         self.mouse_thread.text_selected.connect(self.on_text_selected)
         self.mouse_thread.global_click.connect(self.on_global_click)
         self.mouse_thread.start()
+
+    def _check_and_start_openclaw(self):
+        import socket
+        import subprocess
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        result = sock.connect_ex(('127.0.0.1', 18791))
+        if result == 0:
+            print("[OpenClaw] 服务端已在 18791 端口运行。")
+        else:
+            print("[OpenClaw] 18791 端口未占用，正在启动后台服务...")
+            try:
+                # 隐藏终端窗口启动子进程
+                self.openclaw_process = subprocess.Popen(
+                    ["openclaw", "start"], 
+                    stdout=subprocess.DEVNULL, 
+                    stderr=subprocess.DEVNULL
+                )
+            except Exception as e:
+                print(f"[OpenClaw] 启动失败: {e}")
+        sock.close()
+
+    def cleanup(self):
+        if self.openclaw_process:
+            print("[OpenClaw] 正在关闭后台服务...")
+            self.openclaw_process.terminate()
+            self.openclaw_process.wait(timeout=3)
+        self.mouse_thread.quit()
 
     def on_text_selected(self, text):
         pos = QCursor.pos()
@@ -948,4 +1004,6 @@ if __name__ == '__main__':
     print("  4. 点击卡片外部任意区域，卡片会自动消失。")
     print("🛑 按 Ctrl+C 在终端中停止，或直接关闭终端。")
     
-    sys.exit(app.exec())
+    ret = app.exec()
+    manager.cleanup()
+    sys.exit(ret)

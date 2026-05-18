@@ -30,12 +30,14 @@ ASU 是一个致力于探索**下一代人机交互模式**的系统级工具集
 ## 🚀 快速开始 (Quick Start)
 
 ### 1. 环境准备
-确保您的设备已安装 Python 3.10+。
+确保您的设备已安装 Python 3.10 或 3.11。
+> **⚠️ 严重警告**：请勿使用 Python 3.13+！目前核心依赖 `pynput` 在 Python 3.13+ 版本存在底层 `_thread._ThreadHandle` 兼容性 Bug，会导致划词和鼠标监听直接闪退。
 
 ```bash
 git clone https://github.com/Walter1218/ASU.git
 cd ASU
-python -m venv venv
+# 请明确指定使用 python3.10 或 3.11 创建虚拟环境
+python3.11 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```

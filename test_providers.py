@@ -1,13 +1,13 @@
 import sys
 import json
-from llm_provider import ProviderFactory, OpenClawCLIProvider
+from llm_provider import ProviderFactory, OpenClawServerProvider
 
 def test_provider():
     try:
         provider = ProviderFactory.create_provider()
         print(f"Created provider: {type(provider).__name__}")
         
-        if isinstance(provider, OpenClawCLIProvider):
+        if isinstance(provider, OpenClawServerProvider):
             print(f"Agent name configured: {provider.agent_name}")
             print("Testing stream_chat...")
             for chunk in provider.stream_chat("hello"):

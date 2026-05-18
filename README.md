@@ -5,15 +5,15 @@ ASU 是一个致力于探索**下一代人机交互模式**的系统级工具集
 
 ## ✨ 核心亮点 (Core Features)
 
-1. **三引擎动态热切架构 (Tri-Engine Architecture)**
-   首创三模式无缝切换，在 UI 设置面板中一键切换：
+1. **双引擎动态热切架构 (Dual-Engine Architecture)**
+   在 UI 设置面板中一键切换后端驱动引擎：
    - ☁️ **云端 LLM (MiniMax)**：开箱即用，极速响应。
    - 💻 **本地/第三方 LLM (Ollama/vLLM)**：支持标准 OpenAI 协议的本地推理服务。
-   - 🤖 **本地智能体 (OpenClaw Server)**：原生对接 OpenClaw HTTP Server 模式，程序启动时自动探测 18791 端口并在后台静默拉起服务端，实现真正的流式输出与零冷启动延迟。
+   *程序启动时会自动探测 18888 端口，并在后台静默拉起专属定制智能体（`asu_custom_agent.py`），实现多轮对话与身份记忆的底层托管。*
 
 2. **全局智能划词与无缝追问 (Global Smart Selection & Context Chat)**
    - 任意软件（IDE、浏览器、文档）中选中文字松开鼠标，即可触发智能悬浮卡片。
-   - 告别单轮对话，首创 **“连续对话 (Copilot Tab)”**：将初步解析无缝带入多轮聊天上下文，支持类似微信的流式追问体验。
+   - 告别单轮对话，首创 **“连续对话 (Copilot Tab)”**：后台智能体通过 `session_id` 自动管理对话历史和角色状态（如翻译官、架构师），无缝支持类似微信的流式多轮追问体验。
 
 3. **双图层解耦与多屏边缘适配 (Layer Decoupling & Multi-Screen Adaptation)**
    - 采用创新的**双图层架构**：全屏穿透图层负责绘制高刷光标特效（呼吸准星、水波纹）；局部交互图层负责承载 AI 悬浮卡片。
@@ -42,16 +42,12 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. ⚠️ 重要运行说明 (沙盒与权限)
-**如果您要使用本地智能体 (OpenClaw) 模式，请务必在原生系统终端 (Terminal/iTerm) 中启动本程序，请勿在带有权限沙盒的 IDE 内置终端中启动！**
-因为沙盒环境会拦截 OpenClaw 引擎对本机 `~/.openclaw` 配置与锁文件的读写权限，导致 `EPERM: operation not permitted` 错误。
+### 2. ⚠️ 运行说明 (权限要求)
+作为系统级增强工具，首次运行脚本时需在 macOS `系统设置 -> 隐私与安全性` 中授予终端或 IDE 以下权限：
+1. **辅助功能 (Accessibility)**：用于全局鼠标位置与按键拦截。
+2. **屏幕录制/键盘访问**：用于触发系统级文本抓取。
 
 ### 3. 启动程序
 ```bash
 python smart_copilot.py
 ```
-
-### ⚠️ macOS 权限提示
-作为系统级增强工具，首次运行脚本时需在 macOS `系统设置 -> 隐私与安全性` 中授予终端或 IDE 以下权限：
-1. **辅助功能 (Accessibility)**：用于全局鼠标位置与按键拦截。
-2. **屏幕录制/键盘访问**：用于触发系统级文本抓取。

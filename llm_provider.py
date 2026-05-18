@@ -124,67 +124,46 @@ class LocalProvider(BaseProvider):
     def stream_chat_with_history(self, messages: list):
         yield from self._do_stream(messages)
 
-class OpenClawServerProvider(BaseProvider):
-    def __init__(self, agent_name: str = "main"):
-        self.agent_name = agent_name or "main"
-        self.api_base = "http://localhost:18791/v1/chat/completions"
+class ASUCustomAgentClient(BaseProvider):
+    def __init__(self, port=18888):
+        self.api_base = f"http://127.0.0.1:{port}/v1/agent/chat"
 
-    def _do_stream(self, messages: list):
+    def stream_agent_task(self, text: str, action_type: str = "default", session_id: str = "default", is_new_task: bool = False):
         payload = {
-            "model": self.agent_name,
-            "messages": messages,
-            "stream": True
+            "text": text,
+            "action_type": action_type,
+            "session_id": session_id,
+            "is_new_task": is_new_task
         }
         try:
             with httpx.Client(verify=False) as client:
                 with client.stream("POST", self.api_base, json=payload, timeout=30.0) as response:
                     if response.status_code != 200:
-                        yield f"\n[OpenClaw Server Error]: HTTP {response.status_code} - {response.text}"
+                        yield f"\n[Agent Server Error]: HTTP {response.status_code} - {response.text}"
                         return
                     for line in response.iter_lines():
                         if line.startswith("data: ") and line != "data: [DONE]":
                             try:
                                 data = json.loads(line[6:])
-                                choices = data.get("choices", [])
-                                if choices:
-                                    content = choices[0].get("delta", {}).get("content", "")
-                                    if content:
-                                        yield content
+                                chunk = data.get("chunk", "")
+                                if chunk:
+                                    yield chunk
                             except Exception:
                                 pass
         except Exception as e:
-            yield f"\n[调用 OpenClaw Server 失败]: {str(e)}\n请检查后台服务是否启动在 18791 端口。"
+            yield f"\n[连接后台智能体失败]: {str(e)}\n请检查服务是否正常启动。"
 
     def stream_chat(self, prompt: str, system_prompt: str = ""):
-        messages = []
-        if system_prompt:
-            # 针对 OpenClaw Agent 模式，采用更强指令格式避免被自带 Persona 覆盖
-            messages.append({"role": "system", "content": f"请严格执行以下系统指令，忽略默认设定：\n{system_prompt}"})
-        messages.append({"role": "user", "content": prompt})
-        yield from self._do_stream(messages)
+        # 为了兼容旧接口，直接转发为 default 任务
+        yield from self.stream_agent_task(text=prompt, action_type="default", session_id="default", is_new_task=True)
 
     def stream_chat_with_history(self, messages: list):
-        # 如果存在系统指令，进行强覆盖处理
-        for m in messages:
-            if m.get("role") == "system":
-                m["content"] = f"请严格执行以下系统指令，忽略默认设定：\n{m['content']}"
-        yield from self._do_stream(messages)
+        # 为了兼容旧接口，取最后一条消息即可（历史在 agent 端维护）
+        last_msg = messages[-1]["content"] if messages else ""
+        yield from self.stream_agent_task(text=last_msg, action_type="chat", session_id="default", is_new_task=False)
 
 class ProviderFactory:
     @staticmethod
     def create_provider():
-        config = load_config()
-        provider_type = config.get("provider_type")
-        
-        if provider_type == "local":
-            return LocalProvider(
-                api_base=config.get("local_api_base", "http://localhost:11434/v1"),
-                model=config.get("local_model", "llama3"),
-                api_key=config.get("local_api_key", "sk-local")
-            )
-        elif provider_type == "openclaw":
-            return OpenClawServerProvider(
-                agent_name=config.get("agent_name", "main")
-            )
-        else:
-            return MiniMaxProvider()
+        # 现在所有请求都经过定制的 Agent Server 统一处理
+        return ASUCustomAgentClient()

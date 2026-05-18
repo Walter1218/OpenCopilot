@@ -114,16 +114,14 @@ class SettingsDialog(QDialog):
         from PyQt6.QtWidgets import QGroupBox, QStackedWidget, QFormLayout
         layout = QVBoxLayout(self)
         
-        # 1. 引擎类型选择 (QButtonGroup)
-        type_group = QGroupBox("选择 AI 引擎类型")
+        # 1. 引擎后端选择 (QButtonGroup)
+        type_group = QGroupBox("选择 ASU 定制智能体后端引擎")
         type_layout = QHBoxLayout()
         self.radio_minimax = QRadioButton("云端 LLM (MiniMax)")
         self.radio_custom = QRadioButton("本地/第三方 LLM (Ollama/vLLM)")
-        self.radio_agent = QRadioButton("本地智能体 (OpenClaw Agent)")
         
         type_layout.addWidget(self.radio_minimax)
         type_layout.addWidget(self.radio_custom)
-        type_layout.addWidget(self.radio_agent)
         type_group.setLayout(type_layout)
         layout.addWidget(type_group)
         
@@ -164,26 +162,9 @@ class SettingsDialog(QDialog):
         layout_custom.addRow("API Key (选填):", self.input_custom_key)
         layout_custom.addRow("可用模型:", custom_probe_layout)
         
-        # 面板 C: OpenClaw Agent
-        self.page_agent = QWidget()
-        layout_agent = QFormLayout(self.page_agent)
-        layout_agent.addRow(QLabel("说明: 将通过系统原生 openclaw CLI 调度智能体，无需配置端口。"))
-        
-        agent_probe_layout = QHBoxLayout()
-        self.btn_agent_scan = QPushButton("🔍 获取本机智能体")
-        self.btn_agent_scan.clicked.connect(self.scan_agents)
-        self.combo_agent_name = QComboBox()
-        self.combo_agent_name.setEditable(True)
-        self.combo_agent_name.setCurrentText(self.config.get("agent_name", "main"))
-        agent_probe_layout.addWidget(self.combo_agent_name, stretch=1)
-        agent_probe_layout.addWidget(self.btn_agent_scan)
-        
-        layout_agent.addRow("目标 Agent:", agent_probe_layout)
-        
         # 添加到 StackedWidget
         self.stacked_widget.addWidget(self.page_minimax)
         self.stacked_widget.addWidget(self.page_custom)
-        self.stacked_widget.addWidget(self.page_agent)
         layout.addWidget(self.stacked_widget)
         
         # 3. 底部按钮
@@ -197,13 +178,10 @@ class SettingsDialog(QDialog):
         # 信号连接与状态初始化
         self.radio_minimax.toggled.connect(self.update_ui_state)
         self.radio_custom.toggled.connect(self.update_ui_state)
-        self.radio_agent.toggled.connect(self.update_ui_state)
         
         provider_type = self.config.get("provider_type", "minimax")
         if provider_type == "local":
             self.radio_custom.setChecked(True)
-        elif provider_type == "openclaw":
-            self.radio_agent.setChecked(True)
         else:
             self.radio_minimax.setChecked(True)
             
@@ -214,8 +192,6 @@ class SettingsDialog(QDialog):
             self.stacked_widget.setCurrentWidget(self.page_minimax)
         elif self.radio_custom.isChecked():
             self.stacked_widget.setCurrentWidget(self.page_custom)
-        elif self.radio_agent.isChecked():
-            self.stacked_widget.setCurrentWidget(self.page_agent)
 
     def scan_custom_models(self):
         self.btn_custom_scan.setEnabled(False)
@@ -236,38 +212,19 @@ class SettingsDialog(QDialog):
             self.combo_custom_model.addItems(models)
             QMessageBox.information(self, "探测成功", "已更新本地 LLM 列表。")
             
-    def scan_agents(self):
-        self.btn_agent_scan.setEnabled(False)
-        self.btn_agent_scan.setText("扫描中...")
-        self.scanner = ModelScannerWorker("openclaw-cli")
-        self.scanner.scan_finished.connect(self.on_agent_scan_finished)
-        self.scanner.start()
-        
-    def on_agent_scan_finished(self, models, error_msg):
-        self.btn_agent_scan.setEnabled(True)
-        self.btn_agent_scan.setText("🔍 获取本机智能体")
-        if error_msg:
-            QMessageBox.critical(self, "获取失败", error_msg)
-        else:
-            self.combo_agent_name.clear()
-            self.combo_agent_name.addItems(models)
-            QMessageBox.information(self, "获取成功", "已更新 OpenClaw 智能体列表。")
-
     def save_settings(self):
         if self.radio_minimax.isChecked():
             provider_type = "minimax"
-        elif self.radio_custom.isChecked():
-            provider_type = "local"
         else:
-            provider_type = "openclaw"
+            provider_type = "local"
             
         self.config["provider_type"] = provider_type
         self.config["minimax_api_key"] = self.input_minimax_key.text().strip()
         self.config["local_api_base"] = self.input_custom_base.text().strip()
         self.config["local_model"] = self.combo_custom_model.currentText().strip()
         self.config["local_api_key"] = self.input_custom_key.text().strip()
-        self.config["agent_name"] = self.combo_agent_name.currentText().strip()
         
+        from llm_provider import save_config
         save_config(self.config)
         self.config_updated.emit()
         self.accept()
@@ -297,32 +254,18 @@ class AIWorker(QThread):
     text_updated = pyqtSignal(str)
     finished_signal = pyqtSignal()
 
-    def __init__(self, provider, prompt, action_type="auto"):
+    def __init__(self, provider, prompt, action_type="auto", session_id="default"):
         super().__init__()
         self.provider = provider
         self.prompt = prompt
         self.action_type = action_type
+        self.session_id = session_id
         self._is_running = True
 
     def run(self):
         try:
-            if self.action_type == "translate":
-                system_prompt = "你是一个金牌翻译官。请将用户提供的文本翻译为中文（如果是中文则翻译为英文）。要求信达雅，只输出翻译结果，不带任何解释和废话。"
-            elif self.action_type == "code":
-                system_prompt = "你是一个资深架构师。请对用户提供的代码进行深度解析：\n1. 总结这段代码的核心功能。\n2. 指出潜在的漏洞或优化空间。\n要求排版清晰，直接输出解析结果。"
-            elif self.action_type == "polish":
-                system_prompt = "你是一个资深编辑。请对用户提供的文本进行润色，修正语病，提升表达的专业度和流畅度，使其更具逻辑性。只输出润色后的结果，不解释。"
-            else:
-                system_prompt = (
-                    "你是一个强大的AI划词助手。请对用户提供的文本进行处理：\n"
-                    "1. 如果是外语，请翻译为中文。\n"
-                    "2. 如果是代码，请简要解释代码的作用。\n"
-                    "3. 如果是普通文本，请进行简明扼要的总结或解释。\n"
-                    "输出要求：排版清晰，直接输出结果，不要说多余的客套话。"
-                )
-            
             full_text = ""
-            for chunk in self.provider.stream_chat(self.prompt, system_prompt=system_prompt):
+            for chunk in self.provider.stream_agent_task(self.prompt, action_type=self.action_type, session_id=self.session_id, is_new_task=True):
                 if not self._is_running:
                     break
                 full_text += chunk
@@ -348,16 +291,17 @@ class ChatWorker(QThread):
     text_updated = pyqtSignal(str)
     finished_signal = pyqtSignal()
 
-    def __init__(self, provider, messages):
+    def __init__(self, provider, text, session_id="default"):
         super().__init__()
         self.provider = provider
-        self.messages = messages
+        self.text = text
+        self.session_id = session_id
         self._is_running = True
 
     def run(self):
         try:
             full_text = ""
-            for chunk in self.provider.stream_chat_with_history(self.messages):
+            for chunk in self.provider.stream_agent_task(self.text, action_type="chat", session_id=self.session_id, is_new_task=False):
                 if not self._is_running:
                     break
                 full_text += chunk
@@ -465,6 +409,8 @@ class MouseListenerWorker(QThread):
 # ==========================================
 # 3. 智能悬浮卡片 (独立图层，可交互)
 # ==========================================
+import uuid
+
 class AICardWindow(QWidget):
     def __init__(self, provider):
         super().__init__()
@@ -472,7 +418,8 @@ class AICardWindow(QWidget):
         self.worker = None
         self.chat_worker = None
         self.current_text = ""
-        self.chat_history = []  # 存储多轮对话历史
+        self.chat_history = []  # 保留用于 UI 显示（不再作为参数传给 Provider）
+        self.session_id = str(uuid.uuid4())
         self.initUI()
 
     def initUI(self):
@@ -682,16 +629,7 @@ class AICardWindow(QWidget):
         self.tabs.addTab(self.tab_chat, "💬 连续对话")
 
     def jump_to_chat(self):
-        # 提取当前划词上下文和 AI 回复，并切换到聊天 Tab
-        system_msg = "你是一个强大的AI助手，以下是用户刚才划选的内容以及你给出的解释，请基于此继续回答用户的问题。"
-        context = f"【用户划选内容】:\n{self.current_text}\n\n【你的初步回答】:\n{self.text_edit.toPlainText()}"
-        
-        self.chat_history = [
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": "请看看这段内容：\n" + self.current_text},
-            {"role": "assistant", "content": self.text_edit.toPlainText()}
-        ]
-        
+        # 切换到聊天 Tab，不再手动发送历史记录，因为后端 Agent 已有记忆
         self.chat_display.clear()
         self.append_chat_message("系统", "已将上下文带入，您可以继续追问。")
         self.tabs.setCurrentIndex(1)
@@ -705,18 +643,13 @@ class AICardWindow(QWidget):
         self.chat_input.clear()
         self.append_chat_message("你", user_text)
         
-        if not self.chat_history:
-            self.chat_history.append({"role": "system", "content": "你是一个强大的AI助手，请帮助用户解决问题。"})
-            
-        self.chat_history.append({"role": "user", "content": user_text})
-        
         self.append_chat_message("AI", "正在思考...", is_temp=True)
         
         if self.chat_worker and self.chat_worker.isRunning():
             self.chat_worker.stop()
             self.chat_worker.wait()
 
-        self.chat_worker = ChatWorker(self.provider, self.chat_history)
+        self.chat_worker = ChatWorker(self.provider, user_text, self.session_id)
         self.chat_worker.text_updated.connect(self.on_chat_updated)
         self.chat_worker.finished_signal.connect(self.on_chat_finished)
         self.chat_worker.start()
@@ -750,13 +683,7 @@ class AICardWindow(QWidget):
         scrollbar.setValue(scrollbar.maximum())
 
     def on_chat_finished(self):
-        # 记录 AI 最终的完整回复到历史记录
-        cursor = self.chat_display.textCursor()
-        cursor.setPosition(self._temp_chat_pos)
-        cursor.movePosition(cursor.MoveOperation.End, cursor.MoveMode.KeepAnchor)
-        final_text = cursor.selectedText().replace("AI: ", "").strip()
-        
-        self.chat_history.append({"role": "assistant", "content": final_text})
+        pass
 
     def open_settings(self):
         dialog = SettingsDialog(self)
@@ -768,6 +695,7 @@ class AICardWindow(QWidget):
 
     def show_card(self, text, x, y):
         self.current_text = text
+        self.session_id = str(uuid.uuid4()) # 每次划词生成新的会话ID
         # 考虑到高DPI，使用 QCursor.pos() 获得准确逻辑坐标
         pos = QCursor.pos()
         
@@ -811,7 +739,7 @@ class AICardWindow(QWidget):
             self.worker.stop()
             self.worker.wait()
 
-        self.worker = AIWorker(self.provider, self.current_text, action_type)
+        self.worker = AIWorker(self.provider, self.current_text, action_type, self.session_id)
         self.worker.text_updated.connect(self.on_text_updated)
         self.worker.start()
 
@@ -938,8 +866,8 @@ class CursorOverlay(QWidget):
 # ==========================================
 class CopilotManager:
     def __init__(self):
-        self.openclaw_process = None
-        self._check_and_start_openclaw()
+        self.agent_process = None
+        self._check_and_start_agent()
         
         self.provider = ProviderFactory.create_provider()
         
@@ -956,31 +884,35 @@ class CopilotManager:
         self.mouse_thread.global_click.connect(self.on_global_click)
         self.mouse_thread.start()
 
-    def _check_and_start_openclaw(self):
+    def _check_and_start_agent(self):
         import socket
         import subprocess
+        import sys
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        result = sock.connect_ex(('127.0.0.1', 18791))
+        result = sock.connect_ex(('127.0.0.1', 18888))
         if result == 0:
-            print("[OpenClaw] 服务端已在 18791 端口运行。")
+            print("[ASU Agent] 服务端已在 18888 端口运行。")
         else:
-            print("[OpenClaw] 18791 端口未占用，正在启动后台服务...")
+            print("[ASU Agent] 18888 端口未占用，正在启动 ASU 定制智能体...")
             try:
-                # 隐藏终端窗口启动子进程
-                self.openclaw_process = subprocess.Popen(
-                    ["openclaw", "start"], 
+                # 启动自定义 Agent Server
+                agent_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "asu_custom_agent.py")
+                self.agent_process = subprocess.Popen(
+                    [sys.executable, agent_script], 
                     stdout=subprocess.DEVNULL, 
                     stderr=subprocess.DEVNULL
                 )
+                import time
+                time.sleep(1) # 等待服务启动
             except Exception as e:
-                print(f"[OpenClaw] 启动失败: {e}")
+                print(f"[ASU Agent] 启动失败: {e}")
         sock.close()
 
     def cleanup(self):
-        if self.openclaw_process:
-            print("[OpenClaw] 正在关闭后台服务...")
-            self.openclaw_process.terminate()
-            self.openclaw_process.wait(timeout=3)
+        if self.agent_process:
+            print("[ASU Agent] 正在关闭后台服务...")
+            self.agent_process.terminate()
+            self.agent_process.wait(timeout=3)
         self.mouse_thread.quit()
 
     def on_text_selected(self, text):

@@ -39,8 +39,8 @@ class MiniMaxProvider(BaseProvider):
         self.api_key = api_key or config.get("minimax_api_key") or os.environ.get("MINIMAX_API_KEY")
         if not self.api_key:
             print("警告: 未找到 MINIMAX_API_KEY 环境变量或配置，请在 .env 文件中或设置面板中设置。")
-        self.base_url = "https://api.minimax.chat/v1/text/chatcompletion_v2"
-        self.default_model = "MiniMax-Text-01" # MiniMax新推荐模型
+        self.base_url = "https://api.minimax.chat/v1/chat/completions"
+        self.default_model = "MiniMax-M2.7"
 
     def _do_stream(self, messages: list):
         headers = {
@@ -69,7 +69,7 @@ class MiniMaxProvider(BaseProvider):
         except Exception as e:
             yield f"\n[MiniMax 连接失败]: {str(e)}"
 
-    def stream_chat(self, prompt: str, model: str = None, system_prompt: str = ""):
+    def stream_chat(self, prompt: str, system_prompt: str = ""):
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})

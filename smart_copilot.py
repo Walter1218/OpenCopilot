@@ -455,6 +455,32 @@ class AICardWindow(QWidget):
         quick_layout = QVBoxLayout(self.tab_quick)
         quick_layout.setContentsMargins(0, 10, 0, 0)
         
+        # IDE 插件探测状态栏
+        self.ide_status_layout = QHBoxLayout()
+        self.ide_status_layout.setContentsMargins(0, 0, 0, 5)
+        self.btn_read_ide = QPushButton("📥 极速读取当前 IDE 全文")
+        self.btn_read_ide.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(77, 166, 255, 180);
+                color: #fff;
+                border-radius: 8px;
+                padding: 6px 12px;
+                font-size: 12px;
+                font-weight: bold;
+                border: 1px solid rgba(77, 166, 255, 255);
+            }
+            QPushButton:hover {
+                background-color: rgba(77, 166, 255, 255);
+            }
+        """)
+        self.btn_read_ide.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_read_ide.clicked.connect(self.read_from_ide_extension)
+        self.btn_read_ide.hide() # 默认隐藏，探测到才显示
+        
+        self.ide_status_layout.addWidget(self.btn_read_ide)
+        self.ide_status_layout.addStretch()
+        quick_layout.addLayout(self.ide_status_layout)
+
         # 快捷指令工具栏
         self.btn_layout = QHBoxLayout()
         self.btn_layout.setContentsMargins(0, 0, 0, 5)
@@ -591,6 +617,27 @@ class AICardWindow(QWidget):
         self.tabs.setCurrentIndex(1)
         self.chat_input.setFocus()
 
+    def read_from_ide_extension(self):
+        try:
+            response = httpx.get("http://127.0.0.1:18889/context", timeout=2.0)
+            if response.status_code == 200:
+                data = response.json()
+                content = data.get("content", "")
+                filename = data.get("fileName", "Unknown")
+                if content:
+                    self.current_text = content
+                    self.text_edit.clear()
+                    self.text_edit.setPlainText(f"✅ 已成功从 IDE 插件读取全文 [{filename}]\n\n文件大小: {len(content)} 字符\n\n请点击下方快捷指令进行分析。")
+                    self.tabs.setCurrentIndex(0)
+                    self.btn_read_ide.setText("✅ 已读取全文")
+                    self.btn_read_ide.setStyleSheet(self.btn_read_ide.styleSheet().replace("rgba(77, 166, 255, 180)", "rgba(40, 167, 69, 180)").replace("rgba(77, 166, 255, 255)", "rgba(40, 167, 69, 255)"))
+                else:
+                    self.text_edit.setPlainText("❌ 从 IDE 读取的文件内容为空")
+            else:
+                self.text_edit.setPlainText(f"❌ 读取失败，插件返回状态码: {response.status_code}")
+        except Exception as e:
+            self.text_edit.setPlainText(f"❌ 无法连接到 IDE 伴生插件，请确认已在 VSCode/Trae 中安装并激活插件。\n\n错误信息: {e}")
+
     def send_chat_message(self):
         user_text = self.chat_input.text().strip()
         if not user_text:
@@ -667,6 +714,26 @@ class AICardWindow(QWidget):
         self.text_edit.clear()
         self.text_edit.setPlainText("🎯 请将划选的文本拖拽到此窗口中...")
         self.tabs.setCurrentIndex(0)
+        
+        # 重置 IDE 按钮状态
+        self.btn_read_ide.setText("📥 极速读取当前 IDE 全文")
+        self.btn_read_ide.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(77, 166, 255, 180);
+                color: #fff;
+                border-radius: 8px;
+                padding: 6px 12px;
+                font-size: 12px;
+                font-weight: bold;
+                border: 1px solid rgba(77, 166, 255, 255);
+            }
+            QPushButton:hover {
+                background-color: rgba(77, 166, 255, 255);
+            }
+        """)
+
+        # 异步探测 18889 端口是否存在
+        threading.Thread(target=self._probe_ide_extension, daemon=True).start()
 
         # 考虑到高DPI，使用 QCursor.pos() 获得准确逻辑坐标
         pos = QCursor.pos()
@@ -698,6 +765,18 @@ class AICardWindow(QWidget):
         
         self.move(target_x, target_y)
         self.show()
+
+    def _probe_ide_extension(self):
+        try:
+            # 仅发送一个极快的 OPTIONS 请求或 HEAD 请求测试连通性
+            response = httpx.options("http://127.0.0.1:18889/context", timeout=0.3)
+            if response.status_code in [200, 204]:
+                # 使用 QTimer.singleShot 确保在主线程更新 UI
+                QTimer.singleShot(0, lambda: self.btn_read_ide.show())
+                return
+        except Exception:
+            pass
+        QTimer.singleShot(0, lambda: self.btn_read_ide.hide())
 
     def trigger_ai(self, action_type):
         if not self.current_text:

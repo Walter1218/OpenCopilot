@@ -768,9 +768,10 @@ class AICardWindow(QWidget):
 
     def _probe_ide_extension(self):
         try:
-            # 仅发送一个极快的 OPTIONS 请求或 HEAD 请求测试连通性
-            response = httpx.options("http://127.0.0.1:18889/context", timeout=0.3)
-            if response.status_code in [200, 204]:
+            # 使用 GET 请求进行探活，因为我们的 Node 服务对 HEAD/OPTIONS 可能响应不够稳健
+            response = httpx.get("http://127.0.0.1:18889/context", timeout=0.3)
+            # 只要能连上（不管是不是404没打开文件），都说明插件在运行
+            if response.status_code in [200, 404]:
                 # 使用 QTimer.singleShot 确保在主线程更新 UI
                 QTimer.singleShot(0, lambda: self.btn_read_ide.show())
                 return

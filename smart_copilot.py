@@ -362,6 +362,8 @@ class MouseListenerWorker(QThread):
 import uuid
 
 class AICardWindow(QWidget):
+    ide_probe_result = pyqtSignal(bool)
+
     def __init__(self, provider):
         super().__init__()
         self.provider = provider
@@ -476,6 +478,7 @@ class AICardWindow(QWidget):
         self.btn_read_ide.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_read_ide.clicked.connect(self.read_from_ide_extension)
         self.btn_read_ide.hide() # 默认隐藏，探测到才显示
+        self.ide_probe_result.connect(self._update_ide_btn)
         
         self.ide_status_layout.addWidget(self.btn_read_ide)
         self.ide_status_layout.addStretch()
@@ -772,12 +775,17 @@ class AICardWindow(QWidget):
             response = httpx.get("http://127.0.0.1:18889/context", timeout=0.3)
             # 只要能连上（不管是不是404没打开文件），都说明插件在运行
             if response.status_code in [200, 404]:
-                # 使用 QTimer.singleShot 确保在主线程更新 UI
-                QTimer.singleShot(0, lambda: self.btn_read_ide.show())
+                self.ide_probe_result.emit(True)
                 return
         except Exception:
             pass
-        QTimer.singleShot(0, lambda: self.btn_read_ide.hide())
+        self.ide_probe_result.emit(False)
+
+    def _update_ide_btn(self, is_active):
+        if is_active:
+            self.btn_read_ide.show()
+        else:
+            self.btn_read_ide.hide()
 
     def trigger_ai(self, action_type):
         if not self.current_text:

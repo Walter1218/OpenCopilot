@@ -49,6 +49,13 @@ pip install -r requirements.txt
 2. **屏幕录制/键盘访问**：用于触发系统级文本抓取。
 
 ### 3. 启动程序
+强烈建议通过绝对路径调用虚拟环境中的 Python，以避免环境丢失导致的 `qt.qpa.plugin` 报错：
 ```bash
-python smart_copilot.py
+./venv/bin/python smart_copilot.py
 ```
+
+### 4. 操作指南 (How to Use)
+1. 在任何软件（如 IDE 代码编辑器）中，用鼠标左键划选你想要解释的代码或文本。
+2. 鼠标原地**双击右键**，唤出智能悬浮卡片。
+3. 将鼠标移回刚才划选的高亮区域，**按住左键**将该文本块拖拽并丢入悬浮卡片中。
+4. AI 将自动识别文本并开始流式解析输出。

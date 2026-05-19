@@ -859,6 +859,7 @@ class CopilotManager:
         import socket
         import subprocess
         import sys
+        import os
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         result = sock.connect_ex(('127.0.0.1', 18888))
         if result == 0:

@@ -3,6 +3,11 @@
   "displayName": "ASU IDE Companion",
   "description": "Companion extension for ASU (Advanced System Utilities) to provide local IDE context.",
   "version": "1.0.0",
+  "publisher": "ASU",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/asu.git"
+  },
   "engines": {
     "vscode": "^1.70.0"
   },
@@ -10,7 +15,7 @@
     "Other"
   ],
   "activationEvents": [
-    "*"
+    "onStartupFinished"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -22,7 +27,6 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run package",
     "package": "vsce package",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

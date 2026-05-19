@@ -42,15 +42,30 @@ function startServer() {
         }
 
         if (req.method === 'GET' && req.url === '/context') {
-            const editor = vscode.window.activeTextEditor;
+            let document = null;
             
-            if (!editor) {
+            // 1. 尝试获取当前激活的编辑器
+            if (vscode.window.activeTextEditor) {
+                document = vscode.window.activeTextEditor.document;
+            } 
+            // 2. 如果当前焦点在终端或侧边栏，尝试获取可见的编辑器
+            else if (vscode.window.visibleTextEditors.length > 0) {
+                document = vscode.window.visibleTextEditors[0].document;
+            } 
+            // 3. 如果都没有，尝试获取工作区打开的第一个真实文件
+            else {
+                const docs = vscode.workspace.textDocuments.filter(doc => doc.uri.scheme === 'file');
+                if (docs.length > 0) {
+                    document = docs[docs.length - 1]; // 取最近的一个
+                }
+            }
+            
+            if (!document) {
                 res.writeHead(404, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'No active editor found' }));
                 return;
             }
 
-            const document = editor.document;
             const text = document.getText();
             const fileName = document.fileName;
             const languageId = document.languageId;

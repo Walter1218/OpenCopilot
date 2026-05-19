@@ -324,87 +324,37 @@ class ChatWorker(QThread):
         self._is_running = False
 
 # ==========================================
-# 2. 鼠标与剪贴板监听线程
+# 2. 鼠标双击右键监听线程
 # ==========================================
 class MouseListenerWorker(QThread):
     mouse_moved = pyqtSignal(int, int)
-    text_selected = pyqtSignal(str)
     global_click = pyqtSignal(int, int)
-    capture_requested = pyqtSignal()
+    double_right_clicked = pyqtSignal(int, int)
 
     def __init__(self):
         super().__init__()
-        self.is_dragging = False
-        self.drag_start = None
-        self.old_clipboard = self._get_clipboard()
-        self.is_mac = platform.system() == 'Darwin'
-        self.keyboard_controller = keyboard.Controller()
-        # Connect the signal to the slot (this executes in the thread that created the QThread, i.e., main thread)
-        self.capture_requested.connect(self.execute_capture)
-
-    def _get_clipboard(self):
-        try:
-            if platform.system() == 'Darwin':
-                return subprocess.check_output(['pbpaste'], text=True)
-            else:
-                # Add Windows/Linux clipboard command if needed in future
-                return ""
-        except Exception:
-            return ""
+        self.last_right_click_time = 0
+        self.double_click_threshold = 0.4  # 400ms
 
     def run(self):
         def on_move(x, y):
             self.mouse_moved.emit(int(x), int(y))
             
         def on_click(x, y, button, pressed):
-            if button == mouse.Button.left:
-                if pressed:
-                    self.is_dragging = True
-                    self.drag_start = (x, y)
-                    self.global_click.emit(int(x), int(y))
-                else:
-                    if self.is_dragging:
-                        drag_end = (x, y)
-                        self.is_dragging = False
-                        
-                        if self.drag_start and drag_end:
-                            dx = abs(drag_end[0] - self.drag_start[0])
-                            dy = abs(drag_end[1] - self.drag_start[1])
-                            
-                            if dx > 10 or dy > 10:
-                                # Safe: emits signal to be handled in main GUI thread
-                                self.capture_requested.emit()
+            if pressed:
+                self.global_click.emit(int(x), int(y))
+                if button == mouse.Button.right:
+                    current_time = time.time()
+                    if current_time - self.last_right_click_time < self.double_click_threshold:
+                        # 检测到双击右键
+                        self.double_right_clicked.emit(int(x), int(y))
+                        self.last_right_click_time = 0  # 重置
+                    else:
+                        self.last_right_click_time = current_time
 
         with mouse.Listener(on_move=on_move, on_click=on_click) as listener:
             listener.join()
 
-    def execute_capture(self):
-        # This now runs in the main GUI thread!
-        QTimer.singleShot(200, self._do_hotkey_and_read)
-
-    def _do_hotkey_and_read(self):
-        try:
-            if self.is_mac:
-                with self.keyboard_controller.pressed(keyboard.Key.cmd):
-                    self.keyboard_controller.press('c')
-                    self.keyboard_controller.release('c')
-            else:
-                with self.keyboard_controller.pressed(keyboard.Key.ctrl):
-                    self.keyboard_controller.press('c')
-                    self.keyboard_controller.release('c')
-            # Wait for clipboard to update
-            QTimer.singleShot(200, self._read_clipboard)
-        except Exception as e:
-            print(f"划词快捷键捕获失败: {e}")
-
-    def _read_clipboard(self):
-        try:
-            new_clipboard = self._get_clipboard()
-            if new_clipboard and new_clipboard != self.old_clipboard:
-                self.old_clipboard = new_clipboard
-                self.text_selected.emit(new_clipboard)
-        except Exception as e:
-            print(f"读取剪贴板失败: {e}")
 
 # ==========================================
 # 3. 智能悬浮卡片 (独立图层，可交互)
@@ -430,7 +380,9 @@ class AICardWindow(QWidget):
             Qt.WindowType.BypassWindowManagerHint
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        self.setAcceptDrops(True)  # 允许拖拽文本到窗口
+
+        # self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
 
         self.resize(400, 300)
         self.frame = QFrame(self)
@@ -546,6 +498,7 @@ class AICardWindow(QWidget):
         self.text_edit = QTextEdit(self.tab_quick)
         self.text_edit.setReadOnly(True)
         self.text_edit.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse | Qt.TextInteractionFlag.TextSelectableByKeyboard)
+        self.text_edit.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.text_edit.setStyleSheet("""
             QTextEdit {
                 background-color: transparent;
@@ -584,12 +537,14 @@ class AICardWindow(QWidget):
 
         self.chat_display = QTextEdit(self.tab_chat)
         self.chat_display.setReadOnly(True)
+        self.chat_display.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.chat_display.setStyleSheet(self.text_edit.styleSheet())
         chat_layout.addWidget(self.chat_display)
 
         input_layout = QHBoxLayout()
         self.chat_input = QLineEdit(self.tab_chat)
         self.chat_input.setPlaceholderText("输入消息，按 Enter 发送...")
+        self.chat_input.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         self.chat_input.setStyleSheet("""
             QLineEdit {
                 background-color: rgba(30, 30, 35, 200);
@@ -627,6 +582,7 @@ class AICardWindow(QWidget):
 
         self.tabs.addTab(self.tab_quick, "⚡️ 快捷划词")
         self.tabs.addTab(self.tab_chat, "💬 连续对话")
+        self.tabs.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
     def jump_to_chat(self):
         # 切换到聊天 Tab，不再手动发送历史记录，因为后端 Agent 已有记忆
@@ -693,9 +649,25 @@ class AICardWindow(QWidget):
     def reload_provider(self):
         self.provider = ProviderFactory.create_provider()
 
-    def show_card(self, text, x, y):
-        self.current_text = text
-        self.session_id = str(uuid.uuid4()) # 每次划词生成新的会话ID
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        text = event.mimeData().text()
+        if text:
+            self.current_text = text
+            self.tabs.setCurrentIndex(0)
+            self.trigger_ai("auto")
+
+    def show_card(self, x, y):
+        self.current_text = ""
+        self.session_id = str(uuid.uuid4()) # 每次呼出生成新的会话ID
+        
+        self.text_edit.clear()
+        self.text_edit.setPlainText("🎯 请将划选的文本拖拽到此窗口中...")
+        self.tabs.setCurrentIndex(0)
+
         # 考虑到高DPI，使用 QCursor.pos() 获得准确逻辑坐标
         pos = QCursor.pos()
         
@@ -726,7 +698,6 @@ class AICardWindow(QWidget):
         
         self.move(target_x, target_y)
         self.show()
-        self.trigger_ai("auto")
 
     def trigger_ai(self, action_type):
         if not self.current_text:
@@ -785,7 +756,7 @@ class CursorOverlay(QWidget):
             Qt.WindowType.WindowTransparentForInput
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        # self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
 
         rect = QRect()
         for screen in QApplication.screens():
@@ -880,7 +851,7 @@ class CopilotManager:
         # 启动鼠标监听
         self.mouse_thread = MouseListenerWorker()
         self.mouse_thread.mouse_moved.connect(self.cursor_overlay.update_cursor_position)
-        self.mouse_thread.text_selected.connect(self.on_text_selected)
+        self.mouse_thread.double_right_clicked.connect(self.on_double_right_click)
         self.mouse_thread.global_click.connect(self.on_global_click)
         self.mouse_thread.start()
 
@@ -915,9 +886,9 @@ class CopilotManager:
             self.agent_process.wait(timeout=3)
         self.mouse_thread.quit()
 
-    def on_text_selected(self, text):
+    def on_double_right_click(self, x, y):
         pos = QCursor.pos()
-        self.ai_card.show_card(text, pos.x(), pos.y())
+        self.ai_card.show_card(pos.x(), pos.y())
 
     def on_global_click(self, x, y):
         self.cursor_overlay.add_ripple(x, y)
@@ -931,10 +902,10 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     manager = CopilotManager()
     
-    print("🚀 智能悬浮划词 Copilot 已启动！")
+    print("🚀 智能悬浮划词 Copilot (纯鼠标重构版) 已启动！")
     print("操作提示：")
-    print("  1. 在任意地方用鼠标划选一段文字（代码、英文、普通文本均可）。")
-    print("  2. 松开鼠标后，MiniMax 悬浮卡片将自动在鼠标旁弹出，并流式输出结果。")
+    print("  1. 在任意地方【双击鼠标右键】，即可唤出 AI 悬浮卡片。")
+    print("  2. 将选中的文本（代码、英文、普通文本均可）直接【拖拽】到悬浮卡片中，AI 会自动进行解析。")
     print("  3. 弹出的卡片支持滚动，并允许选中复制 AI 回复的内容。")
     print("  4. 点击卡片外部任意区域，卡片会自动消失。")
     print("🛑 按 Ctrl+C 在终端中停止，或直接关闭终端。")

@@ -72,5 +72,5 @@ pip install -r requirements.txt
 1. 进入 `asu-ide-extension` 目录。
 2. 运行 `npm install` 与 `npx vsce package --no-dependencies --no-yarn` 打包出 `.vsix` 插件文件。
 3. 在你的 IDE 中手动安装该 `.vsix` 插件。
-4. 插件激活后，会在本地后台静默监听 `18889` 端口。此时双击右键唤出 ASU 卡片，卡片会自动探测到 IDE 环境，并显示一个绿色的 **[📥 极速读取当前 IDE 全文]** 按钮。
+4. 插件激活后，会在本地后台静默分配动态端口以防多窗口冲突，并通过临时文件信标与 ASU 通信。此时双击右键唤出 ASU 卡片，卡片会自动探测到 IDE 环境，并显示一个绿色的 **[📥 极速读取当前 IDE 全文]** 按钮。
 5. 点击该按钮，即可瞬间将当前编辑器内的代码全文安全、无感地投喂给 AI！

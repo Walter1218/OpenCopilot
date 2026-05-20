@@ -363,6 +363,7 @@ import uuid
 
 class AICardWindow(QWidget):
     ide_probe_result = pyqtSignal(bool)
+    browser_probe_result = pyqtSignal(str) # 返回浏览器名称，例如 "Google Chrome" 或 "Safari"
 
     def __init__(self, provider):
         super().__init__()
@@ -483,6 +484,33 @@ class AICardWindow(QWidget):
         self.ide_status_layout.addWidget(self.btn_read_ide)
         self.ide_status_layout.addStretch()
         quick_layout.addLayout(self.ide_status_layout)
+
+        # 浏览器探测状态栏
+        self.browser_status_layout = QHBoxLayout()
+        self.browser_status_layout.setContentsMargins(0, 0, 0, 5)
+        self.btn_read_browser = QPushButton("🌐 一键读取当前网页全文")
+        self.btn_read_browser.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(255, 140, 0, 180);
+                color: #fff;
+                border-radius: 8px;
+                padding: 6px 12px;
+                font-size: 12px;
+                font-weight: bold;
+                border: 1px solid rgba(255, 140, 0, 255);
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 140, 0, 255);
+            }
+        """)
+        self.btn_read_browser.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_read_browser.clicked.connect(self.read_from_browser)
+        self.btn_read_browser.hide() # 默认隐藏
+        self.browser_probe_result.connect(self._update_browser_btn)
+        
+        self.browser_status_layout.addWidget(self.btn_read_browser)
+        self.browser_status_layout.addStretch()
+        quick_layout.addLayout(self.browser_status_layout)
 
         # 快捷指令工具栏
         self.btn_layout = QHBoxLayout()
@@ -755,8 +783,26 @@ class AICardWindow(QWidget):
             }
         """)
 
-        # 异步探测 18889 端口是否存在
+        # 重置浏览器按钮状态
+        self.btn_read_browser.setText("🌐 一键读取当前网页全文")
+        self.btn_read_browser.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(255, 140, 0, 180);
+                color: #fff;
+                border-radius: 8px;
+                padding: 6px 12px;
+                font-size: 12px;
+                font-weight: bold;
+                border: 1px solid rgba(255, 140, 0, 255);
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 140, 0, 255);
+            }
+        """)
+
+        # 异步探测
         threading.Thread(target=self._probe_ide_extension, daemon=True).start()
+        threading.Thread(target=self._probe_browser, daemon=True).start()
 
         # 考虑到高DPI，使用 QCursor.pos() 获得准确逻辑坐标
         pos = QCursor.pos()
@@ -789,6 +835,21 @@ class AICardWindow(QWidget):
         self.move(target_x, target_y)
         self.show()
 
+    def _probe_browser(self):
+        try:
+            import subprocess
+            # 使用 AppleScript 获取当前处于激活状态的应用程序名称
+            script = 'tell application "System Events" to get name of first application process whose frontmost is true'
+            front_app = subprocess.check_output(['osascript', '-e', script], stderr=subprocess.DEVNULL).decode('utf-8').strip()
+            
+            supported_browsers = ["Google Chrome", "Safari", "Brave Browser", "Microsoft Edge", "Arc"]
+            if front_app in supported_browsers:
+                self.browser_probe_result.emit(front_app)
+            else:
+                self.browser_probe_result.emit("")
+        except Exception:
+            self.browser_probe_result.emit("")
+
     def _probe_ide_extension(self):
         port = self._get_ide_port()
         if not port:
@@ -811,6 +872,61 @@ class AICardWindow(QWidget):
             self.btn_read_ide.show()
         else:
             self.btn_read_ide.hide()
+
+    def _update_browser_btn(self, browser_name):
+        if browser_name:
+            self.active_browser = browser_name
+            self.btn_read_browser.setText(f"🌐 一键读取当前网页 ({browser_name})")
+            self.btn_read_browser.show()
+        else:
+            self.active_browser = None
+            self.btn_read_browser.hide()
+
+    def read_from_browser(self):
+        if not hasattr(self, 'active_browser') or not self.active_browser:
+            return
+            
+        browser = self.active_browser
+        import subprocess
+        
+        # 针对不同浏览器构建 AppleScript
+        script = ""
+        if browser in ["Google Chrome", "Brave Browser", "Microsoft Edge", "Arc"]:
+            script = f'''
+            tell application "{browser}"
+                execute front window's active tab javascript "document.body.innerText;"
+            end tell
+            '''
+        elif browser == "Safari":
+            script = '''
+            tell application "Safari"
+                do JavaScript "document.body.innerText;" in document 1
+            end tell
+            '''
+            
+        if not script:
+            self.text_edit.setPlainText("❌ 当前浏览器不支持一键读取。")
+            return
+            
+        try:
+            text = subprocess.check_output(['osascript', '-e', script], stderr=subprocess.STDOUT).decode('utf-8').strip()
+            if text:
+                self.current_text = text
+                self.text_edit.clear()
+                self.text_edit.setPlainText(f"✅ 已成功从 {browser} 读取网页全文\n\n网页大小: {len(text)} 字符\n\n请点击下方快捷指令进行分析。")
+                self.tabs.setCurrentIndex(0)
+                self.btn_read_browser.setText("✅ 已读取全文")
+                self.btn_read_browser.setStyleSheet(self.btn_read_browser.styleSheet().replace("rgba(255, 140, 0, 180)", "rgba(40, 167, 69, 180)").replace("rgba(255, 140, 0, 255)", "rgba(40, 167, 69, 255)"))
+            else:
+                self.text_edit.setPlainText(f"❌ 从 {browser} 读取的内容为空。")
+        except subprocess.CalledProcessError as e:
+            err_output = e.output.decode('utf-8')
+            if "JavaScript" in err_output or "Apple Events" in err_output:
+                self.text_edit.setPlainText(f"❌ 读取失败：缺少权限。\n\n请在 {browser} 的菜单中启用：\n「允许来自 Apple 事件的 JavaScript (Allow JavaScript from Apple Events)」")
+            else:
+                self.text_edit.setPlainText(f"❌ 跨进程执行失败: {err_output}")
+        except Exception as e:
+            self.text_edit.setPlainText(f"❌ 读取过程中发生未知错误: {e}")
 
     def trigger_ai(self, action_type):
         if not self.current_text:

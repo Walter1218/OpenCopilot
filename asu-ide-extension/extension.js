@@ -2,9 +2,22 @@ const vscode = require('vscode');
 const http = require('http');
 
 let server;
+let lastActiveDocument = null;
 
 function activate(context) {
     console.log('ASU IDE Companion extension is now active!');
+
+    // 记录最后一次激活的真实文件，防止失去焦点后 activeTextEditor 变 undefined
+    if (vscode.window.activeTextEditor) {
+        lastActiveDocument = vscode.window.activeTextEditor.document;
+    }
+
+    let activeEditorDisposable = vscode.window.onDidChangeActiveTextEditor(editor => {
+        if (editor && editor.document && editor.document.uri.scheme === 'file') {
+            lastActiveDocument = editor.document;
+        }
+    });
+    context.subscriptions.push(activeEditorDisposable);
 
     // Command to manually start the server if needed
     let disposable = vscode.commands.registerCommand('asu-ide-extension.startServer', function () {
@@ -42,17 +55,20 @@ function startServer() {
         }
 
         if (req.method === 'GET' && req.url === '/context') {
-            // 在 VSCode API 中获取所有打开的文本文档
-            const docs = vscode.workspace.textDocuments.filter(doc => doc.uri.scheme === 'file');
+            // 优先获取当前激活的，如果没有（比如焦点在外部窗口），则使用我们记录的最后一个激活文件
+            let document = null;
+            if (vscode.window.activeTextEditor && vscode.window.activeTextEditor.document.uri.scheme === 'file') {
+                document = vscode.window.activeTextEditor.document;
+                lastActiveDocument = document; // 更新缓存
+            } else if (lastActiveDocument) {
+                document = lastActiveDocument;
+            }
             
-            if (docs.length === 0) {
+            if (!document) {
                 res.writeHead(404, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'No files are currently open in the workspace' }));
+                res.end(JSON.stringify({ error: 'No active or recent editor found' }));
                 return;
             }
-
-            // 获取最后一个被修改或打开的真实文件
-            const document = docs[docs.length - 1];
 
             const text = document.getText();
             const fileName = document.fileName;

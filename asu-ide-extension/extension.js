@@ -38,6 +38,7 @@ function activate(context) {
 }
 
 function startServer() {
+    // 如果在重启插件时端口仍被占用，强制关闭之前的服务器实例
     if (server) {
         server.close();
     }

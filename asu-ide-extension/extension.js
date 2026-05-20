@@ -42,29 +42,17 @@ function startServer() {
         }
 
         if (req.method === 'GET' && req.url === '/context') {
-            let document = null;
+            // 在 VSCode API 中获取所有打开的文本文档
+            const docs = vscode.workspace.textDocuments.filter(doc => doc.uri.scheme === 'file');
             
-            // 1. 尝试获取当前激活的编辑器
-            if (vscode.window.activeTextEditor) {
-                document = vscode.window.activeTextEditor.document;
-            } 
-            // 2. 如果当前焦点在终端或侧边栏，尝试获取可见的编辑器
-            else if (vscode.window.visibleTextEditors.length > 0) {
-                document = vscode.window.visibleTextEditors[0].document;
-            } 
-            // 3. 如果都没有，尝试获取工作区打开的第一个真实文件
-            else {
-                const docs = vscode.workspace.textDocuments.filter(doc => doc.uri.scheme === 'file');
-                if (docs.length > 0) {
-                    document = docs[docs.length - 1]; // 取最近的一个
-                }
-            }
-            
-            if (!document) {
+            if (docs.length === 0) {
                 res.writeHead(404, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: 'No active editor found' }));
+                res.end(JSON.stringify({ error: 'No files are currently open in the workspace' }));
                 return;
             }
+
+            // 获取最后一个被修改或打开的真实文件
+            const document = docs[docs.length - 1];
 
             const text = document.getText();
             const fileName = document.fileName;

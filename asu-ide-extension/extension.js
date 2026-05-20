@@ -15,6 +15,15 @@ function activate(context) {
     let activeEditorDisposable = vscode.window.onDidChangeActiveTextEditor(editor => {
         if (editor && editor.document && editor.document.uri.scheme === 'file') {
             lastActiveDocument = editor.document;
+            // 当在这个 Trae 窗口激活文件时，重新把自己的端口写入临时文件
+            // 这样就能确保 ASU 永远读取的是“当前正在操作的那个 Trae 窗口”
+            if (server && server.address()) {
+                const fs = require('fs');
+                const path = require('path');
+                const os = require('os');
+                const portFilePath = path.join(os.tmpdir(), 'asu_ide_port.txt');
+                fs.writeFileSync(portFilePath, server.address().port.toString());
+            }
         }
     });
     context.subscriptions.push(activeEditorDisposable);
@@ -87,8 +96,18 @@ function startServer() {
         }
     });
 
-    server.listen(18889, '127.0.0.1', () => {
-        console.log('ASU IDE Companion Server running on http://127.0.0.1:18889');
+    server.listen(0, '127.0.0.1', () => {
+        const port = server.address().port;
+        console.log(`ASU IDE Companion Server running on http://127.0.0.1:${port}`);
+        // 将分配到的动态端口写入临时文件，供 ASU 客户端读取
+        const fs = require('fs');
+        const path = require('path');
+        const os = require('os');
+        const portFilePath = path.join(os.tmpdir(), 'asu_ide_port.txt');
+        
+        // 每次启动覆盖写入最新的端口号，并且由于写在临时目录，所有 Trae 实例都会竞争写入
+        // 这意味着“最后被激活”的 Trae 窗口的服务端口会生效
+        fs.writeFileSync(portFilePath, port.toString());
     });
     
     server.on('error', (e) => {

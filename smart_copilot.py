@@ -620,9 +620,29 @@ class AICardWindow(QWidget):
         self.tabs.setCurrentIndex(1)
         self.chat_input.setFocus()
 
+    def _get_ide_port(self):
+        """从临时文件读取当前激活的 IDE 插件端口"""
+        import os
+        import tempfile
+        port_file = os.path.join(tempfile.gettempdir(), 'asu_ide_port.txt')
+        if os.path.exists(port_file):
+            try:
+                with open(port_file, 'r') as f:
+                    port = f.read().strip()
+                    if port.isdigit():
+                        return port
+            except Exception:
+                pass
+        return None
+
     def read_from_ide_extension(self):
+        port = self._get_ide_port()
+        if not port:
+            self.text_edit.setPlainText("❌ 无法找到 IDE 插件端口信息，请确认已在当前 VSCode/Trae 窗口中激活了插件。")
+            return
+            
         try:
-            response = httpx.get("http://127.0.0.1:18889/context", timeout=2.0)
+            response = httpx.get(f"http://127.0.0.1:{port}/context", timeout=2.0)
             if response.status_code == 200:
                 data = response.json()
                 content = data.get("content", "")
@@ -770,9 +790,14 @@ class AICardWindow(QWidget):
         self.show()
 
     def _probe_ide_extension(self):
+        port = self._get_ide_port()
+        if not port:
+            self.ide_probe_result.emit(False)
+            return
+            
         try:
-            # 使用 GET 请求进行探活，因为我们的 Node 服务对 HEAD/OPTIONS 可能响应不够稳健
-            response = httpx.get("http://127.0.0.1:18889/context", timeout=0.3)
+            # 使用 GET 请求进行探活
+            response = httpx.get(f"http://127.0.0.1:{port}/context", timeout=0.3)
             # 只要能连上（不管是不是404没打开文件），都说明插件在运行
             if response.status_code in [200, 404]:
                 self.ide_probe_result.emit(True)

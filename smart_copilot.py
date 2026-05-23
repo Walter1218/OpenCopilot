@@ -19,6 +19,7 @@ from PyQt6.QtGui import QCursor, QColor
 
 from cursor_effects import Ripple, CursorOverlay
 from llm_provider import ProviderFactory, load_config, save_config
+from markdown_renderer import render as md_render
 
 # ==========================================
 # 后台模型探测线程
@@ -388,9 +389,13 @@ class AICardWindow(QWidget):
             Qt.WindowType.BypassWindowManagerHint
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setAcceptDrops(True)  # 允许拖拽文本到窗口
-
-        # self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        self.setAcceptDrops(True)
+        self.setMouseTracking(True)  # 启用鼠标追踪，用于拖拽缩放
+        self._resize_margin = 8
+        self._resizing = False
+        self._resize_edge = None
+        self._resize_start_geo = None
+        self._resize_start_pos = None
 
         self.resize(400, 300)
         self.frame = QFrame(self)
@@ -742,10 +747,7 @@ class AICardWindow(QWidget):
         cursor.setPosition(self._temp_chat_pos)
         cursor.movePosition(cursor.MoveOperation.End, cursor.MoveMode.KeepAnchor)
         cursor.removeSelectedText()
-        
-        # 重新插入更新后的文本
-        cursor.insertHtml(f'<b style="color:#42f554;">AI:</b> {text}<br><br>')
-        
+        cursor.insertHtml(md_render(text))
         scrollbar = self.chat_display.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 
@@ -765,6 +767,68 @@ class AICardWindow(QWidget):
         self._pending_hide = False
         if event.mimeData().hasText():
             event.acceptProposedAction()
+
+    # ---- 拖拽缩放支持 ----
+    def _get_resize_edge(self, pos):
+        m = self._resize_margin
+        x, y = pos.x(), pos.y()
+        w, h = self.width(), self.height()
+        b, r = y > h - m, x > w - m
+        t, l = y < m, x < m
+        if b and r: return 'br'
+        if b and l: return 'bl'
+        if t and r: return 'tr'
+        if t and l: return 'tl'
+        if b: return 'b'
+        if r: return 'r'
+        if t: return 't'
+        if l: return 'l'
+        return None
+
+    def _cursor_for_edge(self, edge):
+        return {
+            'l': Qt.CursorShape.SizeHorCursor, 'r': Qt.CursorShape.SizeHorCursor,
+            't': Qt.CursorShape.SizeVerCursor, 'b': Qt.CursorShape.SizeVerCursor,
+            'tl': Qt.CursorShape.SizeFDiagCursor, 'br': Qt.CursorShape.SizeFDiagCursor,
+            'tr': Qt.CursorShape.SizeBDiagCursor, 'bl': Qt.CursorShape.SizeBDiagCursor,
+        }.get(edge, Qt.CursorShape.ArrowCursor)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            edge = self._get_resize_edge(event.pos())
+            if edge:
+                self._resizing = True
+                self._resize_edge = edge
+                self._resize_start_geo = self.geometry()
+                self._resize_start_pos = event.globalPosition().toPoint()
+                return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._resizing:
+            delta = event.globalPosition().toPoint() - self._resize_start_pos
+            g = self._resize_start_geo
+            e = self._resize_edge
+            x, y, w, h = g.x(), g.y(), g.width(), g.height()
+            min_w, min_h = 300, 200
+
+            if 'r' in e: w = max(min_w, g.width() + delta.x())
+            if 'l' in e: x = g.x() + delta.x(); w = max(min_w, g.width() - delta.x())
+            if 'b' in e: h = max(min_h, g.height() + delta.y())
+            if 't' in e: y = g.y() + delta.y(); h = max(min_h, g.height() - delta.y())
+            self.setGeometry(x, y, w, h)
+            self.frame.resize(w - 20, h - 22)
+            return
+
+        edge = self._get_resize_edge(event.pos()) if not self._resizing else None
+        self.setCursor(self._cursor_for_edge(edge))
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._resizing = False
+        self._resize_edge = None
+        super().mouseReleaseEvent(event)
+    # ---- 缩放支持结束 ----
 
     def dropEvent(self, event):
         text = event.mimeData().text()
@@ -971,7 +1035,7 @@ class AICardWindow(QWidget):
         if not text:
             self.text_edit.setPlainText("正在思考...\n")
         else:
-            self.text_edit.setPlainText(text)
+            self.text_edit.setHtml(md_render(text))
         scrollbar = self.text_edit.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 
@@ -1019,6 +1083,12 @@ class AgentWorkspace(QWidget):
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAcceptDrops(True)
+        self.setMouseTracking(True)
+        self._resize_margin = 8
+        self._resizing = False
+        self._resize_edge = None
+        self._resize_start_geo = None
+        self._resize_start_pos = None
         self.resize(520, 480)
 
         # 外层 Frame
@@ -1212,7 +1282,7 @@ class AgentWorkspace(QWidget):
         cursor.setPosition(self._temp_chat_pos)
         cursor.movePosition(cursor.MoveOperation.End, cursor.MoveMode.KeepAnchor)
         cursor.removeSelectedText()
-        cursor.insertHtml(f'<b style="color:#42f554;">AI:</b> {text}<br><br>')
+        cursor.insertHtml(md_render(text))
         scrollbar = self.chat_display.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 
@@ -1234,6 +1304,59 @@ class AgentWorkspace(QWidget):
         if text:
             self.task_input.setText(text)
             self._save_task()
+
+    # ---- 拖拽缩放支持（与 AICardWindow 相同实现）----
+    def _get_resize_edge(self, pos):
+        m = 8; x, y = pos.x(), pos.y(); w, h = self.width(), self.height()
+        b, r = y > h - m, x > w - m; t, l = y < m, x < m
+        if b and r: return 'br'
+        if b and l: return 'bl'
+        if t and r: return 'tr'
+        if t and l: return 'tl'
+        if b: return 'b'
+        if r: return 'r'
+        if t: return 't'
+        if l: return 'l'
+        return None
+
+    def _cursor_for_edge(self, edge):
+        return {
+            'l': Qt.CursorShape.SizeHorCursor, 'r': Qt.CursorShape.SizeHorCursor,
+            't': Qt.CursorShape.SizeVerCursor, 'b': Qt.CursorShape.SizeVerCursor,
+            'tl': Qt.CursorShape.SizeFDiagCursor, 'br': Qt.CursorShape.SizeFDiagCursor,
+            'tr': Qt.CursorShape.SizeBDiagCursor, 'bl': Qt.CursorShape.SizeBDiagCursor,
+        }.get(edge, Qt.CursorShape.ArrowCursor)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            edge = self._get_resize_edge(event.pos())
+            if edge:
+                self._resizing = True; self._resize_edge = edge
+                self._resize_start_geo = self.geometry()
+                self._resize_start_pos = event.globalPosition().toPoint()
+                return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._resizing:
+            delta = event.globalPosition().toPoint() - self._resize_start_pos
+            g = self._resize_start_geo; e = self._resize_edge
+            x, y, w, h = g.x(), g.y(), g.width(), g.height()
+            min_w, min_h = 380, 300
+            if 'r' in e: w = max(min_w, g.width() + delta.x())
+            if 'l' in e: x = g.x() + delta.x(); w = max(min_w, g.width() - delta.x())
+            if 'b' in e: h = max(min_h, g.height() + delta.y())
+            if 't' in e: y = g.y() + delta.y(); h = max(min_h, g.height() - delta.y())
+            self.setGeometry(x, y, w, h)
+            self.frame.resize(w - 20, h - 22)
+            return
+        edge = self._get_resize_edge(event.pos()) if not self._resizing else None
+        self.setCursor(self._cursor_for_edge(edge))
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._resizing = False; self._resize_edge = None
+        super().mouseReleaseEvent(event)
 
     def show_workspace(self, x, y):
         self.session_id = str(uuid.uuid4())

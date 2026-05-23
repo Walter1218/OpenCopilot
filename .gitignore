@@ -51,3 +51,6 @@ venv/
 # Config
 config.json
 
+
+# ASU Broker Token
+.asu_broker_token

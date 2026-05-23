@@ -21,6 +21,7 @@ from PyQt6.QtGui import QCursor, QColor
 from cursor_effects import Ripple, CursorOverlay
 from llm_provider import ProviderFactory, load_config, save_config
 from markdown_renderer import render as md_render
+from system_probe_client import SystemProbeClient
 
 # ==========================================
 # 后台模型探测线程
@@ -290,51 +291,36 @@ class ChatWorker(QThread):
 
 
 class BrowserReaderWorker(QThread):
-    """后台线程：执行 AppleScript 读取浏览器 DOM，避免阻塞 UI。"""
+    """后台线程：通过特权代理读取浏览器 DOM，避免阻塞 UI 并穿透沙盒。"""
     finished = pyqtSignal(str, str)   # browser_name, text (empty on error)
     error = pyqtSignal(str)           # error message
 
     def __init__(self, browser):
         super().__init__()
         self.browser = browser
+        self.client = SystemProbeClient()
 
     def run(self):
-        # 构建 AppleScript
-        if self.browser in ["Google Chrome", "Brave Browser", "Microsoft Edge", "Arc"]:
-            script = f'''
-            tell application "{self.browser}"
-                execute front window's active tab javascript "document.body.innerText;"
-            end tell
-            '''
-        elif self.browser == "Safari":
-            script = '''
-            tell application "Safari"
-                do JavaScript "document.body.innerText;" in document 1
-            end tell
-            '''
-        else:
-            self.error.emit(f"浏览器 {self.browser} 不支持一键读取。")
-            return
-
         try:
-            text = subprocess.check_output(
-                ['osascript', '-e', script], stderr=subprocess.STDOUT, timeout=10
-            ).decode('utf-8').strip()
-            self.finished.emit(self.browser, text)
-        except subprocess.CalledProcessError as e:
-            err = e.output.decode('utf-8')
-            if "JavaScript" in err or "Apple Events" in err:
+            # 检查代理是否在线
+            if not self.client.is_broker_alive():
                 self.error.emit(
-                    f"❌ 读取失败：缺少权限。\n\n"
-                    f"请在 {self.browser} 的菜单中启用：\n"
-                    f"「允许来自 Apple 事件的 JavaScript (Allow JavaScript from Apple Events)」"
+                    "❌ 无法连接到 Privileged Broker。\n\n"
+                    "在 Trae 等沙盒终端内无法直接读取浏览器内容。\n"
+                    "请打开 macOS 原生 Terminal.app，执行：\n"
+                    "python3 asu_broker/run.py"
                 )
+                return
+                
+            text = self.client.get_browser_dom(self.browser)
+            if text:
+                self.finished.emit(self.browser, text)
             else:
-                self.error.emit(f"❌ 跨进程执行失败: {err}")
-        except subprocess.TimeoutExpired:
-            self.error.emit(f"❌ 读取超时，{self.browser} 可能未响应。")
+                self.error.emit(f"❌ 从 {self.browser} 读取的内容为空。")
         except Exception as e:
-            self.error.emit(f"❌ 读取过程中发生未知错误: {e}")
+            import traceback
+            print(traceback.format_exc())
+            self.error.emit(f"❌ 读取失败: {e}")
 
 
 # ==========================================
@@ -939,16 +925,20 @@ class AICardWindow(QWidget):
 
     def _probe_browser(self):
         try:
-            # 使用 AppleScript 获取当前处于激活状态的应用程序名称
-            script = 'tell application "System Events" to get name of first application process whose frontmost is true'
-            front_app = subprocess.check_output(['osascript', '-e', script], stderr=subprocess.DEVNULL).decode('utf-8').strip()
-            
+            client = SystemProbeClient()
+            if not client.is_broker_alive():
+                self.browser_probe_result.emit("")
+                return
+                
+            front_app = client.get_frontmost_app()
             supported_browsers = ["Google Chrome", "Safari", "Brave Browser", "Microsoft Edge", "Arc"]
+            
             if front_app in supported_browsers:
                 self.browser_probe_result.emit(front_app)
             else:
                 self.browser_probe_result.emit("")
         except Exception:
+            import traceback
             print(f"[ASU] 浏览器探测失败: {traceback.format_exc()}")
             self.browser_probe_result.emit("")
 

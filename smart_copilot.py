@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import traceback
 import time
 import uuid
 import threading
@@ -32,32 +33,11 @@ class ModelScannerWorker(QThread):
         self.api_base = api_base.strip().rstrip('/')
 
     def run(self):
-        # 如果用户选择探测 OpenClaw CLI，直接通过命令行获取 agents
-        if "openclaw" in self.api_base.lower() or "cli" in self.api_base.lower() or not self.api_base.startswith("http"):
-            try:
-                import subprocess
-                import json
-                import re
-                result = subprocess.run(["openclaw", "agents", "list", "--json"], capture_output=True, text=True)
-                output = result.stdout
-                
-                # 使用正则精确提取 JSON 数组，避免被前后的日志干扰
-                match = re.search(r"\[\s*\{.*?\}\s*\]", output, re.DOTALL)
-                if match:
-                    data = json.loads(match.group(0))
-                    models = [agent.get("name", agent.get("id")) for agent in data if "id" in agent]
-                    self.api_base = "openclaw-cli" # 更新标志
-                    self.scan_finished.emit(models, "")
-                    return
-            except Exception as e:
-                print(f"OpenClaw CLI probe failed: {e}")
-                # 回退到普通的 HTTP 探测
-                
         models = []
         error_msg = ""
         try:
             with httpx.Client(timeout=5.0, verify=False) as client:
-                # 策略 1: 尝试标准的 OpenAI 接口 /models
+                # 策略 1: 标准 OpenAI 兼容接口 /models
                 try:
                     url = f"{self.api_base}/models"
                     response = client.get(url)
@@ -65,23 +45,10 @@ class ModelScannerWorker(QThread):
                         data = response.json()
                         if "data" in data:
                             models = [m.get("id") for m in data["data"] if "id" in m]
-                except Exception as e:
+                except Exception:
                     pass
 
-                # 策略 2: 如果为空，尝试 Ollama 原生接口 /api/tags
-                # 策略 3: 如果还是空，探测类似 OpenClaw Control 这样的 Web 界面
-                if not models:
-                    try:
-                        base_url = self.api_base.replace('/v1', '')
-                        response = client.get(base_url)
-                        if response.status_code == 200 and "openclaw" in response.text.lower():
-                            # 如果识别出是 18789 面板端口，自动推导底层的 18791 API 端口
-                            if ":18789" in base_url:
-                                self.api_base = base_url.replace(":18789", ":18791")
-                            models = ["openclaw-agent (网关模式)"]
-                    except Exception as e:
-                        pass
-                
+                # 策略 2: Ollama 原生接口 /api/tags
                 if not models:
                     try:
                         base_url = self.api_base.replace('/v1', '')
@@ -91,15 +58,15 @@ class ModelScannerWorker(QThread):
                             data = response.json()
                             if "models" in data:
                                 models = [m.get("name") for m in data["models"] if "name" in m]
-                    except Exception as e:
+                    except Exception:
                         pass
-                
+
                 if not models:
-                    error_msg = "连接成功，但未扫描到任何模型。请确保第三方智能体已加载模型。"
+                    error_msg = "连接成功，但未扫描到任何模型。请确保第三方服务已加载模型。"
         except Exception as e:
             error_msg = f"连接失败: {str(e)}\n请检查 API Base URL 是否正确以及服务是否启动。"
 
-        self.scan_finished.emit(models, error_msg)  # emit signal
+        self.scan_finished.emit(models, error_msg)
 
 # ==========================================
 # 设置对话框 UI
@@ -209,8 +176,6 @@ class SettingsDialog(QDialog):
         if error_msg:
             QMessageBox.critical(self, "探测失败", error_msg)
         else:
-            if ":18791" in self.scanner.api_base or "openclaw-cli" in self.scanner.api_base:
-                self.input_custom_base.setText(self.scanner.api_base)
             self.combo_custom_model.clear()
             self.combo_custom_model.addItems(models)
             QMessageBox.information(self, "探测成功", "已更新本地 LLM 列表。")
@@ -322,6 +287,55 @@ class ChatWorker(QThread):
 
     def stop(self):
         self._is_running = False
+
+
+class BrowserReaderWorker(QThread):
+    """后台线程：执行 AppleScript 读取浏览器 DOM，避免阻塞 UI。"""
+    finished = pyqtSignal(str, str)   # browser_name, text (empty on error)
+    error = pyqtSignal(str)           # error message
+
+    def __init__(self, browser):
+        super().__init__()
+        self.browser = browser
+
+    def run(self):
+        # 构建 AppleScript
+        if self.browser in ["Google Chrome", "Brave Browser", "Microsoft Edge", "Arc"]:
+            script = f'''
+            tell application "{self.browser}"
+                execute front window's active tab javascript "document.body.innerText;"
+            end tell
+            '''
+        elif self.browser == "Safari":
+            script = '''
+            tell application "Safari"
+                do JavaScript "document.body.innerText;" in document 1
+            end tell
+            '''
+        else:
+            self.error.emit(f"浏览器 {self.browser} 不支持一键读取。")
+            return
+
+        try:
+            text = subprocess.check_output(
+                ['osascript', '-e', script], stderr=subprocess.STDOUT, timeout=10
+            ).decode('utf-8').strip()
+            self.finished.emit(self.browser, text)
+        except subprocess.CalledProcessError as e:
+            err = e.output.decode('utf-8')
+            if "JavaScript" in err or "Apple Events" in err:
+                self.error.emit(
+                    f"❌ 读取失败：缺少权限。\n\n"
+                    f"请在 {self.browser} 的菜单中启用：\n"
+                    f"「允许来自 Apple 事件的 JavaScript (Allow JavaScript from Apple Events)」"
+                )
+            else:
+                self.error.emit(f"❌ 跨进程执行失败: {err}")
+        except subprocess.TimeoutExpired:
+            self.error.emit(f"❌ 读取超时，{self.browser} 可能未响应。")
+        except Exception as e:
+            self.error.emit(f"❌ 读取过程中发生未知错误: {e}")
+
 
 # ==========================================
 # 2. 鼠标监听线程（双击 + 三击右键）
@@ -668,7 +682,7 @@ class AICardWindow(QWidget):
                     if port.isdigit():
                         return port
             except Exception:
-                pass
+                print(f"[ASU] 读取 IDE 端口文件失败: {traceback.format_exc()}")
         return None
 
     def read_from_ide_extension(self):
@@ -935,6 +949,7 @@ class AICardWindow(QWidget):
             else:
                 self.browser_probe_result.emit("")
         except Exception:
+            print(f"[ASU] 浏览器探测失败: {traceback.format_exc()}")
             self.browser_probe_result.emit("")
 
     def _probe_ide_extension(self):
@@ -951,7 +966,7 @@ class AICardWindow(QWidget):
                 self.ide_probe_result.emit(True)
                 return
         except Exception:
-            pass
+            print(f"[ASU] IDE 插件探测失败: {traceback.format_exc()}")
         self.ide_probe_result.emit(False)
 
     def _update_ide_btn(self, is_active):
@@ -972,49 +987,36 @@ class AICardWindow(QWidget):
     def read_from_browser(self):
         if not self.active_browser:
             return
-            
+
         browser = self.active_browser
-        
-        # 针对不同浏览器构建 AppleScript
-        script = ""
-        if browser in ["Google Chrome", "Brave Browser", "Microsoft Edge", "Arc"]:
-            script = f'''
-            tell application "{browser}"
-                execute front window's active tab javascript "document.body.innerText;"
-            end tell
-            '''
-        elif browser == "Safari":
-            script = '''
-            tell application "Safari"
-                do JavaScript "document.body.innerText;" in document 1
-            end tell
-            '''
-            
-        if not script:
-            self.text_edit.setPlainText("❌ 当前浏览器不支持一键读取。")
-            return
-            
-        try:
-            text = subprocess.check_output(['osascript', '-e', script], stderr=subprocess.STDOUT).decode('utf-8').strip()
-            if text:
-                self.current_text = text
-                self.context_source = "browser"
-                self.context_meta = {"app_name": browser}
-                self.text_edit.clear()
-                self.text_edit.setPlainText(f"✅ 已成功从 {browser} 读取网页全文\n\n网页大小: {len(text)} 字符\n\n请点击下方快捷指令进行分析。")
-                self.tabs.setCurrentIndex(0)
-                self.btn_read_browser.setText("✅ 已读取全文")
-                self.btn_read_browser.setStyleSheet(self.btn_read_browser.styleSheet().replace("rgba(255, 140, 0, 180)", "rgba(40, 167, 69, 180)").replace("rgba(255, 140, 0, 255)", "rgba(40, 167, 69, 255)"))
-            else:
-                self.text_edit.setPlainText(f"❌ 从 {browser} 读取的内容为空。")
-        except subprocess.CalledProcessError as e:
-            err_output = e.output.decode('utf-8')
-            if "JavaScript" in err_output or "Apple Events" in err_output:
-                self.text_edit.setPlainText(f"❌ 读取失败：缺少权限。\n\n请在 {browser} 的菜单中启用：\n「允许来自 Apple 事件的 JavaScript (Allow JavaScript from Apple Events)」")
-            else:
-                self.text_edit.setPlainText(f"❌ 跨进程执行失败: {err_output}")
-        except Exception as e:
-            self.text_edit.setPlainText(f"❌ 读取过程中发生未知错误: {e}")
+        self.btn_read_browser.setEnabled(False)
+        self.btn_read_browser.setText("⏳ 读取中...")
+        self.text_edit.setPlainText(f"正在从 {browser} 读取网页内容...")
+
+        self._browser_worker = BrowserReaderWorker(browser)
+        self._browser_worker.finished.connect(self._on_browser_text_ready)
+        self._browser_worker.error.connect(self._on_browser_error)
+        self._browser_worker.start()
+
+    def _on_browser_text_ready(self, browser, text):
+        self.btn_read_browser.setEnabled(True)
+        if text:
+            self.current_text = text
+            self.context_source = "browser"
+            self.context_meta = {"app_name": browser}
+            self.text_edit.clear()
+            self.text_edit.setPlainText(f"✅ 已成功从 {browser} 读取网页全文\n\n网页大小: {len(text)} 字符\n\n请点击下方快捷指令进行分析。")
+            self.tabs.setCurrentIndex(0)
+            self.btn_read_browser.setText("✅ 已读取全文")
+            self.btn_read_browser.setStyleSheet(self.btn_read_browser.styleSheet().replace("rgba(255, 140, 0, 180)", "rgba(40, 167, 69, 180)").replace("rgba(255, 140, 0, 255)", "rgba(40, 167, 69, 255)"))
+        else:
+            self.text_edit.setPlainText(f"❌ 从 {browser} 读取的内容为空。")
+            self.btn_read_browser.setText("🌐 一键读取当前网页全文")
+
+    def _on_browser_error(self, err_msg):
+        self.btn_read_browser.setEnabled(True)
+        self.text_edit.setPlainText(err_msg)
+        self.btn_read_browser.setText("🌐 一键读取当前网页全文")
 
     def trigger_ai(self, action_type):
         if not self.current_text:
@@ -1513,6 +1515,7 @@ class CopilotManager:
                 print(f"[ASU Agent] 服务端已在 18888 端口运行 (活跃会话: {data.get('active_sessions', 0)})")
                 return
         except Exception:
+            # Agent 未运行，继续启动流程
             pass
 
         print("[ASU Agent] 18888 端口未占用，正在启动 ASU 定制智能体...")

@@ -9,6 +9,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.auth import verify_token
 from probes.browser_probe import get_browser_tabs, get_active_tab_dom
 from probes.window_probe import get_frontmost_app
+from probes.selection_probe import get_clipboard_content, set_clipboard_content, get_selected_text_via_applescript
+from probes.app_control_probe import get_notes_content, create_note
 
 app = FastAPI(
     title="ASU Privileged Broker",
@@ -28,6 +30,50 @@ async def api_get_frontmost():
         return {"status": "success", "data": {"app_name": app_name}}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ==========================================
+# 预埋的高级系统交互路由 (草案)
+# ==========================================
+
+@app.get("/api/v1/system/clipboard", dependencies=[Depends(verify_token)])
+async def api_get_clipboard():
+    try:
+        content = await get_clipboard_content()
+        return {"status": "success", "data": {"content": content}}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ClipboardRequest(BaseModel):
+    content: str
+
+@app.post("/api/v1/system/clipboard", dependencies=[Depends(verify_token)])
+async def api_set_clipboard(req: ClipboardRequest):
+    try:
+        success = await set_clipboard_content(req.content)
+        return {"status": "success" if success else "error"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/system/selection", dependencies=[Depends(verify_token)])
+async def api_get_selection():
+    try:
+        content = await get_selected_text_via_applescript()
+        return {"status": "success", "data": {"content": content}}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class NoteRequest(BaseModel):
+    title: str
+    body: str
+
+@app.post("/api/v1/apps/notes", dependencies=[Depends(verify_token)])
+async def api_create_note(req: NoteRequest):
+    try:
+        success = await create_note(req.title, req.body)
+        return {"status": "success" if success else "error"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/v1/browser/tabs", dependencies=[Depends(verify_token)])
 async def api_get_browser_tabs():

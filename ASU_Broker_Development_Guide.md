@@ -88,6 +88,15 @@ Broker 采用 RESTful API 与 WebSocket 结合的双向通信模型。
     }
     ```
 
+#### `GET /api/v1/system/clipboard` (高级能力)
+*   **用途**：静默读取操作系统的当前剪贴板内容，用于 AI 辅助。
+
+#### `GET /api/v1/system/selection` (高级能力)
+*   **用途**：提取当前系统任何应用程序中高亮选中的文本（通过底层命令或 AXAPI 实现）。解决沙盒内应用强行注入按键导致的选区丢失问题。
+
+#### `POST /api/v1/apps/notes` (高级能力)
+*   **用途**：静默调用 Apple 备忘录 (Notes) 创建新文档，支持 AI 结果直接回写。
+
 ### 3.2 WebSocket (主动推送模式)
 供 ASU Agent 建立长连接，实现系统状态变化的“无感感知”。
 

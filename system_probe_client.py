@@ -42,6 +42,24 @@ class SystemProbeClient:
             pass
         return ""
 
+    def get_clipboard(self) -> str:
+        """[预埋] 获取系统剪贴板内容"""
+        try:
+            resp = httpx.get(f"{BROKER_URL}/api/v1/system/clipboard", headers=self.headers, timeout=2.0)
+            if resp.status_code == 200:
+                return resp.json().get("data", {}).get("content", "")
+        except Exception:
+            pass
+        return ""
+
+    def get_selection(self) -> str:
+        """[预埋] 获取当前高亮的选区内容"""
+        try:
+            resp = httpx.get(f"{BROKER_URL}/api/v1/system/selection", headers=self.headers, timeout=3.0)
+            if resp.status_code == 200:
+                return resp.json().get("data", {}).get("content", "")
+        except Exception:
+            pass
     def get_browser_dom(self, browser_name: str) -> str:
         """获取指定浏览器的当前标签页全文。"""
         try:

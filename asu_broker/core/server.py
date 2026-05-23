@@ -11,6 +11,8 @@ from probes.browser_probe import get_browser_tabs, get_active_tab_dom
 from probes.window_probe import get_frontmost_app
 from probes.selection_probe import get_clipboard_content, set_clipboard_content, get_selected_text_via_applescript
 from probes.app_control_probe import get_notes_content, create_note
+from probes.screen_probe import capture_front_window
+from probes.fs_probe import read_file_as_context
 
 app = FastAPI(
     title="ASU Privileged Broker",
@@ -71,6 +73,25 @@ async def api_create_note(req: NoteRequest):
     try:
         success = await create_note(req.title, req.body)
         return {"status": "success" if success else "error"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/system/screen/front", dependencies=[Depends(verify_token)])
+async def api_capture_front_window():
+    try:
+        b64_image = await capture_front_window()
+        return {"status": "success", "data": {"image_base64": b64_image}}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class FileRequest(BaseModel):
+    file_path: str
+
+@app.post("/api/v1/system/fs/read", dependencies=[Depends(verify_token)])
+async def api_read_file(req: FileRequest):
+    try:
+        content = await read_file_as_context(req.file_path)
+        return {"status": "success", "data": {"content": content}}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

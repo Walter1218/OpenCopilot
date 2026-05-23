@@ -97,6 +97,12 @@ Broker 采用 RESTful API 与 WebSocket 结合的双向通信模型。
 #### `POST /api/v1/apps/notes` (高级能力)
 *   **用途**：静默调用 Apple 备忘录 (Notes) 创建新文档，支持 AI 结果直接回写。
 
+#### `GET /api/v1/system/screen/front` (视觉与 OCR 能力)
+*   **用途**：静默截取当前最前台应用窗口的屏幕图像（返回 Base64 编码）。用于配合具备 Vision 多模态能力的 LLM（如 GPT-4o 或 MiniMax-Vision）进行 OCR 或视觉交互。完美补充无法通过 DOM 提取上下文的场景（如 PDF 阅读器、设计软件等）。
+
+#### `POST /api/v1/system/fs/read` (全局文件系统监控)
+*   **用途**：绕过 IDE 插件可能遭遇的文件系统沙盒限制（例如无权限读取用户的 Desktop 或 Downloads 文件夹）。通过特权代理，直接提取外部指定文件内容作为 AI 上下文。
+
 ### 3.2 WebSocket (主动推送模式)
 供 ASU Agent 建立长连接，实现系统状态变化的“无感感知”。
 

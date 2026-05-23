@@ -32,10 +32,9 @@ ASU 是一个致力于探索**下一代人机交互模式**的系统级工具集
    - 基于 `pynput` 与原生系统调用（如 macOS 的 `pbpaste`），极致轻量化。
    - 内置防抖与日志轮转机制（限制单文件 20MB），保障后台常驻稳定。
 
-6. **一键场景静默读取 (One-Click Context Fetch)**
-   - **IDE 伴生插件**：VSCode/Trae/Cursor 通用，动态端口 + 临时文件信标，一键读取数万行代码全文。
-   - **浏览器 DOM 读取**：AppleScript 跨进程注入 JS，支持 Chrome、Safari、Brave、Edge、Arc。
-   - **物理拖拽兜底**：任意不支持静默读取的软件，手动拖拽文本到卡片即可。卡片对拖拽操作有 300ms 延迟隐藏保护。
+6. **基于 Privileged Broker 的极客级交互**
+   - 彻底解决 macOS 的 TCC 沙盒限制与进程内调用 AppleScript 导致的 `-10004 权限违例` 崩溃。
+   - 预埋系统级探针，支持静默获取浏览器 DOM、系统剪贴板读写、高亮选区提取、屏幕 OCR 截图、甚至突破 IDE 文件沙盒直接读取全局文件。
 
 ---
 
@@ -48,6 +47,7 @@ ASU 是一个致力于探索**下一代人机交互模式**的系统级工具集
 | 专属智能体 (会话记忆 + Persona + 健康检查) | Agent 服务 | ✅ |
 | IDE 伴生插件 + 动态端口信标 + 全文静默读取 | IDE 场景 | ✅ |
 | 浏览器 DOM 读取 (AppleScript) + 多屏适配 | 浏览器场景 | ✅ |
+| Privileged Broker 特权代理集成 (沙盒穿透/高权限探针) | 架构升级 | ✅ |
 | 上下文感知 (Agent 识别 IDE/浏览器/拖拽来源) | Agent 增强 | ✅ |
 | 三击右键任务工作台 (任务定义 + 独立对话 + 上下文贯通) | 工作台 | ✅ |
 | 代码重构：cursor_effects 共享库 + 拖拽卡死修复 | 工程优化 | ✅ |
@@ -56,7 +56,6 @@ ASU 是一个致力于探索**下一代人机交互模式**的系统级工具集
 | 上下文窗口管理 (超长历史自动截断，防 token 超限) | Agent 增强 | 🔶 |
 | 自定义 Persona (config 化 + GUI 管理) | Agent 增强 | 🔶 |
 | 多 Provider 故障转移 (云端挂了回退本地) | 稳定性 | 🔶 |
-| Privileged Broker 特权代理集成 | 架构升级 | 🔶 |
 | Markdown 渲染 + 代码高亮 + 卡片拖拽缩放 | UI 增强 | 🔶 |
 
 ---
@@ -102,12 +101,13 @@ pip install -r requirements.txt
 **方式二：IDE 全文静默读取 (VSCode/Trae/Cursor)**
 1. 安装 `asu-ide-extension/` 目录下的 `.vsix` 插件。
 2. 双击右键唤出卡片 → 点击绿色 **[📥 极速读取当前 IDE 全文]** 按钮。
-3. 当前编辑器内全部代码瞬间投喂给 AI。
+3. 当前编辑器内全部代码瞬间投喂给 AI。（Broker 也可以通过文件探针提供更深度的支持）
 
-**方式三：浏览器一键读取**
-1. 在 Chrome/Safari/Brave/Edge/Arc 中浏览网页。
-2. 双击右键唤出卡片 → 点击橙色 **[🌐 一键读取当前网页全文]** 按钮。
-3. 若提示权限不足，请在浏览器菜单中启用 `Allow JavaScript from Apple Events`。
+**方式三：基于 Broker 的浏览器无感读取**
+1. 确保已在原生终端启动 `python3 asu_broker/run.py`。
+2. 在 Chrome/Safari/Brave/Edge/Arc 中浏览网页。
+3. 双击右键唤出卡片 → 点击橙色 **[🌐 一键读取当前网页全文]** 按钮。
+4. Broker 将在后台提取 DOM 节点并穿透沙盒返回给 AI。（初次使用仍需在浏览器启用 `Allow JavaScript from Apple Events`）
 
 ---
 

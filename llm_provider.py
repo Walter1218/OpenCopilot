@@ -128,12 +128,16 @@ class ASUCustomAgentClient(BaseProvider):
     def __init__(self, port=18888):
         self.api_base = f"http://127.0.0.1:{port}/v1/agent/chat"
 
-    def stream_agent_task(self, text: str, action_type: str = "default", session_id: str = "default", is_new_task: bool = False):
+    def stream_agent_task(self, text: str, action_type: str = "default", session_id: str = "default",
+                          is_new_task: bool = False, context_source: str = "drag",
+                          context_meta: dict = None):
         payload = {
             "text": text,
             "action_type": action_type,
             "session_id": session_id,
-            "is_new_task": is_new_task
+            "is_new_task": is_new_task,
+            "context_source": context_source,
+            "context_meta": context_meta or {},
         }
         try:
             with httpx.Client(verify=False) as client:

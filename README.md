@@ -1,36 +1,66 @@
 # ASU (Advanced System Utilities) 🚀
 **全局智能交互增强引擎 & 桌面级 AI Copilot**
 
-ASU 是一个致力于探索**下一代人机交互模式**的系统级工具集。它将底层硬件事件监听（鼠标/键盘）、高帧率 GUI 特效渲染与最前沿的 LLM (大语言模型) 能力深度结合，旨在打造“不打断用户心流”的极致 AI 体验。
+ASU 是一个致力于探索**下一代人机交互模式**的系统级工具集。它将底层硬件事件监听（鼠标/键盘）、高帧率 GUI 特效渲染与最前沿的 LLM (大语言模型) 能力深度结合，旨在打造"不打断用户心流"的极致 AI 体验。
 
 ## ✨ 核心亮点 (Core Features)
 
-1. **双引擎动态热切架构 (Dual-Engine Architecture)**
+1. **上下文感知专属智能体 (Context-Aware Agent)**
+   后台定制智能体（`asu_custom_agent.py`, 端口 18888）不仅仅是 LLM 的代理层：
+   - **场景自动感知**：根据文本来源（IDE 代码文件 / 浏览器网页 / 拖拽文本），自动注入对应的 system prompt 前缀，让 AI 从"通用问答"升级为"场景化分析"。
+   - **多角色人格**：内置翻译官、架构师、编辑、通用助手四种 Persona，支持通过 `session_id` 实现多轮对话记忆。
+   - **健康检查**：提供 `GET /health` 端点，主程序启动时自动探活。
+
+2. **双引擎动态热切架构 (Dual-Engine Architecture)**
    在 UI 设置面板中一键切换后端驱动引擎：
    - ☁️ **云端 LLM (MiniMax)**：开箱即用，极速响应。
    - 💻 **本地/第三方 LLM (Ollama/vLLM)**：支持标准 OpenAI 协议的本地推理服务。
-   *程序启动时会自动探测 18888 端口，并在后台静默拉起专属定制智能体（`asu_custom_agent.py`），实现多轮对话与身份记忆的底层托管。*
+   *程序启动时自动探测 18888 端口，若未运行则在后台静默拉起专属智能体。*
 
-2. **纯鼠标双击唤醒与悬浮靶心拖拽 (Pure Mouse Wake-up & Drag-and-Drop Target)**
+3. **纯鼠标双击唤醒与悬浮拖拽投喂**
    - 任意软件（IDE、浏览器、文档）中**双击鼠标右键**，即可在鼠标旁唤出智能悬浮卡片。
-   - 将选中的文本**手动拖拽**到悬浮卡片中完成投喂。这一设计巧妙利用了系统原生的拖拽 API，完美避开了自动模拟 `Cmd+C` 触发操作系统底层防护导致 IDE 光标丢失的死结。
-   - 告别单轮对话，首创 **“连续对话 (Copilot Tab)”**：后台智能体通过 `session_id` 自动管理对话历史和角色状态（如翻译官、架构师），无缝支持类似微信的流式多轮追问体验。
+   - 将选中的文本**手动拖拽**到悬浮卡片中完成投喂。利用系统原生的拖拽 API，完美避开自动模拟 `Cmd+C` 触发 macOS 沙盒防护导致 IDE 光标丢失的死结。
+   - **连续对话 (Copilot Tab)**：后台智能体通过 `session_id` 自动管理对话历史和角色状态，支持流式多轮追问。
 
-3. **双图层解耦与多屏边缘适配 (Layer Decoupling & Multi-Screen Adaptation)**
-   - 采用创新的**双图层架构**：全屏穿透图层负责绘制高刷光标特效（呼吸准星、水波纹）；局部交互图层负责承载 AI 悬浮卡片。
-   - 彻底解决传统悬浮窗“抢夺焦点”或“鼠标事件穿透冲突”的死结。
-   - **多显示器无缝跨越**：特效层自动遍历并联合所有外接屏幕（`united geometry`），实现跨屏无缝渲染。
-   - **智能边缘防遮挡与翻转**：实时识别鼠标所在屏幕，若卡片靠近边缘会自动向左或向上翻转；配合坐标强制钳位（Clamp），确保卡片在任何分辨率下永不越界或被裁切。
+4. **双图层解耦与多屏边缘适配 (Layer Decoupling & Multi-Screen Adaptation)**
+   - 采用**双图层架构**：全屏穿透图层负责绘制高刷光标特效（呼吸准星、拖尾轨迹、水波纹）；局部交互图层负责承载 AI 悬浮卡片。
+   - 光标特效模块已提取为独立共享库 `cursor_effects.py`，避免代码重复。
+   - **多显示器无缝跨越**：特效层自动联合所有外接屏幕进行跨屏渲染。
+   - **智能边缘防遮挡与翻转**：实时识别鼠标所在屏幕，自动翻转 + 坐标钳位（Clamp）确保卡片永不越界。
 
-4. **极低资源占用的系统级监听 (Low-Footprint System Hooks)**
-   - 极致轻量化设计，剔除了臃肿的 `pyautogui` 与 `pyperclip` 等强依赖，全部基于 `pynput` 与原生系统调用（如 macOS 的 `pbpaste`）完成热键与剪贴板捕获，大大降低了环境配置难度。
-   - 内置防抖与日志轮转机制（限制单文件 20MB），保障后台常驻不漏水。
+5. **极低资源占用的系统级监听 (Low-Footprint System Hooks)**
+   - 基于 `pynput` 与原生系统调用（如 macOS 的 `pbpaste`），极致轻量化。
+   - 内置防抖与日志轮转机制（限制单文件 20MB），保障后台常驻稳定。
+
+6. **一键场景静默读取 (One-Click Context Fetch)**
+   - **IDE 伴生插件**（`asu-ide-extension/`）：VSCode/Trae/Cursor 通用，动态端口 + 临时文件信标机制，解决多窗口冲突，一键读取数万行代码全文。
+   - **浏览器 DOM 读取**：AppleScript 跨进程注入 JS，支持 Chrome、Safari、Brave、Edge、Arc 等主流浏览器。
+
+---
+
+## 🗺️ 开发路线图 (Roadmap)
+
+| 阶段 | 内容 | 状态 |
+|------|------|------|
+| **已完成** | 双图层光标特效 + 双击右键唤醒 + 拖拽投喂 | ✅ |
+| **已完成** | 双引擎 AI 后端 (MiniMax + Ollama) + 设置面板 | ✅ |
+| **已完成** | 专属智能体 (会话记忆 + Persona + 健康检查) | ✅ |
+| **已完成** | IDE 伴生插件 + 动态端口信标 + 全文静默读取 | ✅ |
+| **已完成** | 浏览器 DOM 读取 (AppleScript) + 多屏适配 | ✅ |
+| **已完成** | 上下文感知 (Agent 自动识别 IDE/浏览器/拖拽来源) | ✅ |
+| **已完成** | 代码重构：消除重复 (cursor_effects.py) + 修复拖拽卡死 | ✅ |
+| **待开发** | AXAPI 原生文档遍历器 (Pages/备忘录/TextEdit) | 🔶 |
+| **待开发** | 会话持久化 (重启不丢对话历史) | 🔶 |
+| **待开发** | 上下文窗口管理 (超长历史自动截断) | 🔶 |
+| **待开发** | 自定义 Persona (config 化 + GUI 管理) | 🔶 |
+| **待开发** | Privileged Broker 特权代理集成 | 🔶 |
+| **待开发** | 多 Provider 故障转移 + WebSocket 事件推送 | 🔶 |
 
 ---
 
 ## 📚 进阶架构设计文档
-针对如何在 macOS 沙盒限制下，安全、无感地获取多场景（浏览器、IDE、文档）全局上下文的问题，我们提出了**智能场景路由+分层降级**架构，详情请参阅技术白皮书：
-👉 [ASU 全场景智能上下文获取方案 (Architecture Proposal)](ASU_Architecture_Context_Extraction.md)
+- 👉 [ASU 全场景智能上下文获取方案](ASU_Architecture_Context_Extraction.md)
+- 👉 [ASU 特权代理模式集成指南](ASU_Privileged_Broker_Integration_Doc.md)
 
 ---
 
@@ -38,39 +68,57 @@ ASU 是一个致力于探索**下一代人机交互模式**的系统级工具集
 
 ### 1. 环境准备
 确保您的设备已安装 Python 3.10 或 3.11。
-> **⚠️ 严重警告**：请勿使用 Python 3.13+！目前核心依赖 `pynput` 在 Python 3.13+ 版本存在底层 `_thread._ThreadHandle` 兼容性 Bug，会导致划词和鼠标监听直接闪退。
+> **⚠️ 严重警告**：请勿使用 Python 3.13+！`pynput` 在 Python 3.13+ 存在底层 `_thread._ThreadHandle` 兼容性 Bug，会导致鼠标监听直接闪退。
 
 ```bash
 git clone https://github.com/Walter1218/ASU.git
 cd ASU
-# 请明确指定使用 python3.10 或 3.11 创建虚拟环境
 python3.11 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. ⚠️ 运行说明 (权限要求)
-作为系统级增强工具，首次运行脚本时需在 macOS `系统设置 -> 隐私与安全性` 中授予终端或 IDE 以下权限：
+### 2. ⚠️ 权限要求
+首次运行需在 macOS `系统设置 -> 隐私与安全性` 中授予终端以下权限：
 1. **辅助功能 (Accessibility)**：用于全局鼠标位置与按键拦截。
 2. **屏幕录制/键盘访问**：用于触发系统级文本抓取。
 
 ### 3. 启动程序
-强烈建议通过绝对路径调用虚拟环境中的 Python，以避免环境丢失导致的 `qt.qpa.plugin` 报错：
 ```bash
 ./venv/bin/python smart_copilot.py
 ```
 
-### 4. 操作指南 (How to Use)
-**常规拖拽模式**：
-1. 在任何软件（如 IDE 代码编辑器）中，用鼠标左键划选你想要解释的代码或文本。
-2. 鼠标原地**双击右键**，唤出智能悬浮卡片。
-3. 将鼠标移回刚才划选的高亮区域，**按住左键**将该文本块拖拽并丢入悬浮卡片中。
-4. AI 将自动识别文本并开始流式解析输出。
+### 4. 操作指南
 
-**IDE 全文静默读取模式 (VSCode/Trae/Cursor)**：
-为了彻底绕过 macOS 焦点限制并一键读取数万行代码，ASU 提供了一个极简的 IDE 伴生插件。
-1. 进入 `asu-ide-extension` 目录。
-2. 运行 `npm install` 与 `npx vsce package --no-dependencies --no-yarn` 打包出 `.vsix` 插件文件。
-3. 在你的 IDE 中手动安装该 `.vsix` 插件。
-4. 插件激活后，会在本地后台静默分配动态端口以防多窗口冲突，并通过临时文件信标与 ASU 通信。此时双击右键唤出 ASU 卡片，卡片会自动探测到 IDE 环境，并显示一个绿色的 **[📥 极速读取当前 IDE 全文]** 按钮。
-5. 点击该按钮，即可瞬间将当前编辑器内的代码全文安全、无感地投喂给 AI！
+**方式一：物理拖拽（通用，100% 兼容）**
+1. 在任何软件中划选文本。
+2. 双击右键唤出悬浮卡片。
+3. 将高亮文本**拖拽**丢入卡片，AI 自动流式解析。
+
+**方式二：IDE 全文静默读取 (VSCode/Trae/Cursor)**
+1. 安装 `asu-ide-extension/` 目录下的 `.vsix` 插件。
+2. 双击右键唤出卡片 → 点击绿色 **[📥 极速读取当前 IDE 全文]** 按钮。
+3. 当前编辑器内全部代码瞬间投喂给 AI。
+
+**方式三：浏览器一键读取**
+1. 在 Chrome/Safari/Brave/Edge/Arc 中浏览网页。
+2. 双击右键唤出卡片 → 点击橙色 **[🌐 一键读取当前网页全文]** 按钮。
+3. 若提示权限不足，请在浏览器菜单中启用 `Allow JavaScript from Apple Events`。
+
+---
+
+## 🏗️ 项目结构
+
+```text
+ASU/
+├── smart_copilot.py              # 主程序入口（总调度管理器）
+├── cursor_effects.py             # 光标特效共享库（Ripple + CursorOverlay）
+├── asu_custom_agent.py           # 专属智能体 Server（端口 18888）
+├── llm_provider.py               # LLM Provider 抽象层
+├── dynamic_cursor.py             # 光标特效独立演示程序
+├── mouse_tracker.py              # 鼠标轨迹日志工具
+├── text_selector.py              # [已废弃] Cmd+C 剪贴板方案
+├── asu-ide-extension/            # IDE 伴生插件 (VSCode/Cursor/Trae)
+├── requirements.txt              # Python 依赖
+└── *.md                          # 架构文档
+```

@@ -1,20 +1,23 @@
-import sys
-import threading
-import time
-import platform
-import subprocess
+import os
 import re
-from collections import deque
-from pynput import mouse, keyboard
+import sys
+import time
+import uuid
+import threading
+import tempfile
+import subprocess
+from pynput import mouse
 
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, 
-    QLabel, QFrame, QGraphicsDropShadowEffect, QPushButton, QDialog, QRadioButton, QLineEdit, QButtonGroup, QMessageBox, QTabWidget, QComboBox
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
+    QLabel, QFrame, QGraphicsDropShadowEffect, QPushButton, QDialog,
+    QRadioButton, QLineEdit, QMessageBox, QTabWidget, QComboBox
 )
 import httpx
-from PyQt6.QtCore import Qt, pyqtSignal, QThread, QTimer, QRect, QPointF, QEvent
-from PyQt6.QtGui import QCursor, QColor, QPainter, QPen
+from PyQt6.QtCore import Qt, pyqtSignal, QThread, QTimer
+from PyQt6.QtGui import QCursor, QColor
 
+from cursor_effects import Ripple, CursorOverlay
 from llm_provider import ProviderFactory, load_config, save_config
 
 # ==========================================
@@ -47,7 +50,7 @@ class ModelScannerWorker(QThread):
                     return
             except Exception as e:
                 print(f"OpenClaw CLI probe failed: {e}")
-                pass # 回退到普通的 HTTP 探测
+                # 回退到普通的 HTTP 探测
                 
         models = []
         error_msg = ""
@@ -132,7 +135,6 @@ class SettingsDialog(QDialog):
         self.page_minimax = QWidget()
         layout_minimax = QFormLayout(self.page_minimax)
         
-        import os
         default_minimax_key = self.config.get("minimax_api_key") or os.environ.get("MINIMAX_API_KEY", "")
         self.input_minimax_key = QLineEdit(default_minimax_key)
         self.input_minimax_key.setEchoMode(QLineEdit.EchoMode.PasswordEchoOnEdit)
@@ -224,28 +226,10 @@ class SettingsDialog(QDialog):
         self.config["local_model"] = self.combo_custom_model.currentText().strip()
         self.config["local_api_key"] = self.input_custom_key.text().strip()
         
-        from llm_provider import save_config
         save_config(self.config)
         self.config_updated.emit()
         self.accept()
         QMessageBox.information(self, "成功", "配置已保存，下一次划词将生效！")
-
-# ==========================================
-# 特效类：水波纹
-# ==========================================
-class Ripple:
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
-        self.radius = 5.0
-        self.alpha = 255
-        self.active = True
-
-    def update(self):
-        self.radius += 2.0  
-        self.alpha -= 15    
-        if self.alpha <= 0:
-            self.active = False
 
 # ==========================================
 # 1. 后台大模型请求线程 (避免阻塞UI)
@@ -254,18 +238,26 @@ class AIWorker(QThread):
     text_updated = pyqtSignal(str)
     finished_signal = pyqtSignal()
 
-    def __init__(self, provider, prompt, action_type="auto", session_id="default"):
+    def __init__(self, provider, prompt, action_type="auto", session_id="default",
+                 context_source="drag", context_meta=None):
         super().__init__()
         self.provider = provider
         self.prompt = prompt
         self.action_type = action_type
         self.session_id = session_id
+        self.context_source = context_source
+        self.context_meta = context_meta or {}
         self._is_running = True
 
     def run(self):
         try:
             full_text = ""
-            for chunk in self.provider.stream_agent_task(self.prompt, action_type=self.action_type, session_id=self.session_id, is_new_task=True):
+            for chunk in self.provider.stream_agent_task(
+                self.prompt, action_type=self.action_type,
+                session_id=self.session_id, is_new_task=True,
+                context_source=self.context_source,
+                context_meta=self.context_meta
+            ):
                 if not self._is_running:
                     break
                 full_text += chunk
@@ -291,17 +283,24 @@ class ChatWorker(QThread):
     text_updated = pyqtSignal(str)
     finished_signal = pyqtSignal()
 
-    def __init__(self, provider, text, session_id="default"):
+    def __init__(self, provider, text, session_id="default",
+                 context_source="chat", context_meta=None):
         super().__init__()
         self.provider = provider
         self.text = text
         self.session_id = session_id
+        self.context_source = context_source
+        self.context_meta = context_meta or {}
         self._is_running = True
 
     def run(self):
         try:
             full_text = ""
-            for chunk in self.provider.stream_agent_task(self.text, action_type="chat", session_id=self.session_id, is_new_task=False):
+            for chunk in self.provider.stream_agent_task(
+                self.text, action_type="chat", session_id=self.session_id,
+                is_new_task=False, context_source=self.context_source,
+                context_meta=self.context_meta
+            ):
                 if not self._is_running:
                     break
                 full_text += chunk
@@ -359,11 +358,9 @@ class MouseListenerWorker(QThread):
 # ==========================================
 # 3. 智能悬浮卡片 (独立图层，可交互)
 # ==========================================
-import uuid
-
 class AICardWindow(QWidget):
     ide_probe_result = pyqtSignal(bool)
-    browser_probe_result = pyqtSignal(str) # 返回浏览器名称，例如 "Google Chrome" 或 "Safari"
+    browser_probe_result = pyqtSignal(str)
 
     def __init__(self, provider):
         super().__init__()
@@ -371,8 +368,14 @@ class AICardWindow(QWidget):
         self.worker = None
         self.chat_worker = None
         self.current_text = ""
-        self.chat_history = []  # 保留用于 UI 显示（不再作为参数传给 Provider）
+        self.chat_history = []
         self.session_id = str(uuid.uuid4())
+        self.active_browser = None
+        self._temp_chat_pos = 0
+        self._pending_hide = False
+        # 上下文感知：追踪当前文本来源
+        self.context_source = "drag"
+        self.context_meta = {}
         self.initUI()
 
     def initUI(self):
@@ -650,8 +653,6 @@ class AICardWindow(QWidget):
 
     def _get_ide_port(self):
         """从临时文件读取当前激活的 IDE 插件端口"""
-        import os
-        import tempfile
         port_file = os.path.join(tempfile.gettempdir(), 'asu_ide_port.txt')
         if os.path.exists(port_file):
             try:
@@ -677,6 +678,11 @@ class AICardWindow(QWidget):
                 filename = data.get("fileName", "Unknown")
                 if content:
                     self.current_text = content
+                    self.context_source = "ide"
+                    self.context_meta = {
+                        "file_name": data.get("fileName", "Unknown"),
+                        "language": data.get("languageId", ""),
+                    }
                     self.text_edit.clear()
                     self.text_edit.setPlainText(f"✅ 已成功从 IDE 插件读取全文 [{filename}]\n\n文件大小: {len(content)} 字符\n\n请点击下方快捷指令进行分析。")
                     self.tabs.setCurrentIndex(0)
@@ -703,7 +709,8 @@ class AICardWindow(QWidget):
             self.chat_worker.stop()
             self.chat_worker.wait()
 
-        self.chat_worker = ChatWorker(self.provider, user_text, self.session_id)
+        self.chat_worker = ChatWorker(self.provider, user_text, self.session_id,
+                                      self.context_source, self.context_meta)
         self.chat_worker.text_updated.connect(self.on_chat_updated)
         self.chat_worker.finished_signal.connect(self.on_chat_finished)
         self.chat_worker.start()
@@ -748,6 +755,8 @@ class AICardWindow(QWidget):
         self.provider = ProviderFactory.create_provider()
 
     def dragEnterEvent(self, event):
+        # 有拖拽进入卡片，取消任何待执行的延迟隐藏
+        self._pending_hide = False
         if event.mimeData().hasText():
             event.acceptProposedAction()
 
@@ -755,12 +764,16 @@ class AICardWindow(QWidget):
         text = event.mimeData().text()
         if text:
             self.current_text = text
+            self.context_source = "drag"
+            self.context_meta = {}
             self.tabs.setCurrentIndex(0)
             self.trigger_ai("auto")
 
     def show_card(self, x, y):
         self.current_text = ""
-        self.session_id = str(uuid.uuid4()) # 每次呼出生成新的会话ID
+        self.context_source = "drag"
+        self.context_meta = {}
+        self.session_id = str(uuid.uuid4())
         
         self.text_edit.clear()
         self.text_edit.setPlainText("🎯 请将划选的文本拖拽到此窗口中...")
@@ -837,7 +850,6 @@ class AICardWindow(QWidget):
 
     def _probe_browser(self):
         try:
-            import subprocess
             # 使用 AppleScript 获取当前处于激活状态的应用程序名称
             script = 'tell application "System Events" to get name of first application process whose frontmost is true'
             front_app = subprocess.check_output(['osascript', '-e', script], stderr=subprocess.DEVNULL).decode('utf-8').strip()
@@ -883,11 +895,10 @@ class AICardWindow(QWidget):
             self.btn_read_browser.hide()
 
     def read_from_browser(self):
-        if not hasattr(self, 'active_browser') or not self.active_browser:
+        if not self.active_browser:
             return
             
         browser = self.active_browser
-        import subprocess
         
         # 针对不同浏览器构建 AppleScript
         script = ""
@@ -912,6 +923,8 @@ class AICardWindow(QWidget):
             text = subprocess.check_output(['osascript', '-e', script], stderr=subprocess.STDOUT).decode('utf-8').strip()
             if text:
                 self.current_text = text
+                self.context_source = "browser"
+                self.context_meta = {"app_name": browser}
                 self.text_edit.clear()
                 self.text_edit.setPlainText(f"✅ 已成功从 {browser} 读取网页全文\n\n网页大小: {len(text)} 字符\n\n请点击下方快捷指令进行分析。")
                 self.tabs.setCurrentIndex(0)
@@ -939,7 +952,8 @@ class AICardWindow(QWidget):
             self.worker.stop()
             self.worker.wait()
 
-        self.worker = AIWorker(self.provider, self.current_text, action_type, self.session_id)
+        self.worker = AIWorker(self.provider, self.current_text, action_type,
+                               self.session_id, self.context_source, self.context_meta)
         self.worker.text_updated.connect(self.on_text_updated)
         self.worker.start()
 
@@ -951,114 +965,19 @@ class AICardWindow(QWidget):
         scrollbar = self.text_edit.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 
+    def _delayed_hide(self):
+        """延迟隐藏：如果 _pending_hide 仍为 True（无拖拽进入），则隐藏卡片。"""
+        if self._pending_hide:
+            self.hide()
+            if self.worker and self.worker.isRunning():
+                self.worker.stop()
+        self._pending_hide = False
+
     def hide_card(self):
+        self._pending_hide = False
         self.hide()
         if self.worker and self.worker.isRunning():
             self.worker.stop()
-
-# ==========================================
-# 4. 全屏光标特效图层 (独立图层，鼠标穿透)
-# ==========================================
-class CursorOverlay(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.cursor_x = -100.0
-        self.cursor_y = -100.0
-        self.trail = deque(maxlen=20)
-        self.ripples = []
-        self.base_radius = 8
-        self.current_radius = 8
-        self.growing = True
-        
-        self.initUI()
-        
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.animate_effects)
-        self.timer.start(30)
-
-    def initUI(self):
-        # 必须开启鼠标穿透 (WindowTransparentForInput)，否则会挡住用户操作
-        self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.WindowStaysOnTopHint |
-            Qt.WindowType.BypassWindowManagerHint |
-            Qt.WindowType.WindowTransparentForInput
-        )
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        # self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-
-        rect = QRect()
-        for screen in QApplication.screens():
-            rect = rect.united(screen.geometry())
-        self.setGeometry(rect)
-        self.show()
-
-    def get_local_pos(self):
-        global_pos = QCursor.pos()
-        local_pos = self.mapFromGlobal(global_pos)
-        return local_pos.x(), local_pos.y()
-
-    def update_cursor_position(self, x, y):
-        lx, ly = self.get_local_pos()
-        self.cursor_x = lx
-        self.cursor_y = ly
-        self.trail.append((lx, ly))
-        self.update()
-
-    def add_ripple(self, x, y):
-        lx, ly = self.get_local_pos()
-        self.ripples.append(Ripple(lx, ly))
-
-    def animate_effects(self):
-        if self.growing:
-            self.current_radius += 0.5
-            if self.current_radius >= 12:
-                self.growing = False
-        else:
-            self.current_radius -= 0.5
-            if self.current_radius <= 8:
-                self.growing = True
-                
-        for ripple in self.ripples:
-            ripple.update()
-        self.ripples = [r for r in self.ripples if r.active]
-        
-        if len(self.trail) > 0 and self.cursor_x == self.trail[-1][0] and self.cursor_y == self.trail[-1][1]:
-            if int(time.time() * 10) % 2 == 0:
-                self.trail.popleft()
-        
-        self.update()
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        trail_length = len(self.trail)
-        for i, (tx, ty) in enumerate(self.trail):
-            alpha = int(255 * (i / trail_length) * 0.5)
-            radius = self.base_radius * (i / trail_length) * 0.8
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(100, 200, 255, alpha))
-            painter.drawEllipse(QPointF(tx, ty), radius, radius)
-
-        for ripple in self.ripples:
-            alpha = max(0, min(255, ripple.alpha))
-            pen = QPen(QColor(255, 150, 50, alpha), 2)
-            painter.setPen(pen)
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawEllipse(QPointF(ripple.x, ripple.y), ripple.radius, ripple.radius)
-
-        if self.cursor_x >= 0 and self.cursor_y >= 0:
-            pen = QPen(QColor(50, 150, 255, 200), 2)
-            painter.setPen(pen)
-            painter.setBrush(QColor(50, 200, 255, 120))
-            
-            center = QPointF(self.cursor_x, self.cursor_y)
-            painter.drawEllipse(center, self.current_radius, self.current_radius)
-            
-            painter.setPen(QPen(QColor(255, 255, 255, 200), 1))
-            painter.drawLine(int(self.cursor_x - 4), int(self.cursor_y), int(self.cursor_x + 4), int(self.cursor_y))
-            painter.drawLine(int(self.cursor_x), int(self.cursor_y - 4), int(self.cursor_x), int(self.cursor_y + 4))
 
 
 # ==========================================
@@ -1085,29 +1004,27 @@ class CopilotManager:
         self.mouse_thread.start()
 
     def _check_and_start_agent(self):
-        import socket
-        import subprocess
-        import sys
-        import os
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        result = sock.connect_ex(('127.0.0.1', 18888))
-        if result == 0:
-            print("[ASU Agent] 服务端已在 18888 端口运行。")
-        else:
-            print("[ASU Agent] 18888 端口未占用，正在启动 ASU 定制智能体...")
-            try:
-                # 启动自定义 Agent Server
-                agent_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "asu_custom_agent.py")
-                self.agent_process = subprocess.Popen(
-                    [sys.executable, agent_script], 
-                    stdout=subprocess.DEVNULL, 
-                    stderr=subprocess.DEVNULL
-                )
-                import time
-                time.sleep(1) # 等待服务启动
-            except Exception as e:
-                print(f"[ASU Agent] 启动失败: {e}")
-        sock.close()
+        # 使用健康检查端点检测 Agent 是否存活
+        try:
+            resp = httpx.get("http://127.0.0.1:18888/health", timeout=1.0)
+            if resp.status_code == 200:
+                data = resp.json()
+                print(f"[ASU Agent] 服务端已在 18888 端口运行 (活跃会话: {data.get('active_sessions', 0)})")
+                return
+        except Exception:
+            pass
+
+        print("[ASU Agent] 18888 端口未占用，正在启动 ASU 定制智能体...")
+        try:
+            agent_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "asu_custom_agent.py")
+            self.agent_process = subprocess.Popen(
+                [sys.executable, agent_script],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            time.sleep(1)
+        except Exception as e:
+            print(f"[ASU Agent] 启动失败: {e}")
 
     def cleanup(self):
         if self.agent_process:
@@ -1126,7 +1043,10 @@ class CopilotManager:
             global_pos = QCursor.pos()
             # 判断点击位置是否在卡片区域内
             if not self.ai_card.geometry().contains(global_pos):
-                self.ai_card.hide_card()
+                # 延迟 300ms 隐藏，给拖拽操作留出时间窗口
+                # 若用户在 300ms 内将文本拖入卡片，dragEnterEvent 会取消隐藏
+                self.ai_card._pending_hide = True
+                QTimer.singleShot(300, self.ai_card._delayed_hide)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

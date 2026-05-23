@@ -1,5 +1,8 @@
 # ASU 特权代理模式 (Privileged Broker Pattern) 技术方案与集成指南
 
+> **状态**：🔶 架构设计与 PoC 验证完成，待集成到主代码。
+> 相关代码尚未在 `smart_copilot.py` 中引入，当前 ASU 的浏览器探测仍直接在主进程中调用 AppleScript。
+
 ## 1. 背景与痛点：沙盒隔离与权限链断裂
 
 在 macOS 现代安全架构（SIP、TCC、Sandbox）下，ASU Agent 在 IDE（如 Trae、VSCode）内置终端中运行时，面临着严峻的跨进程探测壁垒。
@@ -121,7 +124,12 @@ asu_broker/
 2.  在安装 ASU 时，将 `com.asu.broker.plist` 复制到 `~/Library/LaunchAgents/`。
 3.  使用 `launchctl load` 启动服务。这样即使用户重启电脑，Broker 也会默默在后台拉起，随时准备为 IDE 里的 ASU Agent 提供特权服务。
 
-## 5. 后续工作计划
-1.  **完善 Broker 接口**：除了浏览器标签，补充前台应用识别、选中高亮文本获取等接口。
-2.  **编写打包与部署脚本**：探索将 Broker 打包为拥有独立 Bundle ID 的原生免安装组件，降低用户的权限配置成本。
-3.  **集成测试**：在 ASU 主体逻辑中引入 Broker 客户端并进行联调。
+## 5. 当前状态与后续工作计划
+
+**当前状态**：PoC 验证通过（2026-05-20），但尚未集成到主代码中。ASU 当前通过 `smart_copilot.py` 直接调用 AppleScript 完成浏览器探测，尚未通过 Broker 代理。
+
+**后续工作**：
+1. **完善 Broker 接口**：除了浏览器标签，补充前台应用识别、选中高亮文本获取等接口。
+2. **编写打包与部署脚本**：将 Broker 打包为拥有独立 Bundle ID 的原生免安装组件，降低用户的权限配置成本。
+3. **集成到主程序**：在 `smart_copilot.py` 中引入 Broker 客户端，将 AppleScript 调用统一走 Broker 代理。
+4. **守护进程化**：通过 `launchd` 注册为 macOS `LaunchAgent`，实现开机自启和后台常驻。

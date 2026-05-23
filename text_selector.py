@@ -1,3 +1,15 @@
+"""
+⚠️  【已废弃】划词捕获程序 (Cmd+C 剪贴板方案)
+
+本文件基于 pynput 监听鼠标拖拽并通过模拟 Cmd+C 获取选中文本。
+由于 macOS 沙盒保护机制，模拟 Cmd+C 会导致 IDE/浏览器焦点丢失和光标消失。
+
+当前 ASU 已采用 **原生拖拽 (Drag & Drop)** 方案替代此方案，
+详见 smart_copilot.py 中的 AICardWindow.dropEvent()。
+
+本文件保留仅供学习和参考，请勿在生产中使用。
+"""
+
 import time
 import subprocess
 import threading
@@ -77,6 +89,9 @@ class TextSelector:
             print(f"读取剪贴板失败: {e}", flush=True)
 
 if __name__ == "__main__":
+    print("⚠️  [已废弃] 划词捕获程序 (Cmd+C 方案)")
+    print("   当前 ASU 已使用原生拖拽 (Drag & Drop) 替代此方案。")
+    print()
     selector = TextSelector()
     
     print("📝 划词捕获程序(安全线程版)已启动...")

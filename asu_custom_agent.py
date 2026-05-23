@@ -31,15 +31,13 @@ CONTEXT_DESCRIPTIONS = {
 def build_context_prefix(context_source, context_meta):
     """根据上下文来源和元信息，生成注入到 system prompt 的前缀描述。"""
     base = CONTEXT_DESCRIPTIONS.get(context_source, "")
-    if not base:
-        return ""
-
-    parts = [base]
+    parts = [base] if base else []
 
     if context_meta:
         file_name = context_meta.get("file_name", "")
         language = context_meta.get("language", "")
         app_name = context_meta.get("app_name", "")
+        task = context_meta.get("task", "")
 
         if context_source == "ide" and file_name:
             detail = f"文件名：{file_name}"
@@ -48,6 +46,10 @@ def build_context_prefix(context_source, context_meta):
             parts.append(detail)
         elif context_source == "browser" and app_name:
             parts.append(f"浏览器：{app_name}")
+
+        # 任务上下文：工作台设定的任务注入到所有请求中
+        if task:
+            parts.append(f"用户当前任务：{task}。请围绕此任务目标进行回答，将分析结果与任务关联。")
 
     return "\n".join(parts)
 

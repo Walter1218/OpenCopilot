@@ -323,17 +323,18 @@ class ChatWorker(QThread):
         self._is_running = False
 
 # ==========================================
-# 2. 鼠标双击右键监听线程
+# 2. 鼠标监听线程（双击 + 三击右键）
 # ==========================================
 class MouseListenerWorker(QThread):
     mouse_moved = pyqtSignal(int, int)
     global_click = pyqtSignal(int, int)
-    double_right_clicked = pyqtSignal(int, int)
+    right_clicked = pyqtSignal(int, int, int)  # x, y, click_count
 
     def __init__(self):
         super().__init__()
         self.last_right_click_time = 0
-        self.double_click_threshold = 0.4  # 400ms
+        self.click_threshold = 0.4  # 400ms
+        self._right_click_count = 0
 
     def run(self):
         def on_move(x, y):
@@ -344,12 +345,12 @@ class MouseListenerWorker(QThread):
                 self.global_click.emit(int(x), int(y))
                 if button == mouse.Button.right:
                     current_time = time.time()
-                    if current_time - self.last_right_click_time < self.double_click_threshold:
-                        # 检测到双击右键
-                        self.double_right_clicked.emit(int(x), int(y))
-                        self.last_right_click_time = 0  # 重置
+                    if current_time - self.last_right_click_time < self.click_threshold:
+                        self._right_click_count += 1
                     else:
-                        self.last_right_click_time = current_time
+                        self._right_click_count = 1
+                    self.last_right_click_time = current_time
+                    self.right_clicked.emit(int(x), int(y), self._right_click_count)
 
         with mouse.Listener(on_move=on_move, on_click=on_click) as listener:
             listener.join()
@@ -373,9 +374,10 @@ class AICardWindow(QWidget):
         self.active_browser = None
         self._temp_chat_pos = 0
         self._pending_hide = False
-        # 上下文感知：追踪当前文本来源
+        # 上下文感知
         self.context_source = "drag"
         self.context_meta = {}
+        self.task_context = ""  # 工作台注入的任务上下文
         self.initUI()
 
     def initUI(self):
@@ -709,8 +711,12 @@ class AICardWindow(QWidget):
             self.chat_worker.stop()
             self.chat_worker.wait()
 
+        # 合并工作台任务上下文
+        meta = dict(self.context_meta)
+        if self.task_context:
+            meta["task"] = self.task_context
         self.chat_worker = ChatWorker(self.provider, user_text, self.session_id,
-                                      self.context_source, self.context_meta)
+                                      self.context_source, meta)
         self.chat_worker.text_updated.connect(self.on_chat_updated)
         self.chat_worker.finished_signal.connect(self.on_chat_finished)
         self.chat_worker.start()
@@ -952,8 +958,12 @@ class AICardWindow(QWidget):
             self.worker.stop()
             self.worker.wait()
 
+        # 合并工作台任务上下文到来源上下文中
+        meta = dict(self.context_meta)
+        if self.task_context:
+            meta["task"] = self.task_context
         self.worker = AIWorker(self.provider, self.current_text, action_type,
-                               self.session_id, self.context_source, self.context_meta)
+                               self.session_id, self.context_source, meta)
         self.worker.text_updated.connect(self.on_text_updated)
         self.worker.start()
 
@@ -981,6 +991,287 @@ class AICardWindow(QWidget):
 
 
 # ==========================================
+# 4. 任务工作台 (三击右键唤出)
+# ==========================================
+class AgentWorkspace(QWidget):
+    """独立智能体工作台 —— 三连击右键唤出。
+
+    用于：定义任务背景、独立对话、全局设置。
+    设定的任务上下文会自动注入到双击右键快捷卡片的 AI 请求中。
+    """
+    task_changed = pyqtSignal(str)  # 任务变更时通知 CopilotManager
+
+    def __init__(self, provider):
+        super().__init__()
+        self.provider = provider
+        self.chat_worker = None
+        self.current_task = ""
+        self.session_id = str(uuid.uuid4())
+        self._temp_chat_pos = 0
+        self._pending_hide = False
+        self._init_ui()
+
+    def _init_ui(self):
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.BypassWindowManagerHint
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAcceptDrops(True)
+        self.resize(520, 480)
+
+        # 外层 Frame
+        self.frame = QFrame(self)
+        self.frame.setStyleSheet("""
+            QFrame {
+                background-color: rgba(25, 25, 32, 245);
+                border-radius: 14px;
+                border: 1.5px solid rgba(77, 166, 255, 80);
+            }
+        """)
+        self.frame.resize(500, 460)
+        self.frame.move(10, 10)
+
+        shadow = QGraphicsDropShadowEffect()
+        shadow.setBlurRadius(24)
+        shadow.setColor(QColor(0, 0, 0, 200))
+        shadow.setOffset(0, 6)
+        self.frame.setGraphicsEffect(shadow)
+
+        layout = QVBoxLayout(self.frame)
+        layout.setContentsMargins(16, 14, 16, 14)
+        layout.setSpacing(8)
+
+        # --- 标题栏 ---
+        title_layout = QHBoxLayout()
+        self.title_label = QLabel("🧠 ASU Agent Workspace")
+        self.title_label.setStyleSheet(
+            "color: #4da6ff; font-weight: bold; font-size: 14px; background: transparent; border: none;"
+        )
+
+        self.btn_settings = QPushButton("⚙️")
+        self.btn_settings.setStyleSheet("""
+            QPushButton { background: transparent; border: none; font-size: 14px; }
+            QPushButton:hover { color: #fff; }
+        """)
+        self.btn_settings.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_settings.clicked.connect(self._open_settings)
+
+        self.btn_close = QPushButton("✕")
+        self.btn_close.setStyleSheet("""
+            QPushButton { background: transparent; border: none; font-size: 14px; color: #888; }
+            QPushButton:hover { color: #ff5555; }
+        """)
+        self.btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_close.clicked.connect(self.hide_workspace)
+
+        title_layout.addWidget(self.title_label)
+        title_layout.addStretch()
+        title_layout.addWidget(self.btn_settings)
+        title_layout.addWidget(self.btn_close)
+        layout.addLayout(title_layout)
+
+        # --- 任务定义区 ---
+        task_label = QLabel("📋 当前任务（注入到所有划词请求中）")
+        task_label.setStyleSheet("color: #aaa; font-size: 11px; background: transparent; border: none;")
+        layout.addWidget(task_label)
+
+        task_input_layout = QHBoxLayout()
+        self.task_input = QLineEdit()
+        self.task_input.setPlaceholderText("例：我正在审查支付模块的安全漏洞...")
+        self.task_input.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(40, 40, 50, 200);
+                color: #eee; border: 1px solid rgba(100, 100, 120, 150);
+                border-radius: 6px; padding: 6px 10px; font-size: 12px;
+            }
+            QLineEdit:focus { border: 1px solid #4da6ff; }
+        """)
+        self.task_input.returnPressed.connect(self._save_task)
+
+        self.btn_save_task = QPushButton("设定")
+        self.btn_save_task.setStyleSheet("""
+            QPushButton {
+                background-color: #4da6ff; color: #000; border-radius: 6px;
+                padding: 6px 14px; font-weight: bold; font-size: 12px;
+            }
+            QPushButton:hover { background-color: #66b3ff; }
+        """)
+        self.btn_save_task.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_save_task.clicked.connect(self._save_task)
+
+        task_input_layout.addWidget(self.task_input, stretch=1)
+        task_input_layout.addWidget(self.btn_save_task)
+        layout.addLayout(task_input_layout)
+
+        # 当前任务状态标签
+        self.task_status = QLabel("")
+        self.task_status.setStyleSheet(
+            "color: #42f554; font-size: 11px; background: transparent; border: none;"
+        )
+        self.task_status.hide()
+        layout.addWidget(self.task_status)
+
+        # --- 对话区 ---
+        self.chat_display = QTextEdit()
+        self.chat_display.setReadOnly(True)
+        self.chat_display.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.chat_display.setStyleSheet("""
+            QTextEdit {
+                background-color: transparent; color: #eee; font-size: 13px;
+                border: none; line-height: 1.5;
+            }
+            QScrollBar:vertical { width: 6px; background: transparent; }
+            QScrollBar::handle:vertical { background: rgba(255,255,255,40); border-radius: 3px; }
+        """)
+        layout.addWidget(self.chat_display, stretch=1)
+
+        # --- 输入栏 ---
+        input_layout = QHBoxLayout()
+        self.chat_input = QLineEdit()
+        self.chat_input.setPlaceholderText("输入消息，按 Enter 发送...")
+        self.chat_input.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        self.chat_input.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(40, 40, 50, 200); color: #fff;
+                border: 1px solid rgba(100, 100, 120, 150);
+                border-radius: 6px; padding: 6px 10px; font-size: 13px;
+            }
+            QLineEdit:focus { border: 1px solid #4da6ff; }
+        """)
+        self.chat_input.returnPressed.connect(self._send_message)
+
+        self.btn_send = QPushButton("发送")
+        self.btn_send.setStyleSheet("""
+            QPushButton {
+                background-color: #4da6ff; color: #000; border-radius: 6px;
+                padding: 6px 14px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #66b3ff; }
+        """)
+        self.btn_send.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_send.clicked.connect(self._send_message)
+
+        input_layout.addWidget(self.chat_input, stretch=1)
+        input_layout.addWidget(self.btn_send)
+        layout.addLayout(input_layout)
+
+    def _save_task(self):
+        task = self.task_input.text().strip()
+        self.current_task = task
+        if task:
+            self.task_status.setText(f"✅ 激活任务: {task}")
+            self.task_status.show()
+            self.task_changed.emit(task)
+            self._append_message("系统", f"任务已设定: {task}")
+        else:
+            self.task_status.hide()
+            self.task_changed.emit("")
+            self._append_message("系统", "任务已清除。")
+
+    def _send_message(self):
+        text = self.chat_input.text().strip()
+        if not text:
+            return
+        self.chat_input.clear()
+        self._append_message("你", text)
+        self._append_message("AI", "思考中...", is_temp=True)
+
+        if self.chat_worker and self.chat_worker.isRunning():
+            self.chat_worker.stop()
+            self.chat_worker.wait()
+
+        # 聊天模式，带当前任务上下文
+        meta = {"task": self.current_task} if self.current_task else {}
+        self.chat_worker = ChatWorker(
+            self.provider, text, self.session_id,
+            context_source="chat", context_meta=meta
+        )
+        self.chat_worker.text_updated.connect(self._on_chat_update)
+        self.chat_worker.finished_signal.connect(lambda: None)
+        self.chat_worker.start()
+
+    def _append_message(self, role, text, is_temp=False):
+        color = "#4da6ff" if role == "你" else "#42f554" if role == "AI" else "#aaaaaa"
+        cursor = self.chat_display.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        self.chat_display.setTextCursor(cursor)
+
+        if is_temp:
+            self._temp_chat_pos = cursor.position()
+
+        self.chat_display.insertHtml(
+            f'<b style="color:{color};">{role}:</b> {text}<br><br>'
+        )
+        scrollbar = self.chat_display.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+
+    def _on_chat_update(self, text):
+        cursor = self.chat_display.textCursor()
+        cursor.setPosition(self._temp_chat_pos)
+        cursor.movePosition(cursor.MoveOperation.End, cursor.MoveMode.KeepAnchor)
+        cursor.removeSelectedText()
+        cursor.insertHtml(f'<b style="color:#42f554;">AI:</b> {text}<br><br>')
+        scrollbar = self.chat_display.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+
+    def _open_settings(self):
+        from PyQt6.QtWidgets import QDialog as QDlg
+        dialog = SettingsDialog(self)
+        dialog.config_updated.connect(self._reload_provider)
+        dialog.exec()
+
+    def _reload_provider(self):
+        self.provider = ProviderFactory.create_provider()
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        text = event.mimeData().text()
+        if text:
+            self.task_input.setText(text)
+            self._save_task()
+
+    def show_workspace(self, x, y):
+        self.session_id = str(uuid.uuid4())
+        self.chat_display.clear()
+        if self.current_task:
+            self._append_message("系统", f"当前任务: {self.current_task}")
+
+        pos = QCursor.pos()
+        screen = QApplication.screenAt(pos) or QApplication.primaryScreen()
+        sr = screen.geometry()
+        w, h = self.width(), self.height()
+
+        tx = pos.x() + 20
+        ty = pos.y() + 20
+        if tx + w > sr.right():
+            tx = pos.x() - w - 20
+        if ty + h > sr.bottom():
+            ty = pos.y() - h - 20
+        tx = max(sr.left(), min(tx, sr.right() - w))
+        ty = max(sr.top(), min(ty, sr.bottom() - h))
+
+        self.move(tx, ty)
+        self.show()
+        self.chat_input.setFocus()
+
+    def hide_workspace(self):
+        self._pending_hide = False
+        self.hide()
+        if self.chat_worker and self.chat_worker.isRunning():
+            self.chat_worker.stop()
+
+    def _delayed_hide(self):
+        if self._pending_hide:
+            self.hide_workspace()
+        self._pending_hide = False
+
+
+# ==========================================
 # 5. 总调度管理器与生命周期管理
 # ==========================================
 class CopilotManager:
@@ -990,18 +1281,95 @@ class CopilotManager:
         
         self.provider = ProviderFactory.create_provider()
         
-        # 实例化两个独立的图层：
+        # 三个独立图层：
         # 1. 光标特效图层（全屏、鼠标穿透）
         self.cursor_overlay = CursorOverlay()
-        # 2. 智能卡片图层（局部、非穿透、可交互）
+        # 2. 智能卡片图层（双击右键，快捷交互）
         self.ai_card = AICardWindow(self.provider)
+        # 3. 任务工作台图层（三击右键，任务定义 + 独立对话）
+        self.workspace = AgentWorkspace(self.provider)
         
+        # 三击 vs 双击仲裁状态
+        self._pending_clicks = 0
+        self._pending_click_x = 0
+        self._pending_click_y = 0
+        self._click_resolve_timer = None
+
         # 启动鼠标监听
         self.mouse_thread = MouseListenerWorker()
         self.mouse_thread.mouse_moved.connect(self.cursor_overlay.update_cursor_position)
-        self.mouse_thread.double_right_clicked.connect(self.on_double_right_click)
-        self.mouse_thread.global_click.connect(self.on_global_click)
+        self.mouse_thread.right_clicked.connect(self._on_right_clicked)
+        self.mouse_thread.global_click.connect(self._on_global_click)
         self.mouse_thread.start()
+        
+        # 任务上下文同步：工作台任务 → 快捷卡片
+        self.workspace.task_changed.connect(self._sync_task_context)
+
+    def _sync_task_context(self, task):
+        """工作台设定的任务合并到快捷卡片（不覆盖 IDE/浏览器来源信息）。"""
+        if task:
+            self.ai_card.task_context = task
+        else:
+            self.ai_card.task_context = ""
+
+    def _on_right_clicked(self, x, y, count):
+        """右键点击仲裁：用 QTimer 区分双击 vs 三击。"""
+        self._pending_clicks = count
+        self._pending_click_x = x
+        self._pending_click_y = y
+
+        if count == 2:
+            # 可能是双击，但也可能是三击的中间状态，延迟判决
+            if self._click_resolve_timer is None:
+                self._click_resolve_timer = QTimer()
+                self._click_resolve_timer.setSingleShot(True)
+                self._click_resolve_timer.timeout.connect(self._resolve_right_clicks)
+            self._click_resolve_timer.start(400)  # 等待 400ms 看有没有第三次点击
+        elif count >= 3:
+            # 三击确认，立即执行
+            if self._click_resolve_timer:
+                self._click_resolve_timer.stop()
+            self._resolve_right_clicks()
+
+    def _resolve_right_clicks(self):
+        """根据最终点击次数决定行为。"""
+        clicks = self._pending_clicks
+        self._pending_clicks = 0
+
+        if clicks == 2:
+            self._on_double_right_click(self._pending_click_x, self._pending_click_y)
+        elif clicks >= 3:
+            self._on_triple_right_click(self._pending_click_x, self._pending_click_y)
+
+    def _on_double_right_click(self, x, y):
+        pos = QCursor.pos()
+        self.ai_card.show_card(pos.x(), pos.y())
+
+    def _on_triple_right_click(self, x, y):
+        pos = QCursor.pos()
+        self.workspace.show_workspace(pos.x(), pos.y())
+
+    def _on_global_click(self, x, y):
+        self.cursor_overlay.add_ripple(x, y)
+        # 快捷卡片：点击外部延迟隐藏
+        if self.ai_card.isVisible():
+            global_pos = QCursor.pos()
+            if not self.ai_card.geometry().contains(global_pos):
+                self.ai_card._pending_hide = True
+                QTimer.singleShot(300, self.ai_card._delayed_hide)
+        # 工作台：点击外部延迟隐藏
+        if self.workspace.isVisible():
+            global_pos = QCursor.pos()
+            if not self.workspace.geometry().contains(global_pos):
+                self.workspace._pending_hide = True
+                QTimer.singleShot(300, self.workspace._delayed_hide)
+
+    def cleanup(self):
+        if self.agent_process:
+            print("[ASU Agent] 正在关闭后台服务...")
+            self.agent_process.terminate()
+            self.agent_process.wait(timeout=3)
+        self.mouse_thread.quit()
 
     def _check_and_start_agent(self):
         # 使用健康检查端点检测 Agent 是否存活
@@ -1026,39 +1394,18 @@ class CopilotManager:
         except Exception as e:
             print(f"[ASU Agent] 启动失败: {e}")
 
-    def cleanup(self):
-        if self.agent_process:
-            print("[ASU Agent] 正在关闭后台服务...")
-            self.agent_process.terminate()
-            self.agent_process.wait(timeout=3)
-        self.mouse_thread.quit()
-
-    def on_double_right_click(self, x, y):
-        pos = QCursor.pos()
-        self.ai_card.show_card(pos.x(), pos.y())
-
-    def on_global_click(self, x, y):
-        self.cursor_overlay.add_ripple(x, y)
-        if self.ai_card.isVisible():
-            global_pos = QCursor.pos()
-            # 判断点击位置是否在卡片区域内
-            if not self.ai_card.geometry().contains(global_pos):
-                # 延迟 300ms 隐藏，给拖拽操作留出时间窗口
-                # 若用户在 300ms 内将文本拖入卡片，dragEnterEvent 会取消隐藏
-                self.ai_card._pending_hide = True
-                QTimer.singleShot(300, self.ai_card._delayed_hide)
-
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     manager = CopilotManager()
     
-    print("🚀 智能悬浮划词 Copilot (纯鼠标重构版) 已启动！")
+    print("🚀 ASU Smart Copilot 已启动！")
     print("操作提示：")
-    print("  1. 在任意地方【双击鼠标右键】，即可唤出 AI 悬浮卡片。")
-    print("  2. 将选中的文本（代码、英文、普通文本均可）直接【拖拽】到悬浮卡片中，AI 会自动进行解析。")
-    print("  3. 弹出的卡片支持滚动，并允许选中复制 AI 回复的内容。")
-    print("  4. 点击卡片外部任意区域，卡片会自动消失。")
-    print("🛑 按 Ctrl+C 在终端中停止，或直接关闭终端。")
+    print("  ┌─ 双击右键 → 快捷悬浮卡片（翻译/解释/润色）")
+    print("  ├─ 三击右键 → 任务工作台（设定任务 + 独立对话）")
+    print("  ├─ 拖拽文本到卡片 → 自动 AI 解析")
+    print("  ├─ 点击卡片外部 → 300ms 后自动消失")
+    print("  └─ 工作台设定的任务会自动注入到快捷卡片中")
+    print("🛑 按 Ctrl+C 停止。")
     
     ret = app.exec()
     manager.cleanup()

@@ -61,9 +61,10 @@ ASU 是一个致力于探索**下一代人机交互模式**的系统级工具集
 ---
 
 ## 📚 进阶架构设计文档
+- 👉 [ASU 定制智能体 (Custom Agent) 开发与使用指南](ASU_Custom_Agent_Guide.md)
+- 👉 [ASU 特权代理模式集成与开发指南](ASU_Broker_Development_Guide.md)
 - 👉 [ASU 全场景智能上下文获取方案](ASU_Architecture_Context_Extraction.md)
 - 👉 [ASU Code Review 报告 (2026-05-23)](ASU_Code_Review_Report.md)
-- 👉 [ASU 特权代理模式集成与开发指南](ASU_Broker_Development_Guide.md)
 
 ---
 

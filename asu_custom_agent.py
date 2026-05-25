@@ -2,6 +2,8 @@ import os
 import sys
 import json
 import uuid
+import sqlite3
+import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from llm_provider import MiniMaxProvider, LocalProvider, load_config
 
@@ -54,40 +56,104 @@ def build_context_prefix(context_source, context_meta):
     return "\n".join(parts)
 
 
+def load_persona(action_type):
+    """动态加载 Persona 文件，支持热更新"""
+    filepath = os.path.join(os.path.dirname(__file__), "personas", f"{action_type}.md")
+    if not os.path.exists(filepath):
+        filepath = os.path.join(os.path.dirname(__file__), "personas", "default.md")
+        if not os.path.exists(filepath):
+            return "你是一个强大的AI助手，请直接回答用户的问题。"
+    with open(filepath, "r", encoding="utf-8") as f:
+        return f.read().strip()
+
+
 class ASUAgentMemory:
-    def __init__(self):
-        self.sessions = {}
+    def __init__(self, db_path="asu_agent.db"):
+        self.db_path = db_path
+        self._init_db()
+
+    def _get_conn(self):
+        return sqlite3.connect(self.db_path)
+
+    def _init_db(self):
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS sessions (
+                    session_id TEXT PRIMARY KEY,
+                    persona TEXT DEFAULT 'default',
+                    updated_at REAL
+                )
+            ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT,
+                    role TEXT,
+                    content TEXT,
+                    timestamp REAL,
+                    FOREIGN KEY(session_id) REFERENCES sessions(session_id)
+                )
+            ''')
+            conn.commit()
 
     def get_context(self, session_id):
-        if session_id not in self.sessions:
-            self.sessions[session_id] = {"messages": [], "persona": "default"}
-        return self.sessions[session_id]
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT persona FROM sessions WHERE session_id = ?", (session_id,))
+            row = cursor.fetchone()
+            if row:
+                persona = row[0]
+            else:
+                persona = "default"
+                cursor.execute("INSERT INTO sessions (session_id, persona, updated_at) VALUES (?, ?, ?)", 
+                               (session_id, persona, time.time()))
+                conn.commit()
+
+            cursor.execute("SELECT role, content FROM messages WHERE session_id = ? ORDER BY timestamp ASC", (session_id,))
+            messages = [{"role": r[0], "content": r[1]} for r in cursor.fetchall()]
+            
+            return {"messages": messages, "persona": persona}
 
     def add_message(self, session_id, role, content):
-        ctx = self.get_context(session_id)
-        ctx["messages"].append({"role": role, "content": content})
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute("INSERT OR IGNORE INTO sessions (session_id, persona, updated_at) VALUES (?, 'default', ?)", 
+                           (session_id, time.time()))
+            cursor.execute("INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
+                           (session_id, role, content, time.time()))
+            cursor.execute("UPDATE sessions SET updated_at = ? WHERE session_id = ?", (time.time(), session_id))
+            conn.commit()
 
     def set_persona(self, session_id, persona):
-        ctx = self.get_context(session_id)
-        ctx["persona"] = persona
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            # SQLite upsert equivalent
+            cursor.execute("SELECT 1 FROM sessions WHERE session_id = ?", (session_id,))
+            if cursor.fetchone():
+                cursor.execute("UPDATE sessions SET persona = ?, updated_at = ? WHERE session_id = ?", 
+                               (persona, time.time(), session_id))
+            else:
+                cursor.execute("INSERT INTO sessions (session_id, persona, updated_at) VALUES (?, ?, ?)", 
+                               (session_id, persona, time.time()))
+            conn.commit()
 
     def clear(self, session_id):
-        if session_id in self.sessions:
-            self.sessions[session_id] = {"messages": [], "persona": "default"}
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
+            cursor.execute("UPDATE sessions SET persona = 'default', updated_at = ? WHERE session_id = ?", (time.time(), session_id))
+            conn.commit()
 
     def session_count(self):
-        return len(self.sessions)
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM sessions")
+            row = cursor.fetchone()
+            return row[0] if row else 0
 
 
 memory = ASUAgentMemory()
-
-personas = {
-    "translate": "你是一个金牌翻译官。请将用户提供的文本翻译为中文（如果是中文则翻译为英文）。要求信达雅，只输出翻译结果，不带任何解释和废话。",
-    "code": "你是一个资深架构师。请对用户提供的代码进行深度解析：\n1. 总结核心功能。\n2. 指出潜在漏洞或优化空间。\n要求排版清晰，直接输出解析结果。",
-    "polish": "你是一个资深编辑。请对用户提供的文本进行润色，修正语病，提升表达的专业度和流畅度，使其更具逻辑性。只输出润色后的结果，不解释。",
-    "default": "你是一个强大的AI划词助手。请对用户提供的文本进行处理：如果是外语翻译为中文，如果是代码简要解释，普通文本进行总结或解释。排版清晰，直接输出结果，不说多余的客套话。"
-}
-
 
 def get_base_llm():
     config = load_config()
@@ -138,7 +204,7 @@ class AgentHTTPRequestHandler(BaseHTTPRequestHandler):
 
             ctx = memory.get_context(session_id)
             current_persona = ctx["persona"]
-            persona_prompt = personas.get(current_persona, personas["default"])
+            persona_prompt = load_persona(current_persona)
 
             # 构建上下文前缀
             context_prefix = build_context_prefix(context_source, context_meta)

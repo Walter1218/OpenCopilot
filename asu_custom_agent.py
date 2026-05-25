@@ -7,6 +7,158 @@ import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from llm_provider import MiniMaxProvider, LocalProvider, load_config
 
+
+# ==========================================
+# Context Window 管理（P0）
+# ==========================================
+
+class ContextWindowManager:
+    """基于预算的上下文窗口管理器（字符预算近似 token 预算）。"""
+
+    def __init__(self, max_input_chars=24000, reserve_output_chars=6000,
+                 recent_turns=6, max_history_msg_chars=2200):
+        self.max_input_chars = max_input_chars
+        self.reserve_output_chars = reserve_output_chars
+        self.recent_turns = recent_turns
+        self.max_history_msg_chars = max_history_msg_chars
+
+    def _truncate_text(self, text, limit):
+        if not text or limit <= 0:
+            return ""
+        if len(text) <= limit:
+            return text
+        marker = "\n\n...[已截断]...\n\n"
+        marker_len = len(marker)
+        if limit <= marker_len + 20:
+            return text[:limit]
+        head = int((limit - marker_len) * 0.7)
+        tail = limit - marker_len - head
+        return text[:head] + marker + text[-tail:]
+
+    def _clip_by_source(self, source, text, limit):
+        """按来源做裁剪策略：IDE 保留头尾，Browser 偏头部，其他常规截断。"""
+        if not text or limit <= 0:
+            return ""
+        if len(text) <= limit:
+            return text
+
+        if source == "ide":
+            marker = "\n\n...[IDE内容已裁剪，保留头尾关键片段]...\n\n"
+            marker_len = len(marker)
+            if limit <= marker_len + 20:
+                return text[:limit]
+            head = int((limit - marker_len) * 0.55)
+            tail = limit - marker_len - head
+            return text[:head] + marker + text[-tail:]
+
+        if source == "browser":
+            marker = "\n\n...[网页正文已裁剪]...\n\n"
+            marker_len = len(marker)
+            if limit <= marker_len + 20:
+                return text[:limit]
+            head = limit - marker_len
+            return text[:head] + marker
+
+        return self._truncate_text(text, limit)
+
+    def _build_user_payload(self, envelope, budget):
+        source = envelope.get("source", "drag")
+        content = envelope.get("content", "")
+        selection = envelope.get("selection", "")
+        task = envelope.get("task", "")
+        meta = envelope.get("meta", {}) or {}
+
+        # 元信息摘要
+        meta_parts = []
+        for k in ("file_name", "language", "app_name", "title", "url"):
+            v = meta.get(k)
+            if v:
+                meta_parts.append(f"{k}={v}")
+        meta_text = "；".join(meta_parts)
+
+        # 先构建骨架，再把正文按剩余预算裁剪
+        payload_parts = [f"[context_source] {source}"]
+        if task:
+            payload_parts.append(f"[task] {task}")
+        if meta_text:
+            payload_parts.append(f"[meta] {meta_text}")
+        if selection:
+            payload_parts.append(f"[selection]\n{selection}")
+
+        skeleton = "\n\n".join(payload_parts)
+        remaining = max(0, budget - len(skeleton) - 20)
+        clipped_content = self._clip_by_source(source, content, remaining)
+        payload_parts.append(f"[content]\n{clipped_content}")
+
+        return "\n\n".join(payload_parts)
+
+    def _pick_recent_history(self, history_messages, budget):
+        """保留最近若干轮历史，并对单条消息做上限截断。"""
+        if budget <= 0:
+            return []
+
+        selected = []
+        recent_msgs = history_messages[-(self.recent_turns * 2):] if self.recent_turns > 0 else history_messages
+
+        # 从最近往前装，保证时序时再翻转
+        for msg in reversed(recent_msgs):
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            clipped = self._truncate_text(content, self.max_history_msg_chars)
+            unit = len(role) + len(clipped) + 16
+            if unit > budget:
+                break
+            selected.append({"role": role, "content": clipped})
+            budget -= unit
+
+        selected.reverse()
+        return selected
+
+    def build_messages(self, system_prompt, envelope, history_messages):
+        """生成最终发给模型的消息列表。"""
+        sys_unit = len(system_prompt)
+        total_budget = max(1500, self.max_input_chars - self.reserve_output_chars)
+        remaining = max(0, total_budget - sys_unit)
+
+        # 历史与当前输入按 45/55 分配预算
+        history_budget = int(remaining * 0.45)
+        user_budget = max(500, remaining - history_budget)
+
+        history_msgs = self._pick_recent_history(history_messages, history_budget)
+        user_payload = self._build_user_payload(envelope, user_budget)
+
+        messages = [{"role": "system", "content": system_prompt}]
+        messages.extend(history_msgs)
+        messages.append({"role": "user", "content": user_payload})
+        return messages
+
+
+def normalize_context_envelope(req, fallback_text, fallback_source, fallback_meta):
+    """兼容新旧协议：优先 context_envelope，其次旧字段。"""
+    env = req.get("context_envelope")
+    if isinstance(env, dict):
+        envelope = {
+            "source": env.get("source", fallback_source),
+            "content": env.get("content", fallback_text),
+            "selection": env.get("selection", ""),
+            "task": env.get("task", (env.get("meta") or {}).get("task", "")),
+            "meta": env.get("meta", fallback_meta or {}),
+            "timestamp": env.get("timestamp", time.time()),
+        }
+    else:
+        envelope = {
+            "source": fallback_source,
+            "content": fallback_text,
+            "selection": "",
+            "task": (fallback_meta or {}).get("task", ""),
+            "meta": fallback_meta or {},
+            "timestamp": time.time(),
+        }
+
+    # 兜底：保证 content 至少是字符串
+    envelope["content"] = str(envelope.get("content", "") or "")
+    return envelope
+
 # ==========================================
 # 上下文感知的 System Prompt 构建
 # ==========================================
@@ -154,6 +306,12 @@ class ASUAgentMemory:
 
 
 memory = ASUAgentMemory()
+window_manager = ContextWindowManager(
+    max_input_chars=int(os.getenv("ASU_MAX_INPUT_CHARS", "24000")),
+    reserve_output_chars=int(os.getenv("ASU_RESERVE_OUTPUT_CHARS", "6000")),
+    recent_turns=int(os.getenv("ASU_RECENT_TURNS", "6")),
+    max_history_msg_chars=int(os.getenv("ASU_MAX_HISTORY_MSG_CHARS", "2200")),
+)
 
 def get_base_llm():
     config = load_config()
@@ -194,9 +352,10 @@ class AgentHTTPRequestHandler(BaseHTTPRequestHandler):
             session_id = req.get('session_id', str(uuid.uuid4()))
             is_new_task = req.get('is_new_task', False)
 
-            # 新增：上下文感知参数
+            # 兼容层：支持新 context_envelope 与旧字段共存
             context_source = req.get('context_source', 'drag')
             context_meta = req.get('context_meta', {})
+            envelope = normalize_context_envelope(req, text, context_source, context_meta)
 
             if is_new_task:
                 memory.clear(session_id)
@@ -207,7 +366,7 @@ class AgentHTTPRequestHandler(BaseHTTPRequestHandler):
             persona_prompt = load_persona(current_persona)
 
             # 构建上下文前缀
-            context_prefix = build_context_prefix(context_source, context_meta)
+            context_prefix = build_context_prefix(envelope.get("source", "drag"), envelope.get("meta", {}))
 
             # 将上下文前缀注入 system prompt
             if context_prefix:
@@ -215,11 +374,15 @@ class AgentHTTPRequestHandler(BaseHTTPRequestHandler):
             else:
                 enriched_system = persona_prompt
 
-            messages = [{"role": "system", "content": enriched_system}]
-            messages.extend(ctx["messages"])
-            messages.append({"role": "user", "content": text})
+            # P0: 用预算驱动的窗口管理替换“全量历史 + 全量正文”
+            messages = window_manager.build_messages(
+                system_prompt=enriched_system,
+                envelope=envelope,
+                history_messages=ctx["messages"],
+            )
 
-            memory.add_message(session_id, "user", text)
+            # 持久化原始用户输入，避免丢信息
+            memory.add_message(session_id, "user", envelope.get("content", text))
 
             self.send_response(200)
             self.send_header('Content-Type', 'text/event-stream')

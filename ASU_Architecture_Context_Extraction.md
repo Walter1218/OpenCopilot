@@ -60,6 +60,6 @@
 | **阶段三** | AXAPI 原生文档遍历器 (Pages/备忘录/TextEdit) | 🔶 待开发 |
 | **阶段四** | 上下文感知智能体：Agent 自动识别文本来源，注入场景化 system prompt | ✅ 已完成 |
 | **阶段五** | 三击右键任务工作台：任务定义 + 独立对话 + 上下文贯通快捷卡片 | ✅ 已完成 |
-| **阶段六** | 会话持久化 + 上下文窗口管理 + 自定义 Persona | 🔶 待开发 |
-| **阶段七** | Privileged Broker 特权代理 + WebSocket 推送 + 多 Provider 故障转移 | 🔶 待开发 |
-| **阶段八** | Markdown 渲染 + 代码高亮 + 卡片拖拽缩放 | 🔶 待开发 |
+| **阶段六** | 会话持久化 + Persona 文件化 + UI/Agent 生命周期解耦 + LaunchAgent 常驻 | ✅ 已完成 |
+| **阶段七** | 上下文窗口管理 + Privileged Broker v2 + WebSocket 推送 + 多 Provider 故障转移 | 🔶 待开发 |
+| **阶段八** | Markdown 渲染 + 代码高亮 + 卡片拖拽缩放 | ✅ 已完成 |

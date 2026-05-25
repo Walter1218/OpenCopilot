@@ -6,7 +6,6 @@ import time
 import uuid
 import threading
 import tempfile
-import subprocess
 from pynput import mouse
 
 from PyQt6.QtWidgets import (
@@ -379,6 +378,7 @@ class AICardWindow(QWidget):
         self.context_source = "drag"
         self.context_meta = {}
         self.task_context = ""  # 工作台注入的任务上下文
+        self._agent_online = True  # 默认乐观假设在线，探活结果回来后更新
         self.initUI()
 
     def initUI(self):
@@ -421,6 +421,11 @@ class AICardWindow(QWidget):
         title_layout = QHBoxLayout()
         self.title_label = QLabel("✨ Smart Copilot", self)
         self.title_label.setStyleSheet("color: #4da6ff; font-weight: bold; font-size: 14px; background: transparent; border: none;")
+
+        # Agent 在线状态指示灯（绿色=在线，红色=离线）
+        self.agent_status_dot = QLabel("●", self)
+        self.agent_status_dot.setStyleSheet("color: #4caf50; font-size: 10px; background: transparent; border: none;")
+        self.agent_status_dot.setToolTip("ASU 核心守护服务在线")
         
         self.btn_settings = QPushButton("⚙️", self)
         self.btn_settings.setStyleSheet("""
@@ -439,10 +444,26 @@ class AICardWindow(QWidget):
         self.btn_close.clicked.connect(self.hide_card)
 
         title_layout.addWidget(self.title_label)
+        title_layout.addWidget(self.agent_status_dot)
         title_layout.addStretch()
         title_layout.addWidget(self.btn_settings)
         title_layout.addWidget(self.btn_close)
         layout.addLayout(title_layout)
+
+        # Agent 离线提示横幅（默认隐藏，探活失败时显示）
+        self.agent_offline_banner = QLabel("⚠️ ASU 核心守护服务未启动，请运行 install_daemon.sh 或手动启动 Agent。", self)
+        self.agent_offline_banner.setStyleSheet("""
+            QLabel {
+                background-color: rgba(200, 80, 50, 200);
+                color: #fff;
+                border-radius: 6px;
+                padding: 6px 10px;
+                font-size: 11px;
+            }
+        """)
+        self.agent_offline_banner.setWordWrap(True)
+        self.agent_offline_banner.hide()
+        layout.addWidget(self.agent_offline_banner)
 
         # --- TabWidget ---
         self.tabs = QTabWidget(self.frame)
@@ -783,7 +804,19 @@ class AICardWindow(QWidget):
     def reload_provider(self):
         self.provider = ProviderFactory.create_provider()
 
-    def dragEnterEvent(self, event):
+    def set_agent_status(self, is_online: bool):
+        """根据 Agent 守护服务的探活结果更新 UI 状态灯和离线横幅。"""
+        self._agent_online = is_online
+        if is_online:
+            self.agent_status_dot.setStyleSheet("color: #4caf50; font-size: 10px; background: transparent; border: none;")
+            self.agent_status_dot.setToolTip("ASU 核心守护服务在线")
+            self.agent_offline_banner.hide()
+        else:
+            self.agent_status_dot.setStyleSheet("color: #f44336; font-size: 10px; background: transparent; border: none;")
+            self.agent_status_dot.setToolTip("ASU 核心守护服务离线")
+            self.agent_offline_banner.show()
+
+
         if event.mimeData().hasText():
             event.acceptProposedAction()
 
@@ -1308,6 +1341,12 @@ class AgentWorkspace(QWidget):
     def _reload_provider(self):
         self.provider = ProviderFactory.create_provider()
 
+    def set_agent_status(self, is_online: bool):
+        """根据 Agent 守护服务的探活结果更新工作台的状态提示。"""
+        # 工作台暂时只打印日志，后续可扩展为托盘状态更新
+        if not is_online:
+            print("[AgentWorkspace] 守护服务离线，聊天功能可能不可用。")
+
     def dragEnterEvent(self, event):
         if event.mimeData().hasText():
             event.acceptProposedAction()
@@ -1410,11 +1449,29 @@ class AgentWorkspace(QWidget):
 # ==========================================
 # 5. 总调度管理器与生命周期管理
 # ==========================================
+class AgentHealthWorker(QThread):
+    """异步探活 Agent 后台服务，不阻塞主线程。"""
+    health_result = pyqtSignal(bool, int)  # (is_alive, active_sessions)
+
+    AGENT_URL = "http://127.0.0.1:18888/health"
+
+    def run(self):
+        try:
+            resp = httpx.get(self.AGENT_URL, timeout=1.5)
+            if resp.status_code == 200:
+                data = resp.json()
+                self.health_result.emit(True, data.get("active_sessions", 0))
+                return
+        except Exception:
+            pass
+        self.health_result.emit(False, 0)
+
+
 class CopilotManager:
     def __init__(self):
-        self.agent_process = None
-        self._check_and_start_agent()
-        
+        # UI 与 Agent 生命周期完全解耦：
+        # CopilotManager 不持有、不启动、也不终止 Agent 子进程。
+        # Agent 作为独立的 OS 级守护进程运行（见 deploy/com.asu.agent.plist）。
         self.provider = ProviderFactory.create_provider()
         
         # 三个独立图层：
@@ -1440,6 +1497,9 @@ class CopilotManager:
         
         # 任务上下文同步：工作台任务 → 快捷卡片
         self.workspace.task_changed.connect(self._sync_task_context)
+
+        # 启动时异步探活 Agent，将结果回传给 UI
+        self._ping_agent()
 
     def _sync_task_context(self, task):
         """工作台设定的任务合并到快捷卡片（不覆盖 IDE/浏览器来源信息）。"""
@@ -1489,35 +1549,24 @@ class CopilotManager:
         self.cursor_overlay.add_ripple(x, y)
 
     def cleanup(self):
-        if self.agent_process:
-            print("[ASU Agent] 正在关闭后台服务...")
-            self.agent_process.terminate()
-            self.agent_process.wait(timeout=3)
+        # UI 退出时只终止鼠标监听线程，绝对不干涉 Agent 守护进程的生命周期。
+        # Agent 应由 LaunchAgent 或手动命令独立管理。
         self.mouse_thread.quit()
 
-    def _check_and_start_agent(self):
-        # 使用健康检查端点检测 Agent 是否存活
-        try:
-            resp = httpx.get("http://127.0.0.1:18888/health", timeout=1.0)
-            if resp.status_code == 200:
-                data = resp.json()
-                print(f"[ASU Agent] 服务端已在 18888 端口运行 (活跃会话: {data.get('active_sessions', 0)})")
-                return
-        except Exception:
-            # Agent 未运行，继续启动流程
-            pass
+    def _ping_agent(self):
+        """异步向 Agent 发送探活请求，完成后通过信号更新 UI 状态。"""
+        self._health_worker = AgentHealthWorker()
+        self._health_worker.health_result.connect(self._on_agent_health)
+        self._health_worker.start()
 
-        print("[ASU Agent] 18888 端口未占用，正在启动 ASU 定制智能体...")
-        try:
-            agent_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "asu_custom_agent.py")
-            self.agent_process = subprocess.Popen(
-                [sys.executable, agent_script],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
-            time.sleep(1)
-        except Exception as e:
-            print(f"[ASU Agent] 启动失败: {e}")
+    def _on_agent_health(self, is_alive: bool, active_sessions: int):
+        """收到探活结果后，通知 AI 卡片和工作台更新显示状态。"""
+        if is_alive:
+            print(f"[ASU] 守护服务在线 (活跃会话: {active_sessions})")
+        else:
+            print("[ASU] 守护服务离线，UI 进入只读状态。请启动 Agent 守护进程。")
+        self.ai_card.set_agent_status(is_alive)
+        self.workspace.set_agent_status(is_alive)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

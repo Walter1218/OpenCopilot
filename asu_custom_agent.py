@@ -136,13 +136,17 @@ class ContextWindowManager:
 def normalize_context_envelope(req, fallback_text, fallback_source, fallback_meta):
     """兼容新旧协议：优先 context_envelope，其次旧字段。"""
     env = req.get("context_envelope")
+    safe_fallback_meta = fallback_meta if isinstance(fallback_meta, dict) else {}
+
     if isinstance(env, dict):
+        raw_meta = env.get("meta", safe_fallback_meta)
+        safe_meta = raw_meta if isinstance(raw_meta, dict) else {}
         envelope = {
             "source": env.get("source", fallback_source),
             "content": env.get("content", fallback_text),
             "selection": env.get("selection", ""),
-            "task": env.get("task", (env.get("meta") or {}).get("task", "")),
-            "meta": env.get("meta", fallback_meta or {}),
+            "task": env.get("task", safe_meta.get("task", "")),
+            "meta": safe_meta,
             "timestamp": env.get("timestamp", time.time()),
         }
     else:
@@ -150,13 +154,16 @@ def normalize_context_envelope(req, fallback_text, fallback_source, fallback_met
             "source": fallback_source,
             "content": fallback_text,
             "selection": "",
-            "task": (fallback_meta or {}).get("task", ""),
-            "meta": fallback_meta or {},
+            "task": safe_fallback_meta.get("task", ""),
+            "meta": safe_fallback_meta,
             "timestamp": time.time(),
         }
 
-    # 兜底：保证 content 至少是字符串
+    # 兜底：弱类型输入统一转字符串，避免拼装阶段异常
+    envelope["source"] = str(envelope.get("source", fallback_source) or fallback_source)
     envelope["content"] = str(envelope.get("content", "") or "")
+    envelope["selection"] = str(envelope.get("selection", "") or "")
+    envelope["task"] = str(envelope.get("task", "") or "")
     return envelope
 
 # ==========================================

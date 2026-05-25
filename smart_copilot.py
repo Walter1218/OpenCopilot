@@ -883,6 +883,10 @@ class AICardWindow(QWidget):
         super().mouseReleaseEvent(event)
     # ---- 缩放支持结束 ----
 
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+
     def dropEvent(self, event):
         text = event.mimeData().text()
         if text:

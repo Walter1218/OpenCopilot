@@ -9,13 +9,13 @@ ASU 是一个致力于探索**下一代人机交互模式**的系统级工具集
    后台定制智能体（`asu_custom_agent.py`, 端口 18888）不仅仅是 LLM 的代理层：
    - **场景自动感知**：根据文本来源（IDE 代码文件 / 浏览器网页 / 拖拽文本），自动注入对应的 system prompt 前缀，让 AI 从"通用问答"升级为"场景化分析"。
    - **多角色人格**：内置翻译官、架构师、编辑、通用助手四种 Persona，支持通过 `session_id` 实现多轮对话记忆。
-   - **健康检查**：提供 `GET /health` 端点，主程序启动时自动探活。
+   - **健康检查**：提供 `GET /health` 端点，UI 启动时异步探活并在标题栏显示绿/红状态点。
 
 2. **双引擎动态热切架构 (Dual-Engine Architecture)**
    在 UI 设置面板中一键切换后端驱动引擎：
    - ☁️ **云端 LLM (MiniMax)**：开箱即用，极速响应。
    - 💻 **本地/第三方 LLM (Ollama/vLLM)**：支持标准 OpenAI 协议的本地推理服务。
-   *程序启动时自动探测 18888 端口，若未运行则在后台静默拉起专属智能体。*
+   *Agent 作为独立 OS 级守护进程运行，UI 启动时仅探活，不主动启动或终止 Agent。*
 
 3. **纯鼠标双击唤醒与悬浮拖拽投喂**
    - 任意软件中**双击鼠标右键**，即可在鼠标旁唤出智能悬浮卡片（快捷模式）。
@@ -51,12 +51,12 @@ ASU 是一个致力于探索**下一代人机交互模式**的系统级工具集
 | 上下文感知 (Agent 识别 IDE/浏览器/拖拽来源) | Agent 增强 | ✅ |
 | 三击右键任务工作台 (任务定义 + 独立对话 + 上下文贯通) | 工作台 | ✅ |
 | 代码重构：cursor_effects 共享库 + 拖拽卡死修复 | 工程优化 | ✅ |
+| SQLite 会话持久化 + Persona 文件化 | Agent 增强 | ✅ |
+| Markdown 渲染 + 代码高亮 + 卡片拖拽缩放 | UI 增强 | ✅ |
+| UI/Agent 生命周期解耦 + macOS LaunchAgent 常驻 | 架构升级 | ✅ |
 | AXAPI 原生文档遍历器 (Pages/备忘录/TextEdit) | 场景扩展 | 🔶 |
-| 会话持久化 (shelve/JSON，重启不丢对话) | Agent 增强 | 🔶 |
 | 上下文窗口管理 (超长历史自动截断，防 token 超限) | Agent 增强 | 🔶 |
-| 自定义 Persona (config 化 + GUI 管理) | Agent 增强 | 🔶 |
 | 多 Provider 故障转移 (云端挂了回退本地) | 稳定性 | 🔶 |
-| Markdown 渲染 + 代码高亮 + 卡片拖拽缩放 | UI 增强 | 🔶 |
 
 ---
 
@@ -72,16 +72,14 @@ ASU 是一个致力于探索**下一代人机交互模式**的系统级工具集
 ## 🚀 快速开始 (Quick Start)
 
 ### 1. 环境准备
-确保您的设备已安装 Python 3.10 或 3.11。
-> **⚠️ 严重警告**：请勿使用 Python 3.13+！`pynput` 在 Python 3.13+ 存在底层 `_thread._ThreadHandle` 兼容性 Bug，会导致鼠标监听直接闪退。
 
 ```bash
 git clone https://github.com/Walter1218/ASU.git
 cd ASU
-python3.11 -m venv venv
-source venv/bin/activate
 pip install -r requirements.txt
 ```
+
+> **Python 版本说明**：推荐 Python 3.11~3.13。如遇 `pynput` 鼠标监听闪退，请降至 3.11。
 
 ### 2. ⚠️ 权限要求
 首次运行需在 macOS `系统设置 -> 隐私与安全性` 中授予终端以下权限：
@@ -89,8 +87,37 @@ pip install -r requirements.txt
 2. **屏幕录制/键盘访问**：用于触发系统级文本抓取。
 
 ### 3. 启动程序
+
+**方式一：守护进程模式（推荐，一次性安装，开机自启）**
+
 ```bash
-./venv/bin/python smart_copilot.py
+# 注册 macOS LaunchAgent，安装后 Agent 立即后台启动，并开机自动重启
+bash scripts/install_daemon.sh
+
+# 启动 UI（自动处理 Qt 插件路径）
+bash scripts/start_ui.sh
+```
+
+**方式二：开发调试模式（两个终端）**
+
+```bash
+# 终端 1：启动 Agent 后台服务
+python asu_custom_agent.py
+
+# 终端 2：启动 UI
+bash scripts/start_ui.sh
+```
+
+> **说明**：Agent（端口 18888）和 UI 生命周期完全独立。UI 启动时异步探活 Agent——
+> - 🟢 Agent 在线：标题栏绿色状态点，正常交互。
+> - 🔴 Agent 离线：标题栏红色状态点 + 橙色横幅提示，UI 仍可正常打开。
+
+**常用管理命令**
+
+```bash
+bash scripts/tail_logs.sh          # 实时查看 Agent 日志
+bash scripts/uninstall_daemon.sh   # 卸载守护进程
+curl http://127.0.0.1:18888/health # 检查 Agent 是否在线
 ```
 
 ### 4. 操作指南
@@ -118,14 +145,21 @@ pip install -r requirements.txt
 
 ```text
 ASU/
-├── smart_copilot.py              # 主程序入口（总调度管理器）
+├── smart_copilot.py              # UI 主程序（悬浮卡片 + 工作台）
+├── asu_custom_agent.py           # Agent 后台服务（端口 18888）
 ├── cursor_effects.py             # 光标特效共享库（Ripple + CursorOverlay）
-├── asu_custom_agent.py           # 专属智能体 Server（端口 18888）
 ├── llm_provider.py               # LLM Provider 抽象层
 ├── dynamic_cursor.py             # 光标特效独立演示程序
 ├── mouse_tracker.py              # 鼠标轨迹日志工具
 ├── text_selector.py              # [已废弃] Cmd+C 剪贴板方案
 ├── asu-ide-extension/            # IDE 伴生插件 (VSCode/Cursor/Trae)
+├── scripts/                      # 管理脚本
+│   ├── start_ui.sh               #   启动 UI（自动设置 Qt 插件路径）
+│   ├── install_daemon.sh         #   安装 Agent 为 macOS LaunchAgent
+│   ├── uninstall_daemon.sh       #   卸载守护进程
+│   └── tail_logs.sh              #   实时查看 Agent 日志
+├── deploy/                       # 部署配置
+│   └── com.asu.agent.plist       #   macOS LaunchAgent 配置模板
 ├── requirements.txt              # Python 依赖
 └── *.md                          # 架构文档
 ```

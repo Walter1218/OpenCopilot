@@ -424,21 +424,24 @@ class AICardWindow(QWidget):
         
         self.btn_settings = QPushButton("⚙️", self)
         self.btn_settings.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                border: none;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                color: #fff;
-            }
+            QPushButton { background: transparent; border: none; font-size: 14px; }
+            QPushButton:hover { color: #fff; }
         """)
         self.btn_settings.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_settings.clicked.connect(self.open_settings)
         
+        self.btn_close = QPushButton("✕", self)
+        self.btn_close.setStyleSheet("""
+            QPushButton { background: transparent; border: none; font-size: 14px; color: #888; }
+            QPushButton:hover { color: #ff5555; }
+        """)
+        self.btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_close.clicked.connect(self.hide_card)
+
         title_layout.addWidget(self.title_label)
         title_layout.addStretch()
         title_layout.addWidget(self.btn_settings)
+        title_layout.addWidget(self.btn_close)
         layout.addLayout(title_layout)
 
         # --- TabWidget ---
@@ -651,7 +654,25 @@ class AICardWindow(QWidget):
         self.tabs.addTab(self.tab_chat, "💬 连续对话")
         self.tabs.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
+        # 确保切换 Tab 时重置焦点
+        self.tabs.currentChanged.connect(self._on_tab_changed)
+
     def jump_to_chat(self):
+        # 切换到聊天 Tab，不再手动发送历史记录，因为后端 Agent 已有记忆
+        self.chat_display.clear()
+        self.append_chat_message("系统", "已将上下文带入，您可以继续追问。")
+        self.tabs.setCurrentIndex(1)
+        self.chat_input.setFocus()
+
+    def _on_tab_changed(self, index):
+        # 强制恢复默认光标，防止拖拽或耗时操作遗留的光标状态
+        QApplication.restoreOverrideCursor()
+        self.setCursor(Qt.CursorShape.ArrowCursor)
+        
+        if index == 1:  # 切换到对话 Tab
+            self.chat_input.setFocus()
+        else:
+            self.setFocus()
         # 切换到聊天 Tab，不再手动发送历史记录，因为后端 Agent 已有记忆
         self.chat_display.clear()
         self.append_chat_message("系统", "已将上下文带入，您可以继续追问。")
@@ -763,8 +784,6 @@ class AICardWindow(QWidget):
         self.provider = ProviderFactory.create_provider()
 
     def dragEnterEvent(self, event):
-        # 有拖拽进入卡片，取消任何待执行的延迟隐藏
-        self._pending_hide = False
         if event.mimeData().hasText():
             event.acceptProposedAction()
 
@@ -982,6 +1001,9 @@ class AICardWindow(QWidget):
         self.btn_read_browser.setEnabled(False)
         self.btn_read_browser.setText("⏳ 读取中...")
         self.text_edit.setPlainText(f"正在从 {browser} 读取网页内容...")
+        
+        # 强制设置等待光标
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
 
         self._browser_worker = BrowserReaderWorker(browser)
         self._browser_worker.finished.connect(self._on_browser_text_ready)
@@ -989,6 +1011,7 @@ class AICardWindow(QWidget):
         self._browser_worker.start()
 
     def _on_browser_text_ready(self, browser, text):
+        QApplication.restoreOverrideCursor()
         self.btn_read_browser.setEnabled(True)
         if text:
             self.current_text = text
@@ -1004,6 +1027,7 @@ class AICardWindow(QWidget):
             self.btn_read_browser.setText("🌐 一键读取当前网页全文")
 
     def _on_browser_error(self, err_msg):
+        QApplication.restoreOverrideCursor()
         self.btn_read_browser.setEnabled(True)
         self.text_edit.setPlainText(err_msg)
         self.btn_read_browser.setText("🌐 一键读取当前网页全文")
@@ -1035,14 +1059,6 @@ class AICardWindow(QWidget):
             self.text_edit.setHtml(md_render(text))
         scrollbar = self.text_edit.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
-
-    def _delayed_hide(self):
-        """延迟隐藏：如果 _pending_hide 仍为 True（无拖拽进入），则隐藏卡片。"""
-        if self._pending_hide:
-            self.hide()
-            if self.worker and self.worker.isRunning():
-                self.worker.stop()
-        self._pending_hide = False
 
     def hide_card(self):
         self._pending_hide = False
@@ -1390,11 +1406,6 @@ class AgentWorkspace(QWidget):
         if self.chat_worker and self.chat_worker.isRunning():
             self.chat_worker.stop()
 
-    def _delayed_hide(self):
-        if self._pending_hide:
-            self.hide_workspace()
-        self._pending_hide = False
-
 
 # ==========================================
 # 5. 总调度管理器与生命周期管理
@@ -1476,18 +1487,6 @@ class CopilotManager:
 
     def _on_global_click(self, x, y):
         self.cursor_overlay.add_ripple(x, y)
-        # 快捷卡片：点击外部延迟隐藏
-        if self.ai_card.isVisible():
-            global_pos = QCursor.pos()
-            if not self.ai_card.geometry().contains(global_pos):
-                self.ai_card._pending_hide = True
-                QTimer.singleShot(300, self.ai_card._delayed_hide)
-        # 工作台：点击外部延迟隐藏
-        if self.workspace.isVisible():
-            global_pos = QCursor.pos()
-            if not self.workspace.geometry().contains(global_pos):
-                self.workspace._pending_hide = True
-                QTimer.singleShot(300, self.workspace._delayed_hide)
 
     def cleanup(self):
         if self.agent_process:
@@ -1529,7 +1528,7 @@ if __name__ == '__main__':
     print("  ┌─ 双击右键 → 快捷悬浮卡片（翻译/解释/润色）")
     print("  ├─ 三击右键 → 任务工作台（设定任务 + 独立对话）")
     print("  ├─ 拖拽文本到卡片 → 自动 AI 解析")
-    print("  ├─ 点击卡片外部 → 300ms 后自动消失")
+    print("  ├─ 界面保持常驻，需要通过右上角关闭按钮(✕)隐藏")
     print("  └─ 工作台设定的任务会自动注入到快捷卡片中")
     print("🛑 按 Ctrl+C 停止。")
     

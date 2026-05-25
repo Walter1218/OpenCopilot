@@ -816,10 +816,6 @@ class AICardWindow(QWidget):
             self.agent_status_dot.setToolTip("ASU 核心守护服务离线")
             self.agent_offline_banner.show()
 
-
-        if event.mimeData().hasText():
-            event.acceptProposedAction()
-
     # ---- 拖拽缩放支持 ----
     def _get_resize_edge(self, pos):
         m = self._resize_margin

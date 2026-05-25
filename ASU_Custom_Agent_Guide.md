@@ -14,8 +14,8 @@
 ## 2. 架构与生命周期
 
 *   **运行机制**：在主程序 `smart_copilot.py` 启动时，会自动探活本地的 `18888` 端口。如果发现 Agent 未启动，主程序会作为一个守护子进程静默拉起它。
-*   **通信协议**：标准的 HTTP REST API (基于 FastAPI 搭建)。
-*   **配置读取**：Agent 启动时会读取项目根目录下的 `.env` 文件，获取用户的 `MINIMAX_API_KEY` 和 `MINIMAX_GROUP_ID`。
+*   **通信协议**：标准 HTTP REST 风格接口。目前实现基于 Python 标准库 `HTTPServer` + `BaseHTTPRequestHandler`，对外提供本地回环 HTTP 服务；后续如需更复杂的路由、鉴权和观测能力，可升级为 FastAPI。
+*   **配置读取**：Agent 启动时会读取项目根目录下的 `config.json` 与环境变量，按配置选择 MiniMax 或本地 OpenAI-compatible Provider。
 
 ---
 
@@ -27,18 +27,22 @@
 *   **GET `/health`**
 *   **用途**：检查智能体是否已成功启动并就绪。
 
-### 3.2 对话接口 (流式/非流式)
-*   **POST `/api/chat`**
-*   **用途**：向智能体发送对话请求，支持上下文传递和 Persona 指定。
+### 3.2 对话接口 (SSE 流式)
+*   **POST `/v1/agent/chat`**
+*   **用途**：向智能体发送对话请求，支持上下文来源、任务背景和 Persona 指定。
 *   **请求体参数**：
     ```json
     {
-      "messages": [
-        {"role": "user", "content": "请解释一下这段代码..."}
-      ],
-      "stream": true,            // 是否开启流式返回
-      "session_id": "ide_123",   // 用于维持多轮对话记忆的唯一 ID
-      "action_type": "code"      // 指定场景 Persona (翻译/代码分析/通用等)
+      "text": "请解释一下这段代码...",
+      "session_id": "ide_123",
+      "action_type": "code",
+      "is_new_task": true,
+      "context_source": "ide",
+      "context_meta": {
+        "file_name": "smart_copilot.py",
+        "language": "python",
+        "task": "审查 Broker 集成稳定性"
+      }
     }
     ```
 *   **场景路由 (`action_type`)**：
@@ -54,9 +58,9 @@
 
 Agent 内部维护了一个内存级别的会话池 (`sessions_memory`)。
 
-1.  **如何开启记忆**：客户端只要在 POST `/api/chat` 时携带非空的 `session_id`（例如 `ASU_IDE_Session`），Agent 就会自动将本次对话追加到该 ID 对应的历史记录中。
-2.  **如何切断记忆**：如果传递的是新的 `session_id`，或者不传该字段，Agent 会将其视为全新的独立对话。
-3.  **当前局限与未来规划**：目前的记忆是保存在**内存**中的，这意味着如果 Agent 进程重启（或关闭了 ASU 主程序），对话历史会丢失。未来的路线图计划引入基于 SQLite 或 JSON 的本地持久化存储。
+1.  **如何开启记忆**：客户端只要在 POST `/v1/agent/chat` 时携带非空的 `session_id`（例如 `ASU_IDE_Session`），Agent 就会自动将本次对话追加到该 ID 对应的历史记录中。
+2.  **如何切断记忆**：如果传递的是新的 `session_id`，或者将 `is_new_task` 设置为 `true`，Agent 会清空该会话下的旧上下文并开启新任务。
+3.  **当前局限与未来规划**：目前的记忆是保存在**内存**中的，这意味着如果 Agent 进程重启（或关闭了 ASU 主程序），对话历史会丢失。未来路线图建议优先引入 SQLite 本地持久化。
 
 ---
 
@@ -65,13 +69,28 @@ Agent 内部维护了一个内存级别的会话池 (`sessions_memory`)。
 如果您想优化 AI 的回答质量或增加新的技能：
 
 1.  **修改 Persona (角色设定)**：
-    打开 `asu_custom_agent.py`，找到文件开头的 `SYSTEM_PROMPTS` 字典。您可以直接修改或新增 Key-Value，然后在客户端调用时传入对应的 Key 作为 `action_type`。
+    打开 `asu_custom_agent.py`，找到文件开头的 `personas` 字典。您可以直接修改或新增 Key-Value，然后在客户端调用时传入对应的 Key 作为 `action_type`。
 2.  **对接新的大模型 API**：
-    目前 Agent 在 `_call_minimax_api` 函数中硬编码了对 MiniMax `v1/chat/completions` 的调用逻辑。如果未来需要接入其他模型，可以重构该函数，引入策略模式。
+    当前 Agent 通过 `llm_provider.py` 中的 `MiniMaxProvider` 与 `LocalProvider` 访问模型。未来需要接入更多模型时，建议继续扩展 Provider 层，而不是在 UI 层直接调用模型。
 3.  **独立测试**：
     您可以不启动 ASU 的 GUI，直接在终端中运行：
     ```bash
     source venv/bin/activate
     python asu_custom_agent.py
     ```
-    然后通过 `curl` 或 Postman 直接请求 `http://127.0.0.1:18888/api/chat` 进行 API 级别的联调测试。
+    然后通过 `curl` 或 Postman 直接请求 `http://127.0.0.1:18888/v1/agent/chat` 进行 API 级别的联调测试。
+
+---
+
+## 6. 下一阶段开发方向
+
+关于本地专属智能体的完整现状评估、短板和路线图，请参考：
+
+- [ASU 本地专属智能体现状与开发路线建议](ASU_Local_Agent_Roadmap.md)
+
+近期建议优先推进：
+
+1. **Agent Core v2**：SQLite 持久记忆、上下文窗口管理、Persona 文件化、SSE 错误边界优化。
+2. **ContextEnvelope**：统一 IDE、Browser、Drag、Workspace 等来源的上下文协议。
+3. **IDE Extension v2**：补充选区、diagnostics、git diff、symbol 等开发现场信息。
+4. **Broker v2**：补齐 capabilities、统一错误结构、WebSocket 事件推送与 LaunchAgent 常驻。

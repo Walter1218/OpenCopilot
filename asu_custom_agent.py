@@ -186,6 +186,11 @@ CONTEXT_DESCRIPTIONS = {
     "chat": (
         "用户正在与ASU Copilot进行连续对话。请基于已有的对话历史进行连贯的追问回复。"
     ),
+    "revision": (
+        "用户正在对文档进行修订。你收到两部分：[selection] 是用户选中的待修改文本，"
+        "[content] 是完整文档。请先按选中文本的要求进行修改，再扫描全文找出由于此修改而产生矛盾"
+        "或也应同步调整的位置，标记给用户。"
+    ),
 }
 
 
@@ -199,8 +204,9 @@ def build_context_prefix(context_source, context_meta):
         language = context_meta.get("language", "")
         app_name = context_meta.get("app_name", "")
         task = context_meta.get("task", "")
+        revision_target = context_meta.get("revision_target", "")
 
-        if context_source == "ide" and file_name:
+        if context_source in ("ide", "revision") and file_name:
             detail = f"文件名：{file_name}"
             if language:
                 detail += f"，编程语言：{language}"
@@ -211,6 +217,10 @@ def build_context_prefix(context_source, context_meta):
         # 任务上下文：工作台设定的任务注入到所有请求中
         if task:
             parts.append(f"用户当前任务：{task}。请围绕此任务目标进行回答，将分析结果与任务关联。")
+
+        # 修订模式降级：无全文时告知 Agent 仅做局部修订
+        if revision_target and context_source == "revision":
+            parts.append(f"[选择文本]（待修订内容）:\n{revision_target}")
 
     return "\n".join(parts)
 

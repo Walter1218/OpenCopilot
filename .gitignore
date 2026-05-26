@@ -54,3 +54,8 @@ config.json
 
 # ASU Broker Token
 .asu_broker_token
+
+# Test artifacts
+test_docs/_*
+test_docs/*_result*
+test_docs/*_raw*

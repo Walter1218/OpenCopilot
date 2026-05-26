@@ -1,21 +1,23 @@
 # ASU 定制智能体 (Custom Agent) 开发与使用指南
 
-> **文档状态**: V1.0
-> **更新日期**: 2026-05-24
+> **文档状态**: V1.2
+> **更新日期**: 2026-05-26
 
 ## 1. 什么是 ASU 定制智能体？
 
 在 ASU 项目的早期版本中，我们依赖外部的 `OpenClaw CLI` 作为后端 LLM 服务。为了追求更高的可控性、更低的资源占用以及对 MiniMax 模型 API 的深度定制，我们开发了内置的 **ASU Custom Agent** (`asu_custom_agent.py`)。
 
-它是 ASU 项目的**核心“AI 大脑”**，负责管理所有的 LLM 会话、角色切换 (Persona)、上下文记忆以及与远端 API（目前独家锚定 MiniMax-M2.7）的通信。
+它是 ASU 项目的**核心"AI 大脑"**，负责管理所有的 LLM 会话、角色切换 (Persona)、上下文记忆以及与远端 API（目前支持 MiniMax 和本地 OpenAI-compatible Provider）的通信。
 
 ---
 
 ## 2. 架构与生命周期
 
-*   **运行机制**：在主程序 `smart_copilot.py` 启动时，会自动探活本地的 `18888` 端口。如果发现 Agent 未启动，主程序会作为一个守护子进程静默拉起它。
-*   **通信协议**：标准 HTTP REST 风格接口。目前实现基于 Python 标准库 `HTTPServer` + `BaseHTTPRequestHandler`，对外提供本地回环 HTTP 服务；后续如需更复杂的路由、鉴权和观测能力，可升级为 FastAPI。
-*   **配置读取**：Agent 启动时会读取项目根目录下的 `config.json` 与环境变量，按配置选择 MiniMax 或本地 OpenAI-compatible Provider。
+*   **运行机制**：Agent 作为**独立的 OS 级守护进程**运行（通过 macOS LaunchAgent 开机自启），与 UI 生命周期完全解耦。UI 启动时仅通过 `AgentHealthWorker` 异步探活 `127.0.0.1:18888/health`，不启动也不终止 Agent 进程。
+    *   一键安装：`bash scripts/install_daemon.sh`
+    *   手动运行：`python asu_custom_agent.py`
+*   **通信协议**：标准 HTTP REST 风格接口，基于 Python 标准库 `HTTPServer`，对外提供本地回环 HTTP 服务与 SSE 流式响应。
+*   **配置读取**：Agent 启动时读取项目根目录下的 `config.json` 与环境变量，按 `provider_type` 选择 MiniMax 或本地 OpenAI-compatible Provider。
 
 ---
 
@@ -56,11 +58,11 @@
 
 ## 4. 记忆机制与多轮对话
 
-Agent 内部维护了一个内存级别的会话池 (`sessions_memory`)。
+Agent 基于 **SQLite 本地持久化**（`asu_agent.db`）管理会话记忆，包含 `sessions`、`messages`、`tasks`、`personas` 四张表。
 
-1.  **如何开启记忆**：客户端只要在 POST `/v1/agent/chat` 时携带非空的 `session_id`（例如 `ASU_IDE_Session`），Agent 就会自动将本次对话追加到该 ID 对应的历史记录中。
-2.  **如何切断记忆**：如果传递的是新的 `session_id`，或者将 `is_new_task` 设置为 `true`，Agent 会清空该会话下的旧上下文并开启新任务。
-3.  **当前局限与未来规划**：目前的记忆是保存在**内存**中的，这意味着如果 Agent 进程重启（或关闭了 ASU 主程序），对话历史会丢失。未来路线图建议优先引入 SQLite 本地持久化。
+1.  **如何开启记忆**：客户端在 POST `/v1/agent/chat` 时携带非空的 `session_id`（例如 `ASU_IDE_Session`），Agent 自动将对话追加到该会话历史。
+2.  **如何切断记忆**：传递新的 `session_id` 或将 `is_new_task` 设为 `true`，Agent 清空该会话旧上下文并开启新任务。
+3.  **上下文窗口管理**：内置 `ContextWindowManager`，基于字符预算驱动（默认 ~30K token 输入窗口），按来源（IDE/Browser/其他）差异化裁剪，旧消息自动截断，防止 Token 超限和成本浪费。（39/39 测试通过）
 
 ---
 
@@ -69,28 +71,30 @@ Agent 内部维护了一个内存级别的会话池 (`sessions_memory`)。
 如果您想优化 AI 的回答质量或增加新的技能：
 
 1.  **修改 Persona (角色设定)**：
-    打开 `asu_custom_agent.py`，找到文件开头的 `personas` 字典。您可以直接修改或新增 Key-Value，然后在客户端调用时传入对应的 Key 作为 `action_type`。
+    Persona 已实现**文件化管理**，存放在 `personas/` 目录下（如 `personas/code.md`、`personas/translate.md`）。直接编辑对应的 Markdown 文件即可，Agent 下次请求时自动热加载，无需修改源码。
 2.  **对接新的大模型 API**：
-    当前 Agent 通过 `llm_provider.py` 中的 `MiniMaxProvider` 与 `LocalProvider` 访问模型。未来需要接入更多模型时，建议继续扩展 Provider 层，而不是在 UI 层直接调用模型。
+    当前 Agent 通过 `llm_provider.py` 中的 `MiniMaxProvider` 与 `LocalProvider` 访问模型。在 `asu_custom_agent.py` 的 `get_base_llm()` 中配置 `provider_type`。未来需要接入更多模型时，建议继续扩展 Provider 层。
 3.  **独立测试**：
-    您可以不启动 ASU 的 GUI，直接在终端中运行：
+    可以不启动 ASU 的 GUI，直接在终端中运行：
     ```bash
-    source venv/bin/activate
     python asu_custom_agent.py
     ```
     然后通过 `curl` 或 Postman 直接请求 `http://127.0.0.1:18888/v1/agent/chat` 进行 API 级别的联调测试。
 
 ---
 
-## 6. 下一阶段开发方向
+## 6. 当前开发状态与方向
 
-关于本地专属智能体的完整现状评估、短板和路线图，请参考：
+已完成（✅）：
+- SQLite 持久记忆 + 会话恢复
+- 上下文窗口管理（预算驱动裁剪，69% 平均压缩率）
+- Persona 文件化 + 热加载
+- ContextEnvelope 协议兼容层
+- UI/Agent 生命周期解耦 + LaunchAgent 常驻
 
-- [ASU 本地专属智能体现状与开发路线建议](ASU_Local_Agent_Roadmap.md)
+待推进（🔶）：
+- IDE Extension v2：补充 `/selection`、`/diagnostics`、`/git-diff` 端点
+- 多 Provider 故障转移
+- SSE 错误边界优化
 
-近期建议优先推进：
-
-1. **Agent Core v2**：SQLite 持久记忆、上下文窗口管理、Persona 文件化、SSE 错误边界优化。
-2. **ContextEnvelope**：统一 IDE、Browser、Drag、Workspace 等来源的上下文协议。
-3. **IDE Extension v2**：补充选区、diagnostics、git diff、symbol 等开发现场信息。
-4. **Broker v2**：补齐 capabilities、统一错误结构、WebSocket 事件推送与 LaunchAgent 常驻。
+详细路线图见 [ASU 本地专属智能体现状与开发路线建议](ASU_Local_Agent_Roadmap.md)。

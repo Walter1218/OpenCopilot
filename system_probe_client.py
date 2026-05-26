@@ -75,3 +75,17 @@ class SystemProbeClient:
             raise Exception("读取浏览器内容超时，请检查浏览器是否无响应或存在权限弹窗。")
         except Exception as e:
             raise Exception(f"请求 Broker 失败: {str(e)}")
+
+    def read_office_file(self, file_path: str) -> dict:
+        """解析 .docx 或 .pptx 文件为纯文本。返回 {"type","content","...}。"""
+        try:
+            payload = {"file_path": file_path}
+            resp = httpx.post(f"{BROKER_URL}/api/v1/system/fs/office/read",
+                              json=payload, headers=self.headers, timeout=15.0)
+            if resp.status_code == 200:
+                return resp.json().get("data", {})
+            else:
+                detail = resp.json().get("message", resp.json().get("detail", "Unknown"))
+                raise Exception(f"Broker 返回错误: {detail}")
+        except Exception as e:
+            raise Exception(f"读取 Office 文件失败: {str(e)}")

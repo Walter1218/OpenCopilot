@@ -1,7 +1,7 @@
 # ASU OS级常驻化与生命周期解耦方案 (Daemon Deployment Plan)
 
-> **文档状态**: V1.1（已落地）  
-> **更新日期**: 2026-05-25  
+> **文档状态**: V1.2（已更新）  
+> **更新日期**: 2026-05-26  
 > **目标**: 指导 ASU 从"捆绑启动的单体应用"向"OS 级后台守护进程 (Daemon) + 轻量级无状态 UI"平滑演进。
 
 ---
@@ -71,7 +71,11 @@
 
 ## 4. 预期收益（已实现）
 
-完成该方案后，ASU 已成为一个真正意义上的 OS 级智能体底座，不再只是一个带有 Python 后端的 GUI 工具。这为下一步进行**全局 WebSocket 焦点监听**和**长期挂机任务**彻底扫清了工程障碍。
+完成该方案后，ASU 已成为一个真正意义上的 OS 级智能体底座：
+- ✅ Agent 开机自启、崩溃自愈
+- ✅ UI 生命周期完全独立、断连优雅降级
+- ✅ **Broker 同步完成常驻化**（`deploy/com.asu.broker.plist` + `scripts/install_broker_daemon.sh`）
+- Broker WebSocket 焦点监听待后续实现
 
 ---
 
@@ -79,9 +83,14 @@
 
 | 操作 | 命令 |
 |------|------|
-| 安装守护进程（一次性） | `bash scripts/install_daemon.sh` |
+| 安装 Agent 守护进程（一次性） | `bash scripts/install_daemon.sh` |
+| 安装 Broker 守护进程（一次性） | `bash scripts/install_broker_daemon.sh` |
 | 启动 UI | `bash scripts/start_ui.sh` |
 | 启动 Agent（开发调试） | `python asu_custom_agent.py` |
+| 启动 Broker（开发调试） | `cd asu_broker && python run.py` |
 | 查看 Agent 实时日志 | `bash scripts/tail_logs.sh` |
-| 卸载守护进程 | `bash scripts/uninstall_daemon.sh` |
+| 查看 Broker 实时日志 | `tail -f ~/Library/Logs/ASU/broker_out.log` |
+| 卸载 Agent 守护进程 | `bash scripts/uninstall_daemon.sh` |
+| 卸载 Broker 守护进程 | `bash scripts/uninstall_broker_daemon.sh` |
 | 检查 Agent 是否在线 | `curl http://127.0.0.1:18888/health` |
+| 检查 Broker 是否在线 | `curl -H "Authorization: Bearer $(cat ~/.asu_broker_token)" http://127.0.0.1:18889/health` |

@@ -15,7 +15,7 @@ ASU 是一个致力于探索**下一代人机交互模式**的系统级工具集
    在 UI 设置面板中一键切换后端驱动引擎：
    - ☁️ **云端 LLM (MiniMax)**：开箱即用，极速响应。
    - 💻 **本地/第三方 LLM (Ollama/vLLM)**：支持标准 OpenAI 协议的本地推理服务。
-   *Agent 作为独立 OS 级守护进程运行，UI 启动时仅探活，不主动启动或终止 Agent。*
+   *Agent 与 Broker 均作为独立 OS 级守护进程运行（LaunchAgent 开机自启），UI 启动时仅探活。*
 
 3. **纯鼠标双击唤醒与悬浮拖拽投喂**
    - 任意软件中**双击鼠标右键**，即可在鼠标旁唤出智能悬浮卡片（快捷模式）。
@@ -54,9 +54,12 @@ ASU 是一个致力于探索**下一代人机交互模式**的系统级工具集
 | SQLite 会话持久化 + Persona 文件化 | Agent 增强 | ✅ |
 | Markdown 渲染 + 代码高亮 + 卡片拖拽缩放 | UI 增强 | ✅ |
 | UI/Agent 生命周期解耦 + macOS LaunchAgent 常驻 | 架构升级 | ✅ |
+| Broker 产品化 (LaunchAgent 常驻 + capabilities + 统一错误) | 架构升级 | ✅ |
+| 上下文窗口管理 (超长历史自动截断，防 token 超限) | Agent 增强 | ✅ |
 | AXAPI 原生文档遍历器 (Pages/备忘录/TextEdit) | 场景扩展 | 🔶 |
-| 上下文窗口管理 (超长历史自动截断，防 token 超限) | Agent 增强 | 🔶 |
+| IDE Extension v2 (选区/诊断/git diff 端点) | IDE 增强 | 🔶 |
 | 多 Provider 故障转移 (云端挂了回退本地) | 稳定性 | 🔶 |
+| Broker WebSocket 主动推送 (前台应用切换事件) | 主动感知 | 🔶 |
 
 ---
 
@@ -170,10 +173,13 @@ ASU/
 ├── scripts/                      # 管理脚本
 │   ├── start_ui.sh               #   启动 UI（自动设置 Qt 插件路径）
 │   ├── install_daemon.sh         #   安装 Agent 为 macOS LaunchAgent
-│   ├── uninstall_daemon.sh       #   卸载守护进程
+│   ├── uninstall_daemon.sh       #   卸载 Agent 守护进程
+│   ├── install_broker_daemon.sh  #   安装 Broker 为 macOS LaunchAgent
+│   ├── uninstall_broker_daemon.sh#   卸载 Broker 守护进程
 │   └── tail_logs.sh              #   实时查看 Agent 日志
 ├── deploy/                       # 部署配置
-│   └── com.asu.agent.plist       #   macOS LaunchAgent 配置模板
+│   ├── com.asu.agent.plist       #   Agent macOS LaunchAgent 配置模板
+│   └── com.asu.broker.plist      #   Broker macOS LaunchAgent 配置模板
 ├── requirements.txt              # Python 依赖
 └── *.md                          # 架构文档
 ```

@@ -130,7 +130,7 @@ class ASUCustomAgentClient(BaseProvider):
 
     def stream_agent_task(self, text: str, action_type: str = "default", session_id: str = "default",
                           is_new_task: bool = False, context_source: str = "drag",
-                          context_meta: dict = None):
+                          context_meta: dict = None, context_envelope: dict = None):
         payload = {
             "text": text,
             "action_type": action_type,
@@ -139,6 +139,8 @@ class ASUCustomAgentClient(BaseProvider):
             "context_source": context_source,
             "context_meta": context_meta or {},
         }
+        if context_envelope:
+            payload["context_envelope"] = context_envelope
         try:
             with httpx.Client(verify=False) as client:
                 with client.stream("POST", self.api_base, json=payload, timeout=30.0) as response:

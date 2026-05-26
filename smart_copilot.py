@@ -11,7 +11,8 @@ from pynput import mouse
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
     QLabel, QFrame, QGraphicsDropShadowEffect, QPushButton, QDialog,
-    QRadioButton, QLineEdit, QMessageBox, QTabWidget, QComboBox
+    QRadioButton, QLineEdit, QMessageBox, QTabWidget, QComboBox,
+    QFileDialog
 )
 import httpx
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QTimer
@@ -205,7 +206,7 @@ class AIWorker(QThread):
     finished_signal = pyqtSignal()
 
     def __init__(self, provider, prompt, action_type="auto", session_id="default",
-                 context_source="drag", context_meta=None):
+                 context_source="drag", context_meta=None, context_envelope=None):
         super().__init__()
         self.provider = provider
         self.prompt = prompt
@@ -213,6 +214,7 @@ class AIWorker(QThread):
         self.session_id = session_id
         self.context_source = context_source
         self.context_meta = context_meta or {}
+        self.context_envelope = context_envelope
         self._is_running = True
 
     def run(self):
@@ -222,7 +224,8 @@ class AIWorker(QThread):
                 self.prompt, action_type=self.action_type,
                 session_id=self.session_id, is_new_task=True,
                 context_source=self.context_source,
-                context_meta=self.context_meta
+                context_meta=self.context_meta,
+                context_envelope=self.context_envelope
             ):
                 if not self._is_running:
                     break
@@ -379,6 +382,9 @@ class AICardWindow(QWidget):
         self.context_meta = {}
         self.task_context = ""  # 工作台注入的任务上下文
         self._agent_online = True  # 默认乐观假设在线，探活结果回来后更新
+        # 文档修订模式
+        self.revision_mode = False
+        self.full_document = ""  # 修订模式下的全文档缓存
         self.initUI()
 
     def initUI(self):
@@ -571,8 +577,10 @@ class AICardWindow(QWidget):
         self.btn_trans = QPushButton("🌐 翻译")
         self.btn_code = QPushButton("💻 代码解析")
         self.btn_polish = QPushButton("✍️ 润色")
+        self.btn_revision = QPushButton("📝 全文修订")
+        self.btn_revision.setCheckable(True)
         
-        for btn in [self.btn_auto, self.btn_trans, self.btn_code, self.btn_polish]:
+        for btn in [self.btn_auto, self.btn_trans, self.btn_code, self.btn_polish, self.btn_revision]:
             btn.setStyleSheet(button_style)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             self.btn_layout.addWidget(btn)
@@ -585,6 +593,7 @@ class AICardWindow(QWidget):
         self.btn_trans.clicked.connect(lambda: self.trigger_ai("translate"))
         self.btn_code.clicked.connect(lambda: self.trigger_ai("code"))
         self.btn_polish.clicked.connect(lambda: self.trigger_ai("polish"))
+        self.btn_revision.clicked.connect(self._toggle_revision_mode)
 
         self.text_edit = QTextEdit(self.tab_quick)
         self.text_edit.setReadOnly(True)
@@ -891,16 +900,29 @@ class AICardWindow(QWidget):
         text = event.mimeData().text()
         if text:
             self.current_text = text
-            self.context_source = "drag"
-            self.context_meta = {}
-            self.tabs.setCurrentIndex(0)
-            self.trigger_ai("auto")
+            if self.revision_mode:
+                # 修订模式：拖入的文本作为待修订目标
+                self.context_source = "revision"
+                self.context_meta = {"revision_target": text}
+                self.tabs.setCurrentIndex(0)
+                self.trigger_ai("revision")
+            else:
+                self.context_source = "drag"
+                self.context_meta = {}
+                self.tabs.setCurrentIndex(0)
+                self.trigger_ai("auto")
 
     def show_card(self, x, y):
         self.current_text = ""
         self.context_source = "drag"
         self.context_meta = {}
         self.session_id = str(uuid.uuid4())
+        # 重置修订模式（每次唤出卡片都是普通模式）
+        if self.revision_mode:
+            self.revision_mode = False
+            self.full_document = ""
+            self.btn_revision.setChecked(False)
+            self.btn_revision.setText("📝 全文修订")
         
         self.text_edit.clear()
         self.text_edit.setPlainText("🎯 请将划选的文本拖拽到此窗口中...")
@@ -1080,10 +1102,125 @@ class AICardWindow(QWidget):
         meta = dict(self.context_meta)
         if self.task_context:
             meta["task"] = self.task_context
+
+        # 文档修订模式：构建 context_envelope，注入全文上下文用于交叉扫描
+        envelope = None
+        if action_type == "revision":
+            if not self.full_document:
+                # 尝试自动读取 IDE 全文
+                self._read_ide_silent()
+            if self.full_document:
+                envelope = {
+                    "source": "ide",
+                    "content": self.full_document,       # 全文 → Agent 用于交叉扫描
+                    "selection": self.current_text,       # 拖拽文本 → 需要修改的目标
+                    "task": self.task_context or "",
+                    "meta": {
+                        "file_name": meta.get("file_name", ""),
+                        "language": meta.get("language", ""),
+                    },
+                    "timestamp": time.time(),
+                }
+                self.context_source = "ide"
+            else:
+                # 降级：无全文时仅做普通修订分析
+                meta["revision_target"] = self.current_text
+
         self.worker = AIWorker(self.provider, self.current_text, action_type,
-                               self.session_id, self.context_source, meta)
+                               self.session_id, self.context_source, meta,
+                               context_envelope=envelope)
         self.worker.text_updated.connect(self.on_text_updated)
         self.worker.start()
+
+    def _toggle_revision_mode(self, checked):
+        """切换文档修订模式：ON 时自动读取 IDE 全文，失败则提供文件选择（支持 .docx/.pptx）"""
+        base_style = self.btn_revision.styleSheet()
+        self.revision_mode = checked
+        if checked:
+            self._read_ide_silent()
+            if not self.full_document:
+                # IDE 无全文 → 尝试通过 Broker 读 Office 文件
+                self._try_read_office()
+            if self.full_document:
+                self.btn_revision.setText("📝 修订 ON")
+                self.btn_revision.setStyleSheet(
+                    base_style.replace(
+                        "rgba(60, 60, 70, 200)", "rgba(40, 167, 69, 200)"
+                    ).replace(
+                        "rgba(80, 80, 100, 255)", "rgba(40, 167, 69, 255)"
+                    )
+                )
+                doc_type = self.context_meta.get("file_name", "").split(".")[-1].upper()
+                self.text_edit.setPlainText(
+                    f"📝 全文修订模式已激活\n\n已读取文档全文（{len(self.full_document)} 字符，{doc_type}）\n\n请将需要修改的文本拖拽到此窗口。"
+                )
+            else:
+                self.btn_revision.setText("📝 修订 (无全文)")
+                self.btn_revision.setStyleSheet(
+                    base_style.replace(
+                        "rgba(60, 60, 70, 200)", "rgba(180, 130, 30, 200)"
+                    ).replace(
+                        "rgba(80, 80, 100, 255)", "rgba(180, 130, 30, 255)"
+                    )
+                )
+                self.text_edit.setPlainText(
+                    "⚠️ 未获取到文档全文。\n\n"
+                    "• 在 IDE 中打开文档后重试，或\n"
+                    "• 点击「📂 选择文件」加载 .docx/.pptx 文件\n\n"
+                    "当前降级模式：仅对拖拽文本做局部修订。"
+                )
+                self.revision_mode = True
+        else:
+            self.btn_revision.setText("📝 全文修订")
+            self.btn_revision.setStyleSheet(base_style)
+            self.full_document = ""
+            self.revision_mode = False
+            self.text_edit.setPlainText("📝 全文修订模式已关闭。")
+
+    def _try_read_office(self):
+        """尝试通过 Broker 读取 .docx/.pptx 文件"""
+        # 弹出文件选择对话框
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "选择文档进行全文修订",
+            os.path.expanduser("~"),
+            "文档文件 (*.docx *.pptx);;所有文件 (*)"
+        )
+        if not file_path:
+            return
+
+        try:
+            probe = SystemProbeClient()
+            if not probe.is_broker_alive():
+                self.text_edit.setPlainText(
+                    "⚠️ Broker 未启动，无法解析 Office 文件。\n请在原生终端运行：cd asu_broker && python run.py"
+                )
+                return
+            result = probe.read_office_file(file_path)
+            content = result.get("content", "")
+            if content:
+                self.full_document = content
+                fname = os.path.basename(file_path)
+                self.context_meta = {"file_name": fname, "language": result.get("type", "docx")}
+                self.context_source = "ide"  # 统一走 IDE 上下文路径
+        except Exception as e:
+            self.text_edit.setPlainText(f"❌ 解析 Office 文件失败: {str(e)}")
+
+    def _read_ide_silent(self):
+        """静默读取 IDE 全文（不更新 UI 显示）"""
+        port = self._get_ide_port()
+        if not port:
+            return
+        try:
+            response = httpx.get(f"http://127.0.0.1:{port}/context", timeout=2.0)
+            if response.status_code == 200:
+                data = response.json()
+                self.full_document = data.get("content", "")
+                self.context_meta = {
+                    "file_name": data.get("fileName", "Unknown"),
+                    "language": data.get("languageId", ""),
+                }
+        except Exception:
+            pass  # 静默失败，不打断用户体验
 
     def on_text_updated(self, text):
         if not text:

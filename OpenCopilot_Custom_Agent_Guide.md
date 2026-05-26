@@ -52,6 +52,8 @@
     *   `translate`：强制输出极客风格的中文翻译。
     *   `code`：作为资深架构师，分析代码逻辑。
     *   `polish`：作为技术专栏编辑，润色文本。
+    *   `custom`：自定义指令修改，严格按用户指令输出修改后文本（不输出解释）。
+    *   `revision`：文档全文联动修订，输出修订后文本 + 联动影响分析 + 修订说明。
     *   *留空*：默认的通用全能助手。
 
 ---
@@ -71,7 +73,7 @@ Agent 基于 **SQLite 本地持久化**（`asu_agent.db`）管理会话记忆，
 如果您想优化 AI 的回答质量或增加新的技能：
 
 1.  **修改 Persona (角色设定)**：
-    Persona 已实现**文件化管理**，存放在 `personas/` 目录下（如 `personas/code.md`、`personas/translate.md`）。直接编辑对应的 Markdown 文件即可，Agent 下次请求时自动热加载，无需修改源码。
+    Persona 已实现**文件化管理**，存放在 `personas/` 目录下（如 `personas/code.md`、`personas/translate.md`、`personas/custom.md`、`personas/revision.md`）。直接编辑对应的 Markdown 文件即可，Agent 下次请求时自动热加载，无需修改源码。
 2.  **对接新的大模型 API**：
     当前 Agent 通过 `llm_provider.py` 中的 `MiniMaxProvider` 与 `LocalProvider` 访问模型。在 `asu_custom_agent.py` 的 `get_base_llm()` 中配置 `provider_type`。未来需要接入更多模型时，建议继续扩展 Provider 层。
 3.  **独立测试**：
@@ -91,9 +93,11 @@ Agent 基于 **SQLite 本地持久化**（`asu_agent.db`）管理会话记忆，
 - Persona 文件化 + 热加载
 - ContextEnvelope 协议兼容层
 - UI/Agent 生命周期解耦 + LaunchAgent 常驻
+- 自定义指令修改（custom Persona + custom_instruction 传递）
+- IDE 选区读取 + 回写（/selection + /apply 端点）
 
 待推进（🔶）：
-- IDE Extension v2：补充 `/selection`、`/diagnostics`、`/git-diff` 端点
+- IDE Extension v2：补充 `/diagnostics`、`/git-diff` 端点
 - 多 Provider 故障转移
 - SSE 错误边界优化
 

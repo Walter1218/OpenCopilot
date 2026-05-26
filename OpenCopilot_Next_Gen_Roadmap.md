@@ -65,7 +65,8 @@
 ### P2.2 自定义 Persona 的 GUI 管理工坊
 *   **目标**：满足极客用户的深度定制需求，将 Prompt 设定权交给用户。
 *   **技术路径**：
-    *   Persona 已实现文件化管理（`personas/*.md` 热加载）。
+    *   Persona 已实现文件化管理（`personas/*.md` 热加载），目前已有 default / code / translate / polish / custom / revision 六种。
+    *   ✅ `custom.md` 已实现自定义指令修改场景，AI 严格按指令输出修改后文本。
     *   后续在 PyQt 界面增加"角色工坊"管理面板，支持增删改查。
 
 ### P2.3 Markdown 富文本渲染与代码高亮 ✅ 已完成

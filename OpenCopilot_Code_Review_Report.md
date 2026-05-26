@@ -43,10 +43,11 @@
 
 结合上述问题与之前验证的 [特权代理模式集成指南](./ASU_Privileged_Broker_Integration_Doc.md)，建议分阶段执行以下重构：
 
-1.  **阶段 1：剥离高权限代码 (Fix TCC)**
-    *   移除 `smart_copilot.py` 中的 `osascript`。
-    *   建立并集成 `asu_broker` 模块。
-2.  **阶段 2：UI 线程解耦**
-    *   将 `read_from_browser` 重构为基于 `QThread` 的异步请求模式。
-3.  **阶段 3：代码净化**
-    *   清理 `ModelScannerWorker` 和其它与旧版 OpenClaw 相关的历史废弃代码。
+1.  **阶段 1：剥离高权限代码 (Fix TCC)** ✅ 已完成
+    *   ✅ 移除 `smart_copilot.py` 中的 `osascript`。
+    *   ✅ 建立并集成 `asu_broker` 模块。
+2.  **阶段 2：UI 线程解耦** ✅ 已完成
+    *   ✅ 将 `read_from_browser` 重构为基于 `QThread` 的异步请求模式（通过 Broker HTTP 代理）。
+3.  **阶段 3：代码净化** 🔶 部分完成
+    *   ✅ Agent 已切换到内置 `asu_custom_agent.py`，不再依赖 OpenClaw。
+    *   🔶 `ModelScannerWorker` 和其它与旧版 OpenClaw 相关的历史废弃代码仍需清理。

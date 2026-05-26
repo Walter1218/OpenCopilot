@@ -64,3 +64,4 @@
 | **阶段七-A** | 上下文窗口管理 P0：预算驱动拼装 + 分层裁剪 + ContextEnvelope 兼容 | ✅ 已完成 |
 | **阶段七-B** | Privileged Broker v2 + WebSocket 推送 + 多 Provider 故障转移 | 🔶 Broker 产品化已完成，WebSocket + 故障转移 待开发 |
 | **阶段八** | Markdown 渲染 + 代码高亮 + 卡片拖拽缩放 | ✅ 已完成 |
+| **阶段九** | 自定义指令修改 + IDE 选区回写 + custom/revision Persona | ✅ 已完成 |

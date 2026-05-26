@@ -170,7 +170,7 @@ OpenCopilot/
 ├── llm_provider.py               # LLM Provider 抽象层
 ├── dynamic_cursor.py             # 光标特效独立演示程序
 ├── mouse_tracker.py              # 鼠标轨迹日志工具
-├── text_selector.py              # [已废弃] Cmd+C 剪贴板方案
+├── text_selector.py              # [已废弃] 模拟 Cmd+C 自动捕获方案（当前使用拖拽+粘贴按钮共存）
 ├── personas/                     # Persona 人格文件
 │   └── custom.md                 #   自定义修改指令专用人格
 ├── asu-ide-extension/            # IDE 伴生插件 (VSCode/Cursor/Trae)

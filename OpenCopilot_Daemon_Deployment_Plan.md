@@ -1,4 +1,4 @@
-# ASU OS级常驻化与生命周期解耦方案 (Daemon Deployment Plan)
+# OpenCopilot OS级常驻化与生命周期解耦方案 (Daemon Deployment Plan)
 
 > **文档状态**: V1.2（已更新）  
 > **更新日期**: 2026-05-26  
@@ -10,7 +10,7 @@
 
 > **此问题已完全解决。** 以下保留原始背景描述供参考。
 
-~~当前 ASU 的启动逻辑是强耦合的：当用户启动 UI (`smart_copilot.py`) 时，UI 会尝试在后台通过子进程拉起 Agent (`asu_custom_agent.py`)。如果 UI 退出，Agent 通常也会被连带关闭。~~
+~~当前 OpenCopilot 的启动逻辑是强耦合的：当用户启动 UI (`smart_copilot.py`) 时，UI 会尝试在后台通过子进程拉起 Agent (`asu_custom_agent.py`)。如果 UI 退出，Agent 通常也会被连带关闭。~~
 
 **已实现的最终形态：**
 - **Agent 服务**：开机即静默运行，始终在后台监控系统状态、维护持久化记忆，不依赖任何 UI 的存活。
@@ -27,7 +27,7 @@
 2. **异步探活 + 状态反馈 UI**：
    - 新增 `AgentHealthWorker(QThread)`，UI 唤出时异步向 `http://127.0.0.1:18888/health` Ping。
    - **健康状态 (🟢)**：标题栏绿色状态点，正常交互。
-   - **断连状态 (🔴)**：标题栏红色状态点 + 橙色横幅提示"ASU 核心守护服务未启动"。
+   - **断连状态 (🔴)**：标题栏红色状态点 + 橙色横幅提示"OpenCopilot 核心守护服务未启动"。
 3. **安全退出机制**：`cleanup()` 只终止鼠标监听线程，绝对不干涉 18888 端口的存活。
 
 ### 模块二：macOS 守护进程标准化 ✅ 已完成

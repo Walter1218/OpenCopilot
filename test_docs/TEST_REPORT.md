@@ -1,4 +1,4 @@
-# ASU 文档全文联动修订功能 —— 验证测试报告
+# OpenCopilot 文档全文联动修订功能 —— 验证测试报告
 
 > **测试时间**：2026-05-26 13:40-14:00（基础）+ 19:55-20:15（极端案例）  
 > **测试版本**：asu_custom_agent.py + personas/revision.md + Broker office_probe.py  
@@ -17,7 +17,7 @@
 | Agent 服务 | `127.0.0.1:18888`，`python3 asu_custom_agent.py` |
 | 修订 Persona | `personas/revision.md`（新建） |
 | 请求格式 | `POST /v1/agent/chat` + `context_envelope`（content=全文, selection=选中文本） |
-| 模拟操作 | 模拟用户在 IDE 中选中文本后拖拽到 ASU 卡片触发全文修订 |
+| 模拟操作 | 模拟用户在 IDE 中选中文本后拖拽到 OpenCopilot 卡片触发全文修订 |
 
 ---
 
@@ -83,7 +83,7 @@ AI 的思考过程显示：
 ### 3.1 文档原始内容
 
 **文件**：`tech_spec.md`（1196 字符）  
-**文档概要**：ASU Desktop Copilot 技术规格说明书，包含产品定义、核心模块、通信架构、性能要求、部署方案 5 个章节。
+**文档概要**：OpenCopilot 技术规格说明书，包含产品定义、核心模块、通信架构、性能要求、部署方案 5 个章节。
 
 ```markdown
 ### 2.1 交互层 (smart_copilot.py)
@@ -285,7 +285,7 @@ AI 的思考过程经过多轮迭代分析：
 ### 7.3 用户操作流程
 
 ```
-1. 双击右键唤出 ASU 卡片
+1. 双击右键唤出 OpenCopilot 卡片
 2. 点「📝 全文修订」→ 无 IDE 全文时弹出文件选择框
 3. 选择 .docx/.pptx 文件 → Broker 自动解析为纯文本（按钮变绿）
 4. 在 Word/PPT/任意软件中选中文字 → 拖拽到卡片

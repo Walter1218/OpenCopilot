@@ -1,4 +1,4 @@
-# ASU v2.0 Release Notes - June 2026
+# OpenCopilot v2.0 Release Notes - June 2026
 
 ## Overview
 

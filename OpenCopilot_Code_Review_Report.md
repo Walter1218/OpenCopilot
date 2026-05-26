@@ -1,4 +1,4 @@
-# ASU 项目 Code Review 报告
+# OpenCopilot 项目 Code Review 报告
 
 **时间**: 2026-05-23
 **分支**: `ai-assistant-dev`
@@ -26,8 +26,8 @@
 
 ### 1. 过时的 OpenClaw 强耦合逻辑
 *   **定位**：`smart_copilot.py` -> `ModelScannerWorker` 类
-*   **问题描述**：根据项目上下文与核心记忆，ASU 项目已明确转向使用内置的 `asu_custom_agent.py`，不再强依赖 OpenClaw。但在探测逻辑中（L29-L74），仍然存在大量关于 `openclaw agents list`、端口 `18789`/`18791` 探测的硬编码“脏逻辑”。
-*   **重构建议**：遵循“删除旧的过失信息”的开发规范，重构 `ModelScannerWorker`，清理 OpenClaw 的特定逻辑，专注于探测通用的 OpenAI 兼容接口或仅仅检查 ASU 内置代理的心跳。
+*   **问题描述**：根据项目上下文与核心记忆，OpenCopilot 项目已明确转向使用内置的 `asu_custom_agent.py`，不再强依赖 OpenClaw。但在探测逻辑中（L29-L74），仍然存在大量关于 `openclaw agents list`、端口 `18789`/`18791` 探测的硬编码“脏逻辑”。
+*   **重构建议**：遵循“删除旧的过失信息”的开发规范，重构 `ModelScannerWorker`，清理 OpenClaw 的特定逻辑，专注于探测通用的 OpenAI 兼容接口或仅仅检查 OpenCopilot 内置代理的心跳。
 
 ### 2. 异常处理过宽 (Error Swallowing)
 *   **定位**：`smart_copilot.py` 多个地方，例如 `_probe_browser` 中的 `except Exception:`。

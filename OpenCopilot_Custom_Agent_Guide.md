@@ -1,13 +1,13 @@
-# ASU 定制智能体 (Custom Agent) 开发与使用指南
+# OpenCopilot 定制智能体 (Custom Agent) 开发与使用指南
 
 > **文档状态**: V1.2
 > **更新日期**: 2026-05-26
 
-## 1. 什么是 ASU 定制智能体？
+## 1. 什么是 OpenCopilot 定制智能体？
 
-在 ASU 项目的早期版本中，我们依赖外部的 `OpenClaw CLI` 作为后端 LLM 服务。为了追求更高的可控性、更低的资源占用以及对 MiniMax 模型 API 的深度定制，我们开发了内置的 **ASU Custom Agent** (`asu_custom_agent.py`)。
+在 OpenCopilot 项目的早期版本中，我们依赖外部的 `OpenClaw CLI` 作为后端 LLM 服务。为了追求更高的可控性、更低的资源占用以及对 MiniMax 模型 API 的深度定制，我们开发了内置的 **ASU Custom Agent** (`asu_custom_agent.py`)。
 
-它是 ASU 项目的**核心"AI 大脑"**，负责管理所有的 LLM 会话、角色切换 (Persona)、上下文记忆以及与远端 API（目前支持 MiniMax 和本地 OpenAI-compatible Provider）的通信。
+它是 OpenCopilot 项目的**核心"AI 大脑"**，负责管理所有的 LLM 会话、角色切换 (Persona)、上下文记忆以及与远端 API（目前支持 MiniMax 和本地 OpenAI-compatible Provider）的通信。
 
 ---
 
@@ -75,7 +75,7 @@ Agent 基于 **SQLite 本地持久化**（`asu_agent.db`）管理会话记忆，
 2.  **对接新的大模型 API**：
     当前 Agent 通过 `llm_provider.py` 中的 `MiniMaxProvider` 与 `LocalProvider` 访问模型。在 `asu_custom_agent.py` 的 `get_base_llm()` 中配置 `provider_type`。未来需要接入更多模型时，建议继续扩展 Provider 层。
 3.  **独立测试**：
-    可以不启动 ASU 的 GUI，直接在终端中运行：
+    可以不启动 OpenCopilot 的 GUI，直接在终端中运行：
     ```bash
     python asu_custom_agent.py
     ```

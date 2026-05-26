@@ -9,8 +9,8 @@
 ## 关键文档
 - `README.md`：项目概览与开发路线图
 - `USER_GUIDE.md`：产品用户说明书（安装/功能/排错）
-- `ASU_Custom_Agent_Guide.md`：Agent 开发指南
-- `ASU_Broker_Development_Guide.md`：Broker 开发指南
+- `OpenCopilot_Custom_Agent_Guide.md`：Agent 开发指南
+- `OpenCopilot_Broker_Development_Guide.md`：Broker 开发指南
 - `test_docs/TEST_REPORT.md`：文档修订功能验证报告
 - AI 后端：MiniMax 云端 + Ollama/vLLM 本地，通过 18888 端口 Agent Server 统一管理
 - IDE 插件：VS Code Extension (Node.js)，动态端口 + 临时文件信标通信

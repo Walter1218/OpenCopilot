@@ -1,8 +1,8 @@
-# ASU Desktop Copilot 技术规格说明书
+# OpenCopilot 技术规格说明书
 
 ## 1. 产品定义
 
-ASU Desktop Copilot（简称 ASU）是一款面向 macOS 平台的桌面级 AI 智能协驾工具。通过全局鼠标监听和悬浮卡片交互，实现跨应用的上下文感知和智能分析。
+OpenCopilot（简称 OpenCopilot）是一款面向 macOS 平台的桌面级 AI 智能协驾工具。通过全局鼠标监听和悬浮卡片交互，实现跨应用的上下文感知和智能分析。
 
 ## 2. 核心模块
 

@@ -1,7 +1,7 @@
-# ASU (Advanced System Utilities) 🚀
+# OpenCopilot (Advanced System Utilities) 🚀
 **全局智能交互增强引擎 & 桌面级 AI Copilot**
 
-ASU 是一个致力于探索**下一代人机交互模式**的系统级工具集。它将底层硬件事件监听（鼠标/键盘）、高帧率 GUI 特效渲染与最前沿的 LLM (大语言模型) 能力深度结合，旨在打造"不打断用户心流"的极致 AI 体验。
+OpenCopilot 是一个致力于探索**下一代人机交互模式**的系统级工具集。它将底层硬件事件监听（鼠标/键盘）、高帧率 GUI 特效渲染与最前沿的 LLM (大语言模型) 能力深度结合，旨在打造"不打断用户心流"的极致 AI 体验。
 
 ## ✨ 核心亮点 (Core Features)
 
@@ -64,8 +64,8 @@ ASU 是一个致力于探索**下一代人机交互模式**的系统级工具集
 ---
 
 ## 📚 进阶架构设计文档
-- 👉 [ASU 定制智能体 (Custom Agent) 开发与使用指南](ASU_Custom_Agent_Guide.md)
-- 👉 [ASU 特权代理模式集成与开发指南](ASU_Broker_Development_Guide.md)
+- 👉 [OpenCopilot 定制智能体 (Custom Agent) 开发与使用指南](OpenCopilot_Custom_Agent_Guide.md)
+- 👉 [OpenCopilot 特权代理模式集成与开发指南](OpenCopilot_Broker_Development_Guide.md)
 - 👉 [ASU 下一代架构演进路线图 (Next-Gen Roadmap)](ASU_Next_Gen_Roadmap.md)
 - 👉 [ASU 全场景智能上下文获取方案](ASU_Architecture_Context_Extraction.md)
 - 👉 [ASU Code Review 报告 (2026-05-23)](ASU_Code_Review_Report.md)
@@ -77,8 +77,8 @@ ASU 是一个致力于探索**下一代人机交互模式**的系统级工具集
 ### 1. 环境准备
 
 ```bash
-git clone https://github.com/Walter1218/ASU.git
-cd ASU
+git clone https://github.com/Walter1218/OpenCopilot.git
+cd OpenCopilot
 pip install -r requirements.txt
 ```
 
@@ -161,7 +161,7 @@ curl http://127.0.0.1:18888/health # 检查 Agent 是否在线
 ## 🏗️ 项目结构
 
 ```text
-ASU/
+OpenCopilot/
 ├── smart_copilot.py              # UI 主程序（悬浮卡片 + 工作台）
 ├── asu_custom_agent.py           # Agent 后台服务（端口 18888）
 ├── cursor_effects.py             # 光标特效共享库（Ripple + CursorOverlay）

@@ -66,6 +66,7 @@ class ContextWindowManager:
         content = envelope.get("content", "")
         selection = envelope.get("selection", "")
         task = envelope.get("task", "")
+        custom_instruction = envelope.get("custom_instruction", "")
         meta = envelope.get("meta", {}) or {}
 
         # 元信息摘要
@@ -74,6 +75,9 @@ class ContextWindowManager:
             v = meta.get(k)
             if v:
                 meta_parts.append(f"{k}={v}")
+        # custom_instruction 优先从 envelope 顶层取，其次从 meta 取
+        if not custom_instruction:
+            custom_instruction = meta.get("custom_instruction", "")
         meta_text = "；".join(meta_parts)
 
         # 先构建骨架，再把正文按剩余预算裁剪
@@ -82,6 +86,11 @@ class ContextWindowManager:
             payload_parts.append(f"[task] {task}")
         if meta_text:
             payload_parts.append(f"[meta] {meta_text}")
+        if custom_instruction:
+            payload_parts.append(
+                f"[custom_instruction]\n{custom_instruction}\n\n"
+                f"请严格按照上述指令对 [selection] 中的文本进行修改，只输出修改后的文本，不要输出任何解释或说明。"
+            )
         if selection:
             payload_parts.append(f"[selection]\n{selection}")
 
@@ -134,7 +143,7 @@ class ContextWindowManager:
 
 
 def normalize_context_envelope(req, fallback_text, fallback_source, fallback_meta):
-    """兼容新旧协议：优先 context_envelope，其次旧字段。"""
+    """兼容新旧协议：优先 context_envelope，其次旧字段。同时确保 custom_instruction 不丢失。"""
     env = req.get("context_envelope")
     safe_fallback_meta = fallback_meta if isinstance(fallback_meta, dict) else {}
 
@@ -149,6 +158,12 @@ def normalize_context_envelope(req, fallback_text, fallback_source, fallback_met
             "meta": safe_meta,
             "timestamp": env.get("timestamp", time.time()),
         }
+        # 确保 custom_instruction 从 context_meta 合并进 envelope（envelope meta 可能缺少）
+        ci = safe_fallback_meta.get("custom_instruction", "")
+        if ci and "custom_instruction" not in safe_meta:
+            envelope["custom_instruction"] = ci
+        elif ci and safe_meta.get("custom_instruction"):
+            envelope["custom_instruction"] = safe_meta["custom_instruction"]
     else:
         envelope = {
             "source": fallback_source,
@@ -158,6 +173,9 @@ def normalize_context_envelope(req, fallback_text, fallback_source, fallback_met
             "meta": safe_fallback_meta,
             "timestamp": time.time(),
         }
+        ci = safe_fallback_meta.get("custom_instruction", "")
+        if ci:
+            envelope["custom_instruction"] = ci
 
     # 兜底：弱类型输入统一转字符串，避免拼装阶段异常
     envelope["source"] = str(envelope.get("source", fallback_source) or fallback_source)
@@ -173,8 +191,10 @@ def normalize_context_envelope(req, fallback_text, fallback_source, fallback_met
 # 格式: "source_type": "人类可读的描述模板"
 CONTEXT_DESCRIPTIONS = {
     "ide": (
-        "当前用户正在代码编辑器（IDE）中工作。用户提供的是代码文件内容。"
-        "请以代码审查/架构分析的角度来理解和回应。"
+        "当前用户正在代码编辑器（IDE）中工作。"
+        "如果请求中包含 [selection]（用户选中的文本片段）和 [content]（完整文件内容），"
+        "说明用户只想修改选中的片段。此时：只输出修改后的选中文本，不要输出全文，不要输出解释。"
+        "如果只有 [content] 没有选区，则以代码审查/架构分析的角度来理解和回应。"
     ),
     "browser": (
         "当前用户正在浏览器中浏览网页。用户提供的是网页文本内容。"
@@ -205,6 +225,8 @@ def build_context_prefix(context_source, context_meta):
         app_name = context_meta.get("app_name", "")
         task = context_meta.get("task", "")
         revision_target = context_meta.get("revision_target", "")
+        custom_instruction = context_meta.get("custom_instruction", "")
+        source_text = context_meta.get("source_text", "")
 
         if context_source in ("ide", "revision") and file_name:
             detail = f"文件名：{file_name}"
@@ -221,6 +243,15 @@ def build_context_prefix(context_source, context_meta):
         # 修订模式降级：无全文时告知 Agent 仅做局部修订
         if revision_target and context_source == "revision":
             parts.append(f"[选择文本]（待修订内容）:\n{revision_target}")
+
+        # 自定义指令：明确告诉 Agent 用户的修改要求
+        if custom_instruction:
+            parts.append(f"[用户修改指令] {custom_instruction}\n请严格按此指令对提供的文本进行修改，只输出修改后的结果，不要输出任何解释。")
+
+        # 聊天模式中附带的源文本上下文
+        if source_text and context_source == "chat":
+            preview = source_text[:2000] + ("…" if len(source_text) > 2000 else "")
+            parts.append(f"[用户当前关注的源文本]:\n{preview}")
 
     return "\n".join(parts)
 

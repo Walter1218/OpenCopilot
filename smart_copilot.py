@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import subprocess
 import traceback
 import time
 import uuid
@@ -12,16 +13,95 @@ from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
     QLabel, QFrame, QGraphicsDropShadowEffect, QPushButton, QDialog,
     QRadioButton, QLineEdit, QMessageBox, QTabWidget, QComboBox,
-    QFileDialog
+    QFileDialog, QSystemTrayIcon, QMenu, QStyle
 )
 import httpx
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QTimer
-from PyQt6.QtGui import QCursor, QColor
+from PyQt6.QtGui import QCursor, QColor, QAction, QIcon
 
 from cursor_effects import Ripple, CursorOverlay
 from llm_provider import ProviderFactory, load_config, save_config
 from markdown_renderer import render as md_render
 from system_probe_client import SystemProbeClient
+
+
+def check_accessibility_permission():
+    """检测 macOS 辅助功能权限，未授权则弹出提示并尝试打开系统设置。"""
+    if sys.platform != "darwin":
+        return True
+    try:
+        from ApplicationServices import AXIsProcessTrusted
+        if AXIsProcessTrusted():
+            return True
+    except ImportError:
+        # PyObjC 未安装，用 AppleScript 间接检测
+        try:
+            r = subprocess.run(
+                ["osascript", "-e", 'tell application "System Events" to get name of first process'],
+                capture_output=True, timeout=3, text=True,
+            )
+            if r.returncode == 0:
+                return True
+        except Exception:
+            pass
+
+    # 权限未授予 → 弹窗提示
+    msg = QMessageBox()
+    msg.setIcon(QMessageBox.Icon.Warning)
+    msg.setWindowTitle("⚠️ 辅助功能权限未授予")
+    msg.setText(
+        "Smart Copilot 无法监听鼠标事件！\n\n"
+        "请按以下步骤授权：\n"
+        "1. 打开 系统设置 → 隐私与安全性 → 辅助功能\n"
+        "2. 将当前终端（Terminal / Trae / iTerm2）添加到列表并勾选\n"
+        "3. 完全退出后重新运行 Smart Copilot\n\n"
+        "点击「打开系统设置」可直达权限页面。"
+    )
+    btn_open = msg.addButton("打开系统设置", QMessageBox.ButtonRole.AcceptRole)
+    msg.addButton("稍后手动设置", QMessageBox.ButtonRole.RejectRole)
+    msg.exec()
+
+    if msg.clickedButton() == btn_open:
+        subprocess.Popen([
+            "open", "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+        ])
+    return False
+
+
+def make_panel_persistent(widget):
+    """macOS: 设置 NSPanel.hidesOnDeactivate = False，防止失焦自动隐藏。
+    
+    Qt.Tool 标志在 macOS 上创建 NSPanel，默认 hidesOnDeactivate=True，
+    导致应用失焦时窗口被系统自动隐藏。通过 PyObjC 直接修改该属性实现常驻。
+    """
+    if sys.platform != "darwin":
+        return
+    try:
+        from AppKit import NSApp, NSPanel
+
+        # 保存原标题，设置唯一临时标题用于在 NSApp.windows() 中定位
+        orig_title = widget.windowTitle()
+        tag = f"_asu_persistent_{id(widget)}"
+        widget.setWindowTitle(tag)
+
+        found = False
+        for ns_win in NSApp.windows():
+            if ns_win.title() == tag:
+                if isinstance(ns_win, NSPanel):
+                    ns_win.setHidesOnDeactivate_(False)
+                found = True
+                break
+
+        # 恢复原标题
+        widget.setWindowTitle(orig_title)
+        
+        if not found:
+            # 备选：遍历所有 NSPanel 直接设置
+            for ns_win in NSApp.windows():
+                if isinstance(ns_win, NSPanel):
+                    ns_win.setHidesOnDeactivate_(False)
+    except Exception:
+        pass
 
 # ==========================================
 # 后台模型探测线程
@@ -220,6 +300,8 @@ class AIWorker(QThread):
     def run(self):
         try:
             full_text = ""
+            chunk_count = 0
+            print(f"[ASU] AIWorker开始 | action={self.action_type} | session={self.session_id[:8]}... | source={self.context_source} | meta_keys={list(self.context_meta.keys())}")
             for chunk in self.provider.stream_agent_task(
                 self.prompt, action_type=self.action_type,
                 session_id=self.session_id, is_new_task=True,
@@ -228,8 +310,10 @@ class AIWorker(QThread):
                 context_envelope=self.context_envelope
             ):
                 if not self._is_running:
+                    print(f"[ASU] AIWorker被中断 | chunks={chunk_count}")
                     break
                 full_text += chunk
+                chunk_count += 1
                 
                 # 过滤掉已闭合的 <think>...</think> 标签块
                 display_text = re.sub(r'<think>.*?</think>', '', full_text, flags=re.DOTALL)
@@ -240,7 +324,9 @@ class AIWorker(QThread):
                     
                 self.text_updated.emit(display_text.strip())
                 
+            print(f"[ASU] AIWorker完成 | action={self.action_type} | chunks={chunk_count} | output_len={len(full_text)}")
         except Exception as e:
+            print(f"[ASU] AIWorker异常 | action={self.action_type} | error={str(e)}")
             self.text_updated.emit(f"\n[错误]: {str(e)}")
             
         self.finished_signal.emit()
@@ -265,14 +351,19 @@ class ChatWorker(QThread):
     def run(self):
         try:
             full_text = ""
+            chunk_count = 0
+            has_source = "source_text" in self.context_meta
+            print(f"[ASU] ChatWorker开始 | session={self.session_id[:8]}... | has_source_text={has_source} | meta_keys={list(self.context_meta.keys())}")
             for chunk in self.provider.stream_agent_task(
                 self.text, action_type="chat", session_id=self.session_id,
                 is_new_task=False, context_source=self.context_source,
                 context_meta=self.context_meta
             ):
                 if not self._is_running:
+                    print(f"[ASU] ChatWorker被中断 | chunks={chunk_count}")
                     break
                 full_text += chunk
+                chunk_count += 1
                 
                 # 过滤掉已闭合的 <think>...</think> 标签块
                 display_text = re.sub(r'<think>.*?</think>', '', full_text, flags=re.DOTALL)
@@ -283,7 +374,9 @@ class ChatWorker(QThread):
                     
                 self.text_updated.emit(display_text.strip())
                 
+            print(f"[ASU] ChatWorker完成 | chunks={chunk_count} | output_len={len(full_text)}")
         except Exception as e:
+            print(f"[ASU] ChatWorker异常 | error={str(e)}")
             self.text_updated.emit(f"\n[错误]: {str(e)}")
             
         self.finished_signal.emit()
@@ -332,31 +425,58 @@ class MouseListenerWorker(QThread):
     mouse_moved = pyqtSignal(int, int)
     global_click = pyqtSignal(int, int)
     right_clicked = pyqtSignal(int, int, int)  # x, y, click_count
+    listener_error = pyqtSignal(str)
+    listener_died = pyqtSignal()  # listener 非正常退出时通知主线程重启
 
     def __init__(self):
         super().__init__()
         self.last_right_click_time = 0
-        self.click_threshold = 0.4  # 400ms
+        self.click_threshold = 0.55  # 550ms，适配触控板/蓝牙鼠标的双击节奏
         self._right_click_count = 0
+        self._listener = None
+        self._stop_requested = False
 
     def run(self):
+        self._stop_requested = False
+
         def on_move(x, y):
-            self.mouse_moved.emit(int(x), int(y))
+            try:
+                self.mouse_moved.emit(int(x), int(y))
+            except Exception:
+                pass  # 回调异常不能向外抛，否则 pynput 会静默终止 listener
             
         def on_click(x, y, button, pressed):
-            if pressed:
-                self.global_click.emit(int(x), int(y))
-                if button == mouse.Button.right:
-                    current_time = time.time()
-                    if current_time - self.last_right_click_time < self.click_threshold:
-                        self._right_click_count += 1
-                    else:
-                        self._right_click_count = 1
-                    self.last_right_click_time = current_time
-                    self.right_clicked.emit(int(x), int(y), self._right_click_count)
+            try:
+                if pressed:
+                    self.global_click.emit(int(x), int(y))
+                    if button == mouse.Button.right:
+                        current_time = time.time()
+                        if current_time - self.last_right_click_time < self.click_threshold:
+                            self._right_click_count += 1
+                        else:
+                            self._right_click_count = 1
+                        self.last_right_click_time = current_time
+                        self.right_clicked.emit(int(x), int(y), self._right_click_count)
+            except Exception:
+                pass  # 同上
 
-        with mouse.Listener(on_move=on_move, on_click=on_click) as listener:
-            listener.join()
+        try:
+            self._listener = mouse.Listener(on_move=on_move, on_click=on_click)
+            self._listener.start()
+            self._listener.join()
+        except Exception:
+            err = traceback.format_exc()
+            self.listener_error.emit(err)
+
+        # 如果不是主动 stop 导致的退出，通知主线程
+        if not self._stop_requested:
+            self.listener_died.emit()
+
+    def stop(self):
+        """停止 pynput 鼠标监听器。"""
+        self._stop_requested = True
+        if self._listener:
+            self._listener.stop()
 
 
 # ==========================================
@@ -377,24 +497,31 @@ class AICardWindow(QWidget):
         self.active_browser = None
         self._temp_chat_pos = 0
         self._pending_hide = False
+        self._user_initiated_hide = False  # 区分用户主动隐藏 vs 系统自动隐藏
         # 上下文感知
         self.context_source = "drag"
         self.context_meta = {}
         self.task_context = ""  # 工作台注入的任务上下文
+        self._ide_selection_range = None  # IDE 选区范围（用于局部回写）
+        self._ide_full_document = ""  # IDE 全文缓存（用于上下文和定位）
         self._agent_online = True  # 默认乐观假设在线，探活结果回来后更新
+        self._allow_close = False
         # 文档修订模式
         self.revision_mode = False
         self.full_document = ""  # 修订模式下的全文档缓存
         self.initUI()
 
     def initUI(self):
-        # 无边框、置顶、绕过窗口管理器、不抢夺焦点
+        # 无边框、置顶
+        # 不用 Qt.Tool：macOS 会在父窗口失焦时自动隐藏 Tool 窗口
+        #   且 Tool + hidesOnDeactivate=False 后跨窗口拖拽失效
+        # 用 WA_ShowWithoutActivating 控制首次显示不抢焦点
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.WindowStaysOnTopHint |
-            Qt.WindowType.BypassWindowManagerHint
+            Qt.WindowType.WindowStaysOnTopHint
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setAcceptDrops(True)
         self.setMouseTracking(True)  # 启用鼠标追踪，用于拖拽缩放
         self._resize_margin = 14
@@ -522,6 +649,24 @@ class AICardWindow(QWidget):
         self.ide_probe_result.connect(self._update_ide_btn)
         
         self.ide_status_layout.addWidget(self.btn_read_ide)
+        self.btn_paste_clipboard = QPushButton("📋 粘贴剪贴板")
+        self.btn_paste_clipboard.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(120, 80, 220, 180);
+                color: #fff;
+                border-radius: 8px;
+                padding: 6px 12px;
+                font-size: 12px;
+                font-weight: bold;
+                border: 1px solid rgba(120, 80, 220, 255);
+            }
+            QPushButton:hover {
+                background-color: rgba(120, 80, 220, 255);
+            }
+        """)
+        self.btn_paste_clipboard.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_paste_clipboard.clicked.connect(self.paste_from_clipboard)
+        self.ide_status_layout.addWidget(self.btn_paste_clipboard)
         self.ide_status_layout.addStretch()
         quick_layout.addLayout(self.ide_status_layout)
 
@@ -595,6 +740,39 @@ class AICardWindow(QWidget):
         self.btn_polish.clicked.connect(lambda: self.trigger_ai("polish"))
         self.btn_revision.clicked.connect(self._toggle_revision_mode)
 
+        # 自定义指令输入栏（让用户填写修改要求）
+        self.instruction_layout = QHBoxLayout()
+        self.instruction_layout.setContentsMargins(0, 0, 0, 5)
+        self.instruction_input = QLineEdit(self.tab_quick)
+        self.instruction_input.setPlaceholderText("💬 输入修改要求（如：改为 async/await、修复 bug…）按 Enter 提交")
+        self.instruction_input.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        self.instruction_input.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(40, 40, 50, 200);
+                color: #fff; border: 1px solid rgba(100, 100, 120, 150);
+                border-radius: 6px; padding: 6px 10px; font-size: 12px;
+            }
+            QLineEdit:focus { border: 1px solid #4da6ff; }
+        """)
+        self.instruction_input.returnPressed.connect(self._on_custom_instruction)
+
+        self.btn_custom_submit = QPushButton("▶", self.tab_quick)
+        self.btn_custom_submit.setToolTip("提交修改指令")
+        self.btn_custom_submit.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(77, 166, 255, 180);
+                color: #fff; border-radius: 6px;
+                padding: 6px 14px; font-size: 13px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: rgba(77, 166, 255, 255); }
+        """)
+        self.btn_custom_submit.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_custom_submit.clicked.connect(self._on_custom_instruction)
+
+        self.instruction_layout.addWidget(self.instruction_input, stretch=1)
+        self.instruction_layout.addWidget(self.btn_custom_submit)
+        quick_layout.addLayout(self.instruction_layout)
+
         self.text_edit = QTextEdit(self.tab_quick)
         self.text_edit.setReadOnly(True)
         self.text_edit.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse | Qt.TextInteractionFlag.TextSelectableByKeyboard)
@@ -627,6 +805,45 @@ class AICardWindow(QWidget):
         ask_more_layout.addStretch()
         ask_more_layout.addWidget(self.btn_ask_more)
         quick_layout.addLayout(ask_more_layout)
+
+        # 回写 IDE 操作栏
+        apply_layout = QHBoxLayout()
+        self.btn_apply_to_ide = QPushButton("📝 回写到 IDE")
+        self.btn_apply_to_ide.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(40, 167, 69, 180);
+                color: #fff; border-radius: 8px;
+                padding: 5px 10px; font-size: 11px; font-weight: bold;
+                border: 1px solid rgba(40, 167, 69, 255);
+            }
+            QPushButton:hover {
+                background-color: rgba(40, 167, 69, 255);
+            }
+        """)
+        self.btn_apply_to_ide.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_apply_to_ide.clicked.connect(self._apply_to_ide)
+        self.btn_apply_to_ide.hide()  # 初始隐藏，AI 回复后显示
+
+        self.btn_copy_result = QPushButton("📋 复制结果")
+        self.btn_copy_result.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(120, 80, 220, 180);
+                color: #fff; border-radius: 8px;
+                padding: 5px 10px; font-size: 11px; font-weight: bold;
+                border: 1px solid rgba(120, 80, 220, 255);
+            }
+            QPushButton:hover {
+                background-color: rgba(120, 80, 220, 255);
+            }
+        """)
+        self.btn_copy_result.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_copy_result.clicked.connect(self._copy_result_to_clipboard)
+        self.btn_copy_result.hide()  # 初始隐藏
+
+        apply_layout.addWidget(self.btn_apply_to_ide)
+        apply_layout.addStretch()
+        apply_layout.addWidget(self.btn_copy_result)
+        quick_layout.addLayout(apply_layout)
 
         # ==========================
         # Tab 2: 连续对话
@@ -688,9 +905,13 @@ class AICardWindow(QWidget):
         self.tabs.currentChanged.connect(self._on_tab_changed)
 
     def jump_to_chat(self):
-        # 切换到聊天 Tab，不再手动发送历史记录，因为后端 Agent 已有记忆
+        # 切换到聊天 Tab，将源文本上下文带入对话
         self.chat_display.clear()
-        self.append_chat_message("系统", "已将上下文带入，您可以继续追问。")
+        context_info = ""
+        if self.current_text:
+            preview = self.current_text[:150] + ("…" if len(self.current_text) > 150 else "")
+            context_info = f"\n\n📄 当前上下文（{len(self.current_text)} 字符，来源: {self.context_source}）:\n{preview}"
+        self.append_chat_message("系统", f"已将上下文带入，您可以继续追问。{context_info}")
         self.tabs.setCurrentIndex(1)
         self.chat_input.setFocus()
 
@@ -701,13 +922,8 @@ class AICardWindow(QWidget):
         
         if index == 1:  # 切换到对话 Tab
             self.chat_input.setFocus()
-        else:
-            self.setFocus()
-        # 切换到聊天 Tab，不再手动发送历史记录，因为后端 Agent 已有记忆
-        self.chat_display.clear()
-        self.append_chat_message("系统", "已将上下文带入，您可以继续追问。")
-        self.tabs.setCurrentIndex(1)
-        self.chat_input.setFocus()
+        # 注意：非聊天 Tab 不调用 self.setFocus()，
+        # 否则会与 WA_ShowWithoutActivating 冲突，导致 macOS 收回窗口
 
     def _get_ide_port(self):
         """从临时文件读取当前激活的 IDE 插件端口"""
@@ -722,6 +938,145 @@ class AICardWindow(QWidget):
                 print(f"[ASU] 读取 IDE 端口文件失败: {traceback.format_exc()}")
         return None
 
+    def _on_custom_instruction(self):
+        """用户在指令输入栏按 Enter 或点击 ▶ 按钮时触发。"""
+        instruction = self.instruction_input.text().strip()
+        if not instruction:
+            return
+        if not self.current_text:
+            self.text_edit.setPlainText("⚠️ 请先拖拽或粘贴文本内容，再输入修改要求。")
+            return
+        # trigger_ai 会自动读取 instruction_input 中的内容
+        self.trigger_ai("custom")
+
+    def _apply_to_ide(self):
+        """将 AI 回复结果回写到 IDE 当前文件。
+        
+        策略：
+        - 有选区范围(_ide_selection_range)：只替换选中片段（局部回写）
+        - 无选区但有全文(_ide_full_document)：在全文中找到原始片段并替换
+        - 都没有：全文替换（兜底）
+        """
+        port = self._get_ide_port()
+        if not port:
+            self.text_edit.setPlainText("❌ 无法连接 IDE 插件，请确认已在 VSCode/Trae 中安装并激活插件。")
+            return
+
+        # 获取 AI 回复的纯文本内容
+        result_text = self.text_edit.toPlainText()
+        if not result_text.strip():
+            return
+
+        try:
+            # 策略 1: 有选区范围 → 精确局部替换
+            if hasattr(self, '_ide_selection_range') and self._ide_selection_range:
+                payload = {
+                    "replace": result_text,
+                    "range": self._ide_selection_range
+                }
+                mode_label = "局部替换(选区)"
+            # 策略 2: 无选区但有全文和原始文本 → 在全文中定位并替换片段
+            elif hasattr(self, '_ide_full_document') and self._ide_full_document and self.current_text:
+                full_doc = self._ide_full_document
+                original = self.current_text
+                # 在全文中查找原始片段的位置
+                idx = full_doc.find(original)
+                if idx >= 0:
+                    # 计算行号和列号
+                    before = full_doc[:idx]
+                    start_line = before.count('\n')
+                    start_col = len(before) - before.rfind('\n') - 1 if '\n' in before else len(before)
+                    
+                    after_original = full_doc[:idx + len(original)]
+                    end_line = after_original.count('\n')
+                    end_col = len(after_original) - after_original.rfind('\n') - 1 if '\n' in after_original else len(after_original)
+                    
+                    payload = {
+                        "replace": result_text,
+                        "range": {
+                            "startLine": start_line,
+                            "startCol": start_col,
+                            "endLine": end_line,
+                            "endCol": end_col
+                        }
+                    }
+                    mode_label = "局部替换(定位)"
+                else:
+                    # 在全文中找不到原文片段 → 全文替换
+                    payload = {"content": result_text}
+                    mode_label = "全文替换(未定位到原文)"
+            # 策略 3: 兜底全文替换
+            else:
+                payload = {"content": result_text}
+                mode_label = "全文替换"
+
+            response = httpx.post(
+                f"http://127.0.0.1:{port}/apply",
+                json=payload, timeout=3.0
+            )
+            if response.status_code == 200:
+                data = response.json()
+                mode = data.get("mode", "unknown")
+                self.btn_apply_to_ide.setText(f"✅ 已回写({mode_label})")
+                self.btn_apply_to_ide.setStyleSheet(self.btn_apply_to_ide.styleSheet().replace("rgba(40, 167, 69, 180)", "rgba(100, 100, 110, 180)").replace("rgba(40, 167, 69, 255)", "rgba(100, 100, 110, 255)"))
+                self.btn_apply_to_ide.setEnabled(False)
+                print(f"[ASU] 回写IDE成功 | mode={mode} | strategy={mode_label}")
+            else:
+                self.text_edit.setPlainText(f"❌ 回写失败: HTTP {response.status_code}")
+                print(f"[ASU] 回写IDE失败 | status={response.status_code}")
+        except Exception as e:
+            self.text_edit.setPlainText(f"❌ 回写失败: {str(e)}\n\n请确认 IDE 插件正在运行。")
+            print(f"[ASU] 回写IDE异常 | error={str(e)}")
+
+    def _copy_result_to_clipboard(self):
+        """将 AI 回复结果复制到系统剪贴板。"""
+        result_text = self.text_edit.toPlainText()
+        if result_text.strip():
+            clipboard = QApplication.clipboard()
+            clipboard.setText(result_text)
+            self.btn_copy_result.setText("✅ 已复制")
+            QTimer.singleShot(2000, lambda: self.btn_copy_result.setText("📋 复制结果"))
+
+    def _try_get_ide_selection(self):
+        """尝试自动读取 IDE 选区范围（用于回写时的局部替换定位）。"""
+        port = self._get_ide_port()
+        if not port:
+            return
+        try:
+            response = httpx.get(f"http://127.0.0.1:{port}/selection", timeout=1.0)
+            if response.status_code == 200:
+                data = response.json()
+                sel_range = data.get("range", None)
+                sel_text = data.get("text", "")
+                if sel_range and sel_text:
+                    self._ide_selection_range = sel_range
+                    # 如果还没有全文缓存，顺便读取
+                    if not (hasattr(self, '_ide_full_document') and self._ide_full_document):
+                        ctx_resp = httpx.get(f"http://127.0.0.1:{port}/context", timeout=1.0)
+                        if ctx_resp.status_code == 200:
+                            self._ide_full_document = ctx_resp.json().get("content", "")
+        except Exception:
+            pass  # 静默失败，回写时会降级到全文替换
+
+    def paste_from_clipboard(self):
+        """从系统剪贴板粘贴文本，等待用户输入修改要求或点击快捷指令。"""
+        clipboard = QApplication.clipboard()
+        text = clipboard.text()
+        if not text or not text.strip():
+            self.text_edit.setPlainText("❌ 剪贴板为空，请先在 IDE 中复制文本（Cmd+C）。")
+            return
+        self.current_text = text
+        self.context_source = "clipboard"
+        self.context_meta = {}
+        self.tabs.setCurrentIndex(0)
+        # 不自动触发 AI，展示内容后等待用户指令
+        preview = text[:200] + ("…" if len(text) > 200 else "")
+        self.text_edit.setPlainText(
+            f"📄 已获取内容（{len(text)} 字符）:\n\n{preview}\n\n"
+            f"👇 请输入修改要求后按 Enter，或点击下方快捷指令。"
+        )
+        self.instruction_input.setFocus()
+
     def read_from_ide_extension(self):
         port = self._get_ide_port()
         if not port:
@@ -729,23 +1084,56 @@ class AICardWindow(QWidget):
             return
             
         try:
+            # 先尝试读取选中文本（如果有选区则只处理选中部分）
+            sel_response = httpx.get(f"http://127.0.0.1:{port}/selection", timeout=2.0)
+            sel_text = ""
+            sel_range = None
+            if sel_response.status_code == 200:
+                sel_data = sel_response.json()
+                sel_text = sel_data.get("text", "")
+                sel_range = sel_data.get("range", None)
+
+            # 读取全文
             response = httpx.get(f"http://127.0.0.1:{port}/context", timeout=2.0)
             if response.status_code == 200:
                 data = response.json()
                 content = data.get("content", "")
                 filename = data.get("fileName", "Unknown")
                 if content:
-                    self.current_text = content
-                    self.context_source = "ide"
-                    self.context_meta = {
-                        "file_name": data.get("fileName", "Unknown"),
-                        "language": data.get("languageId", ""),
-                    }
-                    self.text_edit.clear()
-                    self.text_edit.setPlainText(f"✅ 已成功从 IDE 插件读取全文 [{filename}]\n\n文件大小: {len(content)} 字符\n\n请点击下方快捷指令进行分析。")
+                    # 如果有选中文本，优先使用选中文本作为操作目标
+                    if sel_text and sel_text.strip():
+                        self.current_text = sel_text
+                        self.context_source = "ide"
+                        self._ide_selection_range = sel_range  # 记录选区范围，用于局部回写
+                        self._ide_full_document = content       # 记录全文，用于上下文
+                        self.context_meta = {
+                            "file_name": data.get("fileName", "Unknown"),
+                            "language": data.get("languageId", ""),
+                        }
+                        self.text_edit.clear()
+                        preview = sel_text[:200] + ("…" if len(sel_text) > 200 else "")
+                        self.text_edit.setPlainText(
+                            f"✅ 已读取 IDE 选中文本 [{filename}]\n\n"
+                            f"选中: {len(sel_text)} 字符 / 全文: {len(content)} 字符\n\n"
+                            f"📄 预览:\n{preview}\n\n"
+                            f"👇 请输入修改要求后按 Enter，或点击下方快捷指令。\n"
+                            f"💡 回写时将只替换选中的文本片段。"
+                        )
+                    else:
+                        self.current_text = content
+                        self.context_source = "ide"
+                        self._ide_selection_range = None
+                        self._ide_full_document = content
+                        self.context_meta = {
+                            "file_name": data.get("fileName", "Unknown"),
+                            "language": data.get("languageId", ""),
+                        }
+                        self.text_edit.clear()
+                        self.text_edit.setPlainText(f"✅ 已成功从 IDE 插件读取全文 [{filename}]\n\n文件大小: {len(content)} 字符\n\n请点击下方快捷指令进行分析。")
                     self.tabs.setCurrentIndex(0)
-                    self.btn_read_ide.setText("✅ 已读取全文")
+                    self.btn_read_ide.setText("✅ 已读取")
                     self.btn_read_ide.setStyleSheet(self.btn_read_ide.styleSheet().replace("rgba(77, 166, 255, 180)", "rgba(40, 167, 69, 180)").replace("rgba(77, 166, 255, 255)", "rgba(40, 167, 69, 255)"))
+                    self.instruction_input.setFocus()
                 else:
                     self.text_edit.setPlainText("❌ 从 IDE 读取的文件内容为空")
             else:
@@ -767,10 +1155,17 @@ class AICardWindow(QWidget):
             self.chat_worker.stop()
             self.chat_worker.wait()
 
-        # 合并工作台任务上下文
+        # 合并工作台任务上下文 + 源文本内容
         meta = dict(self.context_meta)
         if self.task_context:
             meta["task"] = self.task_context
+        # 关键修复：将源文本内容传入 context_meta，让 Agent 知道用户在讨论什么
+        if self.current_text:
+            meta["source_text"] = self.current_text
+            meta["source_type"] = self.context_source
+
+        print(f"[ASU] Chat请求 | session={self.session_id[:8]}... | text_len={len(user_text)} | has_source={bool(self.current_text)} | meta_keys={list(meta.keys())}")
+
         self.chat_worker = ChatWorker(self.provider, user_text, self.session_id,
                                       self.context_source, meta)
         self.chat_worker.text_updated.connect(self.on_chat_updated)
@@ -895,6 +1290,8 @@ class AICardWindow(QWidget):
     def dragEnterEvent(self, event):
         if event.mimeData().hasText():
             event.acceptProposedAction()
+        elif event.mimeData().hasUrls():
+            event.acceptProposedAction()
 
     def dropEvent(self, event):
         text = event.mimeData().text()
@@ -910,13 +1307,21 @@ class AICardWindow(QWidget):
                 self.context_source = "drag"
                 self.context_meta = {}
                 self.tabs.setCurrentIndex(0)
-                self.trigger_ai("auto")
+                # 不自动触发，等待用户指定修改方向
+                preview = text[:200] + ("…" if len(text) > 200 else "")
+                self.text_edit.setPlainText(
+                    f"📄 已获取内容（{len(text)} 字符）:\n\n{preview}\n\n"
+                    f"👇 请输入修改要求后按 Enter，或点击下方快捷指令。"
+                )
+                self.instruction_input.setFocus()
 
     def show_card(self, x, y):
         self.current_text = ""
         self.context_source = "drag"
         self.context_meta = {}
         self.session_id = str(uuid.uuid4())
+        self._ide_selection_range = None
+        self._ide_full_document = ""
         # 重置修订模式（每次唤出卡片都是普通模式）
         if self.revision_mode:
             self.revision_mode = False
@@ -925,7 +1330,10 @@ class AICardWindow(QWidget):
             self.btn_revision.setText("📝 全文修订")
         
         self.text_edit.clear()
-        self.text_edit.setPlainText("🎯 请将划选的文本拖拽到此窗口中...")
+        self.text_edit.setPlainText("🎯 请将划选的文本拖拽到此窗口中，或点击「📋 粘贴剪贴板」…")
+        self.instruction_input.clear()
+        self.btn_apply_to_ide.hide()
+        self.btn_copy_result.hide()
         self.tabs.setCurrentIndex(0)
         
         # 重置 IDE 按钮状态
@@ -995,7 +1403,10 @@ class AICardWindow(QWidget):
         target_y = max(screen_rect.top(), min(target_y, screen_rect.bottom() - card_h))
         
         self.move(target_x, target_y)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         self.show()
+        self.raise_()  # macOS: 确保浮窗在所有窗口最前面
+        make_panel_persistent(self)  # 设置 NSPanel 不随失焦隐藏
 
     def _probe_browser(self):
         try:
@@ -1091,8 +1502,31 @@ class AICardWindow(QWidget):
         if not self.current_text:
             return
             
+        # 读取自定义指令（如果有）
+        custom_instruction = self.instruction_input.text().strip()
+        if custom_instruction:
+            action_type = "custom"
+
         self.text_edit.clear()
         self.text_edit.setPlainText("正在思考...\n")
+        
+        # 隐藏回写/复制按钮（等回复完成再显示）
+        self.btn_apply_to_ide.hide()
+        self.btn_copy_result.hide()
+        # 重置回写按钮状态
+        self.btn_apply_to_ide.setEnabled(True)
+        self.btn_apply_to_ide.setText("📝 回写到 IDE")
+        self.btn_apply_to_ide.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(40, 167, 69, 180);
+                color: #fff; border-radius: 8px;
+                padding: 5px 10px; font-size: 11px; font-weight: bold;
+                border: 1px solid rgba(40, 167, 69, 255);
+            }
+            QPushButton:hover {
+                background-color: rgba(40, 167, 69, 255);
+            }
+        """)
         
         if self.worker and self.worker.isRunning():
             self.worker.stop()
@@ -1102,9 +1536,24 @@ class AICardWindow(QWidget):
         meta = dict(self.context_meta)
         if self.task_context:
             meta["task"] = self.task_context
+        # 注入自定义指令
+        if custom_instruction:
+            meta["custom_instruction"] = custom_instruction
+            print(f"[ASU] 自定义指令: {custom_instruction}")
 
-        # 文档修订模式：构建 context_envelope，注入全文上下文用于交叉扫描
+        # 构建 envelope meta（包含所有必要字段，避免 custom_instruction 丢失）
+        envelope_meta = {
+            "file_name": meta.get("file_name", ""),
+            "language": meta.get("language", ""),
+        }
+        if custom_instruction:
+            envelope_meta["custom_instruction"] = custom_instruction
+        if self.task_context:
+            envelope_meta["task"] = self.task_context
+
+        # 文档修订模式或 IDE 选中文本：构建 context_envelope，注入全文上下文
         envelope = None
+        has_ide_selection = hasattr(self, '_ide_selection_range') and self._ide_selection_range
         if action_type == "revision":
             if not self.full_document:
                 # 尝试自动读取 IDE 全文
@@ -1115,22 +1564,37 @@ class AICardWindow(QWidget):
                     "content": self.full_document,       # 全文 → Agent 用于交叉扫描
                     "selection": self.current_text,       # 拖拽文本 → 需要修改的目标
                     "task": self.task_context or "",
-                    "meta": {
-                        "file_name": meta.get("file_name", ""),
-                        "language": meta.get("language", ""),
-                    },
+                    "meta": envelope_meta,
                     "timestamp": time.time(),
                 }
                 self.context_source = "ide"
             else:
                 # 降级：无全文时仅做普通修订分析
                 meta["revision_target"] = self.current_text
+        elif has_ide_selection and hasattr(self, '_ide_full_document') and self._ide_full_document:
+            # IDE 选中文本模式：将全文作为上下文，选中文本作为修改目标
+            envelope = {
+                "source": "ide",
+                "content": self._ide_full_document,      # 全文 → Agent 用于上下文理解
+                "selection": self.current_text,            # 选中文本 → 需要修改的目标
+                "task": self.task_context or "",
+                "meta": envelope_meta,
+                "timestamp": time.time(),
+            }
+            self.context_source = "ide"
+
+        print(f"[ASU] AI请求 | action={action_type} | source={self.context_source} | text_len={len(self.current_text)} | meta_keys={list(meta.keys())}")
 
         self.worker = AIWorker(self.provider, self.current_text, action_type,
                                self.session_id, self.context_source, meta,
                                context_envelope=envelope)
         self.worker.text_updated.connect(self.on_text_updated)
+        self.worker.finished_signal.connect(self._on_ai_finished)
         self.worker.start()
+
+        # 清空指令输入
+        if custom_instruction:
+            self.instruction_input.clear()
 
     def _toggle_revision_mode(self, checked):
         """切换文档修订模式：ON 时自动读取 IDE 全文，失败则提供文件选择（支持 .docx/.pptx）"""
@@ -1230,11 +1694,47 @@ class AICardWindow(QWidget):
         scrollbar = self.text_edit.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 
+    def _on_ai_finished(self):
+        """AI 回复完成后，显示回写/复制按钮。"""
+        # 检查是否有 IDE 插件可用
+        has_ide = bool(self._get_ide_port())
+        if has_ide:
+            # 如果还没有选区范围，尝试自动获取 IDE 选区（用于局部回写）
+            if not (hasattr(self, '_ide_selection_range') and self._ide_selection_range):
+                self._try_get_ide_selection()
+            self.btn_apply_to_ide.show()
+        self.btn_copy_result.show()
+
     def hide_card(self):
         self._pending_hide = False
+        self._user_initiated_hide = True
         self.hide()
         if self.worker and self.worker.isRunning():
             self.worker.stop()
+
+    def hideEvent(self, event):
+        """拦截 macOS 对 Tool 窗口的自动隐藏：只在用户主动隐藏时才允许。"""
+        if self._user_initiated_hide or self._allow_close:
+            self._user_initiated_hide = False
+            super().hideEvent(event)
+        else:
+            # 系统/焦点变化导致的自动隐藏 → 忽略，并重新显示
+            event.ignore()
+            QTimer.singleShot(0, self._force_reshow)
+
+    def _force_reshow(self):
+        """macOS 失焦后重新显示并置顶。"""
+        if not self._user_initiated_hide and not self._allow_close:
+            self.show()
+            self.raise_()
+            make_panel_persistent(self)
+
+    def closeEvent(self, event):
+        if self._allow_close:
+            event.accept()
+            return
+        self.hide_card()
+        event.ignore()
 
 
 # ==========================================
@@ -1256,15 +1756,19 @@ class AgentWorkspace(QWidget):
         self.session_id = str(uuid.uuid4())
         self._temp_chat_pos = 0
         self._pending_hide = False
+        self._allow_close = False
+        self._user_initiated_hide = False  # 区分用户主动隐藏 vs 系统自动隐藏
         self._init_ui()
 
     def _init_ui(self):
+        # 不用 Qt.Tool：macOS 会在父窗口失焦时自动隐藏 Tool 窗口
+        # 用 WA_ShowWithoutActivating 控制首次显示不抢焦点
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.BypassWindowManagerHint
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setAcceptDrops(True)
         self.setMouseTracking(True)
         self._resize_margin = 14
@@ -1355,6 +1859,19 @@ class AgentWorkspace(QWidget):
         self.btn_save_task.clicked.connect(self._save_task)
 
         task_input_layout.addWidget(self.task_input, stretch=1)
+        self.btn_paste_task = QPushButton("📋")
+        self.btn_paste_task.setToolTip("从剪贴板粘贴")
+        self.btn_paste_task.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(120, 80, 220, 180); color: #fff;
+                border-radius: 6px; padding: 6px 8px; font-size: 12px;
+                border: 1px solid rgba(120, 80, 220, 255);
+            }
+            QPushButton:hover { background-color: rgba(120, 80, 220, 255); }
+        """)
+        self.btn_paste_task.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_paste_task.clicked.connect(self._paste_task_from_clipboard)
+        task_input_layout.addWidget(self.btn_paste_task)
         task_input_layout.addWidget(self.btn_save_task)
         layout.addLayout(task_input_layout)
 
@@ -1410,6 +1927,14 @@ class AgentWorkspace(QWidget):
         input_layout.addWidget(self.btn_send)
         layout.addLayout(input_layout)
 
+    def _paste_task_from_clipboard(self):
+        """从剪贴板粘贴到任务输入框。"""
+        clipboard = QApplication.clipboard()
+        text = clipboard.text()
+        if text and text.strip():
+            self.task_input.setText(text.strip())
+            self._save_task()
+
     def _save_task(self):
         task = self.task_input.text().strip()
         self.current_task = task
@@ -1435,8 +1960,13 @@ class AgentWorkspace(QWidget):
             self.chat_worker.stop()
             self.chat_worker.wait()
 
-        # 聊天模式，带当前任务上下文
-        meta = {"task": self.current_task} if self.current_task else {}
+        # 聊天模式，带当前任务上下文 + 任务描述作为 source_text
+        meta = {}
+        if self.current_task:
+            meta["task"] = self.current_task
+            meta["source_text"] = self.current_task  # 让 Agent 知道上下文
+            meta["source_type"] = "workspace_task"
+        print(f"[ASU] Workspace Chat | session={self.session_id[:8]}... | has_task={bool(self.current_task)} | meta_keys={list(meta.keys())}")
         self.chat_worker = ChatWorker(
             self.provider, text, self.session_id,
             context_source="chat", context_meta=meta
@@ -1573,14 +2103,41 @@ class AgentWorkspace(QWidget):
         ty = max(sr.top(), min(ty, sr.bottom() - h))
 
         self.move(tx, ty)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         self.show()
+        self.raise_()  # macOS: 确保浮窗在最前面
+        make_panel_persistent(self)  # 设置 NSPanel 不随失焦隐藏
         self.chat_input.setFocus()
 
     def hide_workspace(self):
         self._pending_hide = False
+        self._user_initiated_hide = True
         self.hide()
         if self.chat_worker and self.chat_worker.isRunning():
             self.chat_worker.stop()
+
+    def hideEvent(self, event):
+        """拦截 macOS 对 Tool 窗口的自动隐藏：只在用户主动隐藏时才允许。"""
+        if self._user_initiated_hide or self._allow_close:
+            self._user_initiated_hide = False
+            super().hideEvent(event)
+        else:
+            event.ignore()
+            QTimer.singleShot(0, self._force_reshow)
+
+    def _force_reshow(self):
+        """macOS 失焦后重新显示并置顶。"""
+        if not self._user_initiated_hide and not self._allow_close:
+            self.show()
+            self.raise_()
+            make_panel_persistent(self)
+
+    def closeEvent(self, event):
+        if self._allow_close:
+            event.accept()
+            return
+        self.hide_workspace()
+        event.ignore()
 
 
 # ==========================================
@@ -1610,7 +2167,8 @@ class CopilotManager:
         # CopilotManager 不持有、不启动、也不终止 Agent 子进程。
         # Agent 作为独立的 OS 级守护进程运行（见 deploy/com.asu.agent.plist）。
         self.provider = ProviderFactory.create_provider()
-        
+        self._is_shutting_down = False
+
         # 三个独立图层：
         # 1. 光标特效图层（全屏、鼠标穿透）
         self.cursor_overlay = CursorOverlay()
@@ -1618,7 +2176,7 @@ class CopilotManager:
         self.ai_card = AICardWindow(self.provider)
         # 3. 任务工作台图层（三击右键，任务定义 + 独立对话）
         self.workspace = AgentWorkspace(self.provider)
-        
+
         # 三击 vs 双击仲裁状态
         self._pending_clicks = 0
         self._pending_click_x = 0
@@ -1630,13 +2188,94 @@ class CopilotManager:
         self.mouse_thread.mouse_moved.connect(self.cursor_overlay.update_cursor_position)
         self.mouse_thread.right_clicked.connect(self._on_right_clicked)
         self.mouse_thread.global_click.connect(self._on_global_click)
+        self.mouse_thread.listener_error.connect(self._on_mouse_listener_error)
+        self.mouse_thread.listener_died.connect(self._restart_mouse_listener)
         self.mouse_thread.start()
-        
+
         # 任务上下文同步：工作台任务 → 快捷卡片
         self.workspace.task_changed.connect(self._sync_task_context)
 
+        self._init_tray()
+
         # 启动时异步探活 Agent，将结果回传给 UI
         self._ping_agent()
+
+    def _init_tray(self):
+        self.tray = None
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            print("[ASU] 当前系统不可用托盘，跳过托盘初始化。")
+            return
+
+        app = QApplication.instance()
+        icon = QIcon()
+        if app and app.windowIcon() and not app.windowIcon().isNull():
+            icon = app.windowIcon()
+        if icon.isNull() and app:
+            icon = app.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon)
+
+        self.tray = QSystemTrayIcon(icon, app)
+        self.tray.setToolTip("ASU Smart Copilot")
+
+        tray_menu = QMenu()
+        action_show_quick = QAction("重新显示快捷卡片", self.tray)
+        action_show_workspace = QAction("显示任务工作台", self.tray)
+        action_hide_all = QAction("隐藏全部窗口", self.tray)
+        action_quit = QAction("退出 Smart Copilot", self.tray)
+
+        action_show_quick.triggered.connect(self._show_quick_card)
+        action_show_workspace.triggered.connect(self._show_workspace)
+        action_hide_all.triggered.connect(self._hide_all_windows)
+        action_quit.triggered.connect(self._quit_application)
+
+        tray_menu.addAction(action_show_quick)
+        tray_menu.addAction(action_show_workspace)
+        tray_menu.addSeparator()
+        tray_menu.addAction(action_hide_all)
+        tray_menu.addSeparator()
+        tray_menu.addAction(action_quit)
+
+        self.tray.setContextMenu(tray_menu)
+        self.tray.activated.connect(self._on_tray_activated)
+        self.tray.show()
+
+    def _on_tray_activated(self, reason):
+        if reason in (
+            QSystemTrayIcon.ActivationReason.Trigger,
+            QSystemTrayIcon.ActivationReason.DoubleClick,
+        ):
+            self._show_quick_card()
+
+    def _show_quick_card(self):
+        pos = QCursor.pos()
+        self.ai_card.show_card(pos.x(), pos.y())
+
+    def _show_workspace(self):
+        pos = QCursor.pos()
+        self.workspace.show_workspace(pos.x(), pos.y())
+
+    def _hide_all_windows(self):
+        self.ai_card.hide_card()
+        self.workspace.hide_workspace()
+
+    def _quit_application(self):
+        if self._is_shutting_down:
+            return
+        self._is_shutting_down = True
+
+        self.cleanup()
+
+        self.ai_card._allow_close = True
+        self.workspace._allow_close = True
+        self.ai_card.close()
+        self.workspace.close()
+        self.cursor_overlay.close()
+
+        if self.tray:
+            self.tray.hide()
+
+        app = QApplication.instance()
+        if app:
+            app.quit()
 
     def _sync_task_context(self, task):
         """工作台设定的任务合并到快捷卡片（不覆盖 IDE/浏览器来源信息）。"""
@@ -1685,10 +2324,47 @@ class CopilotManager:
     def _on_global_click(self, x, y):
         self.cursor_overlay.add_ripple(x, y)
 
+    def _on_mouse_listener_error(self, err: str):
+        print("[ASU] 鼠标监听启动失败：")
+        print(err)
+        QMessageBox.warning(
+            None,
+            "OpenCopilot 权限提示",
+            "无法监听全局鼠标事件。\n\n请在系统设置中授予当前终端「辅助功能（Accessibility）」权限，\n然后完全退出并重新运行：\n\n  bash scripts/start_ui.sh"
+        )
+
+    def _restart_mouse_listener(self):
+        """listener 非正常退出时自动重启（1.5 秒延迟防抖）。"""
+        print("[ASU] 鼠标监听线程异常退出，1.5 秒后自动重启...")
+        QTimer.singleShot(1500, self._do_restart_listener)
+
+    def _do_restart_listener(self):
+        if self._is_shutting_down:
+            return
+        old = self.mouse_thread
+        self.mouse_thread = MouseListenerWorker()
+        self.mouse_thread.mouse_moved.connect(self.cursor_overlay.update_cursor_position)
+        self.mouse_thread.right_clicked.connect(self._on_right_clicked)
+        self.mouse_thread.global_click.connect(self._on_global_click)
+        self.mouse_thread.listener_error.connect(self._on_mouse_listener_error)
+        self.mouse_thread.listener_died.connect(self._restart_mouse_listener)
+        self.mouse_thread.start()
+        if old and old.isRunning():
+            old.wait(2000)
+        print("[ASU] 鼠标监听已重启。")
+
     def cleanup(self):
-        # UI 退出时只终止鼠标监听线程，绝对不干涉 Agent 守护进程的生命周期。
-        # Agent 应由 LaunchAgent 或手动命令独立管理。
-        self.mouse_thread.quit()
+        # UI 退出时只终止监听线程与定时器，绝不干涉 Agent 守护进程生命周期。
+        if self._click_resolve_timer:
+            self._click_resolve_timer.stop()
+
+        if self.mouse_thread and self.mouse_thread.isRunning():
+            self.mouse_thread.stop()
+            self.mouse_thread.wait(1200)
+
+        if hasattr(self, "_health_worker") and self._health_worker.isRunning():
+            self._health_worker.quit()
+            self._health_worker.wait(500)
 
     def _ping_agent(self):
         """异步向 Agent 发送探活请求，完成后通过信号更新 UI 状态。"""
@@ -1707,6 +2383,14 @@ class CopilotManager:
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    
+    # 启动前检测辅助功能权限（macOS）
+    if not check_accessibility_permission():
+        print("❌ 辅助功能权限未授予，Smart Copilot 无法监听鼠标事件。")
+        print("   请在系统设置中授权后重新运行。")
+        print("   托盘图标已就绪，可手动点击托盘唤出卡片。")
+
+    app.setQuitOnLastWindowClosed(False)
     manager = CopilotManager()
     
     print("🚀 ASU Smart Copilot 已启动！")

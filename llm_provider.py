@@ -142,13 +142,17 @@ class ASUCustomAgentClient(BaseProvider):
         if context_envelope:
             payload["context_envelope"] = context_envelope
         try:
-            with httpx.Client(verify=False) as client:
-                with client.stream("POST", self.api_base, json=payload, timeout=30.0) as response:
+            # timeout: connect=5s, read=120s（AI 思考可能较慢），write=10s, pool=5s
+            timeout = httpx.Timeout(connect=5.0, read=120.0, write=10.0, pool=5.0)
+            with httpx.Client(verify=False, timeout=timeout) as client:
+                with client.stream("POST", self.api_base, json=payload) as response:
                     if response.status_code != 200:
                         yield f"\n[Agent Server Error]: HTTP {response.status_code} - {response.text}"
                         return
                     for line in response.iter_lines():
-                        if line.startswith("data: ") and line != "data: [DONE]":
+                        if line == "data: [DONE]":
+                            return  # 流结束，立即退出
+                        if line.startswith("data: "):
                             try:
                                 data = json.loads(line[6:])
                                 chunk = data.get("chunk", "")

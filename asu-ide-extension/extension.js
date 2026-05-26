@@ -55,7 +55,7 @@ function startServer() {
     server = http.createServer((req, res) => {
         // Set CORS headers
         res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
         if (req.method === 'OPTIONS') {
@@ -64,6 +64,7 @@ function startServer() {
             return;
         }
 
+        // GET /context — 读取当前文件全文
         if (req.method === 'GET' && req.url === '/context') {
             // 优先获取当前激活的，如果没有（比如焦点在外部窗口），则使用我们记录的最后一个激活文件
             let document = null;
@@ -90,7 +91,90 @@ function startServer() {
                 languageId: languageId,
                 content: text
             }));
-        } else {
+        }
+        // POST /apply — 将修改内容回写到 IDE 编辑器
+        else if (req.method === 'POST' && req.url === '/apply') {
+            let body = '';
+            req.on('data', chunk => { body += chunk; });
+            req.on('end', () => {
+                try {
+                    const data = JSON.parse(body);
+                    const editor = vscode.window.activeTextEditor;
+                    if (!editor) {
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'No active editor' }));
+                        return;
+                    }
+
+                    const fullText = data.content;
+                    const range = data.range; // 可选: {startLine, startCol, endLine, endCol}
+                    const replaceText = data.replace; // 可选: 替换文本（局部替换时使用）
+
+                    if (replaceText !== undefined && range) {
+                        // 局部替换模式：替换指定范围内的文本
+                        const startLine = Math.max(0, (range.startLine || 0));
+                        const startCol = Math.max(0, (range.startCol || 0));
+                        const endLine = Math.max(0, (range.endLine || 0));
+                        const endCol = Math.max(0, (range.endCol || 0));
+
+                        const startPos = new vscode.Position(startLine, startCol);
+                        const endPos = new vscode.Position(endLine, endCol);
+                        const editRange = new vscode.Range(startPos, endPos);
+
+                        editor.edit(editBuilder => {
+                            editBuilder.replace(editRange, replaceText);
+                        }).then(success => {
+                            res.writeHead(200, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ success: success, mode: 'partial' }));
+                        });
+                    } else if (fullText !== undefined) {
+                        // 全文替换模式：替换整个文件内容
+                        const doc = editor.document;
+                        const fullRange = new vscode.Range(
+                            doc.lineAt(0).range.start,
+                            doc.lineAt(doc.lineCount - 1).range.end
+                        );
+
+                        editor.edit(editBuilder => {
+                            editBuilder.replace(fullRange, fullText);
+                        }).then(success => {
+                            res.writeHead(200, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ success: success, mode: 'full' }));
+                        });
+                    } else {
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ error: 'Missing content or replace field' }));
+                    }
+                } catch (e) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Invalid JSON: ' + e.message }));
+                }
+            });
+        }
+        // POST /selection — 读取当前选中文本
+        else if (req.method === 'GET' && req.url === '/selection') {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor || editor.selection.isEmpty) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ text: '', range: null }));
+                return;
+            }
+            const sel = editor.selection;
+            const text = editor.document.getText(sel);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                text: text,
+                range: {
+                    startLine: sel.start.line,
+                    startCol: sel.start.character,
+                    endLine: sel.end.line,
+                    endCol: sel.end.character
+                },
+                fileName: editor.document.fileName,
+                languageId: editor.document.languageId
+            }));
+        }
+        else {
             res.writeHead(404, { 'Content-Type': 'text/plain' });
             res.end('Not Found');
         }

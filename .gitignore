@@ -55,6 +55,9 @@ config.json
 # ASU Broker Token
 .asu_broker_token
 
+# CodeBuddy working memory and settings
+.codebuddy/
+
 # Test artifacts
 test_docs/_*
 test_docs/*_result*

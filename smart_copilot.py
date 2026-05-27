@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
     QLabel, QFrame, QGraphicsDropShadowEffect, QPushButton, QDialog,
     QRadioButton, QLineEdit, QMessageBox, QTabWidget, QComboBox,
-    QFileDialog, QSystemTrayIcon, QMenu, QStyle
+    QFileDialog, QSystemTrayIcon, QMenu, QStyle, QGroupBox
 )
 import httpx
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QTimer
@@ -23,6 +23,17 @@ from cursor_effects import Ripple, CursorOverlay
 from llm_provider import ProviderFactory, load_config, save_config
 from markdown_renderer import render as md_render
 from system_probe_client import SystemProbeClient
+
+# 新增：导入办公场景UI组件
+from core.theme_manager import ThemeManager
+from core.shortcut_manager import ShortcutManager
+from widgets.file_drop_zone import FileDropZone
+from widgets.progress_widget import ProgressWidget, MultiStepProgressWidget
+from widgets.context_menu import TextContextMenu, FileContextMenu, CodeContextMenu
+from widgets.settings_dialog import SettingsDialog as NewSettingsDialog
+from widgets.batch_dialog import BatchDialog
+from widgets.terminology_dialog import TerminologyDialog
+from widgets.translation_memory import TranslationMemory
 
 
 def check_accessibility_permission():
@@ -506,9 +517,18 @@ class AICardWindow(QWidget):
         self._ide_full_document = ""  # IDE 全文缓存（用于上下文和定位）
         self._agent_online = True  # 默认乐观假设在线，探活结果回来后更新
         self._allow_close = False
+        self._is_dragging = False  # 是否正在拖拽
         # 文档修订模式
         self.revision_mode = False
         self.full_document = ""  # 修订模式下的全文档缓存
+        
+        # 初始化新组件
+        self.theme_manager = ThemeManager()
+        self.shortcut_manager = ShortcutManager()
+        self.translation_memory = TranslationMemory()
+        self.progress_widget = ProgressWidget()
+        self.multi_step_progress = MultiStepProgressWidget()
+        
         self.initUI()
 
     def initUI(self):
@@ -530,7 +550,8 @@ class AICardWindow(QWidget):
         self._resize_start_geo = None
         self._resize_start_pos = None
 
-        self.resize(400, 300)
+        self.resize(680, 520)
+        self._drag_pos = None  # 拖动起始位置
         self.frame = QFrame(self)
         self.frame.setStyleSheet("""
             QFrame {
@@ -539,7 +560,7 @@ class AICardWindow(QWidget):
                 border: 1px solid rgba(100, 100, 100, 100);
             }
         """)
-        self.frame.resize(380, 280)
+        self.frame.resize(660, 500)
         self.frame.move(10, 10)
         
         shadow = QGraphicsDropShadowEffect()
@@ -552,8 +573,9 @@ class AICardWindow(QWidget):
         layout.setContentsMargins(15, 15, 15, 15)
 
         title_layout = QHBoxLayout()
-        self.title_label = QLabel("✨ Smart Copilot", self)
+        self.title_label = QLabel("✨ Smart Copilot  (可拖动)", self)
         self.title_label.setStyleSheet("color: #4da6ff; font-weight: bold; font-size: 14px; background: transparent; border: none;")
+        self.title_label.setCursor(Qt.CursorShape.OpenHandCursor)
 
         # Agent 在线状态指示灯（绿色=在线，红色=离线）
         self.agent_status_dot = QLabel("●", self)
@@ -724,8 +746,12 @@ class AICardWindow(QWidget):
         self.btn_polish = QPushButton("✍️ 润色")
         self.btn_revision = QPushButton("📝 全文修订")
         self.btn_revision.setCheckable(True)
+        self.btn_batch = QPushButton("📦 批量处理")
+        self.btn_batch.setStyleSheet(button_style)
+        self.btn_batch.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_batch.clicked.connect(self.open_batch_dialog)
         
-        for btn in [self.btn_auto, self.btn_trans, self.btn_code, self.btn_polish, self.btn_revision]:
+        for btn in [self.btn_auto, self.btn_trans, self.btn_code, self.btn_polish, self.btn_revision, self.btn_batch]:
             btn.setStyleSheet(button_style)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             self.btn_layout.addWidget(btn)
@@ -739,6 +765,18 @@ class AICardWindow(QWidget):
         self.btn_code.clicked.connect(lambda: self.trigger_ai("code"))
         self.btn_polish.clicked.connect(lambda: self.trigger_ai("polish"))
         self.btn_revision.clicked.connect(self._toggle_revision_mode)
+        
+        # 文件拖拽区
+        self.file_drop_zone = FileDropZone()
+        self.file_drop_zone.file_dropped.connect(self._on_file_dropped)
+        self.file_drop_zone.setMaximumHeight(80)
+        quick_layout.addWidget(self.file_drop_zone)
+        
+        # 进度条（默认隐藏）
+        self.progress_widget.hide()
+        self.multi_step_progress.hide()
+        quick_layout.addWidget(self.progress_widget)
+        quick_layout.addWidget(self.multi_step_progress)
 
         # 自定义指令输入栏（让用户填写修改要求）
         self.instruction_layout = QHBoxLayout()
@@ -794,6 +832,8 @@ class AICardWindow(QWidget):
                 border-radius: 3px;
             }
         """)
+        self.text_edit.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.text_edit.customContextMenuRequested.connect(self._show_text_context_menu)
         quick_layout.addWidget(self.text_edit)
 
         # 追问按钮
@@ -1200,6 +1240,81 @@ class AICardWindow(QWidget):
     def on_chat_finished(self):
         pass
 
+    # ---- 新增UI组件处理方法 ----
+
+    def open_batch_dialog(self):
+        """打开批量处理对话框"""
+        dialog = BatchDialog(self)
+        dialog.exec()
+
+    def _on_file_dropped(self, file_path, file_info):
+        """处理文件拖入（信号发两个参数: file_path, file_info）"""
+        import os
+        file_name = os.path.basename(file_path)
+        file_ext = os.path.splitext(file_name)[1].lower()
+        
+        print(f"[ASU] 文件拖入: {file_path}, info={file_info}")
+        # 直接交给 _handle_file_drop 处理
+        self._handle_file_drop(file_path)
+
+    def _show_text_context_menu(self, position):
+        """显示文本右键菜单"""
+        selected_text = self.text_edit.textCursor().selectedText()
+        menu = TextContextMenu(self)
+        menu.selected_text = selected_text
+
+        # 添加自定义菜单项
+        menu.addSeparator()
+        action_terminology = menu.addAction("📚 术语库管理")
+        action_memory = menu.addAction("💾 翻译记忆")
+
+        action = menu.exec(self.text_edit.mapToGlobal(position))
+
+        if action:
+            if action == action_terminology:
+                self._open_terminology_dialog()
+            elif action == action_memory:
+                self._open_translation_memory_dialog()
+            else:
+                # 处理标准菜单项
+                action_id = action.data()
+                if action_id == "translate":
+                    self.trigger_ai("translate")
+                elif action_id == "polish":
+                    self.trigger_ai("polish")
+                elif action_id == "copy":
+                    QApplication.clipboard().setText(selected_text)
+
+    def _open_terminology_dialog(self):
+        """打开术语库管理对话框"""
+        dialog = TerminologyDialog(self)
+        dialog.exec()
+
+    def _open_translation_memory_dialog(self):
+        """打开翻译记忆对话框"""
+        count = len(self.translation_memory.units) if hasattr(self.translation_memory, 'units') else 0
+        QMessageBox.information(self, "翻译记忆", f"翻译记忆中共有 {count} 条记录")
+
+    def _apply_settings(self, settings):
+        """应用新设置"""
+        if 'theme' in settings:
+            self._apply_theme(settings['theme'])
+        print(f"[ASU] 设置已更新: {settings}")
+
+    def _apply_theme(self, theme_name):
+        """应用主题到UI"""
+        theme = self.theme_manager.get_theme_config(theme_name)
+        if theme:
+            # Theme 是 dataclass 对象，直接访问属性
+            bg_color = theme.background if hasattr(theme, 'background') else 'rgba(30, 30, 35, 240)'
+            self.frame.setStyleSheet(f"""
+                QFrame {{
+                    background-color: {bg_color};
+                    border-radius: 12px;
+                    border: 1px solid rgba(100, 100, 100, 100);
+                }}
+            """)
+
     def open_settings(self):
         dialog = SettingsDialog(self)
         dialog.config_updated.connect(self.reload_provider)
@@ -1246,6 +1361,7 @@ class AICardWindow(QWidget):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
+            # 检查是否在边缘（缩放）
             edge = self._get_resize_edge(event.pos())
             if edge:
                 self._resizing = True
@@ -1254,15 +1370,28 @@ class AICardWindow(QWidget):
                 self._resize_start_pos = event.globalPosition().toPoint()
                 QApplication.setOverrideCursor(self._EDGE_CURSORS[edge])
                 return
+            
+            # 检查是否在标题栏区域（拖动）
+            # 标题栏大约在顶部40像素内
+            if event.pos().y() < 40:
+                self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+                event.accept()
+                return
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
+        # 处理窗口拖动
+        if self._drag_pos is not None:
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
+            event.accept()
+            return
+        
         if self._resizing:
             delta = event.globalPosition().toPoint() - self._resize_start_pos
             g = self._resize_start_geo
             e = self._resize_edge
             x, y, w, h = g.x(), g.y(), g.width(), g.height()
-            min_w, min_h = 300, 200
+            min_w, min_h = 400, 300
 
             if 'r' in e: w = max(min_w, g.width() + delta.x())
             if 'l' in e: x = g.x() + delta.x(); w = max(min_w, g.width() - delta.x())
@@ -1275,6 +1404,8 @@ class AICardWindow(QWidget):
         edge = self._get_resize_edge(event.pos())
         if edge:
             self.setCursor(self._EDGE_CURSORS.get(edge, Qt.CursorShape.ArrowCursor))
+        elif event.pos().y() < 40:
+            self.setCursor(Qt.CursorShape.OpenHandCursor)
         else:
             self.setCursor(Qt.CursorShape.ArrowCursor)
         super().mouseMoveEvent(event)
@@ -1284,16 +1415,44 @@ class AICardWindow(QWidget):
             QApplication.restoreOverrideCursor()
             self._resizing = False
             self._resize_edge = None
+        if self._drag_pos is not None:
+            self._drag_pos = None
         super().mouseReleaseEvent(event)
     # ---- 缩放支持结束 ----
 
     def dragEnterEvent(self, event):
+        # 拖拽进入时，标记正在拖拽
+        self._is_dragging = True
+        self._allow_close = False
         if event.mimeData().hasText():
             event.acceptProposedAction()
         elif event.mimeData().hasUrls():
             event.acceptProposedAction()
 
+    def dragMoveEvent(self, event):
+        # 拖拽移动时，保持接受状态
+        event.acceptProposedAction()
+
+    def dragLeaveEvent(self, event):
+        # 拖拽离开时，清除拖拽标记
+        self._is_dragging = False
+
     def dropEvent(self, event):
+        # 拖拽放下时，清除拖拽标记
+        self._is_dragging = False
+        self._allow_close = False
+        
+        # 优先处理文件拖入
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if urls:
+                file_path = urls[0].toLocalFile()
+                if file_path:
+                    self._handle_file_drop(file_path)
+                    event.acceptProposedAction()
+                    return
+        
+        # 处理文本拖入
         text = event.mimeData().text()
         if text:
             self.current_text = text
@@ -1314,6 +1473,84 @@ class AICardWindow(QWidget):
                     f"👇 请输入修改要求后按 Enter，或点击下方快捷指令。"
                 )
                 self.instruction_input.setFocus()
+
+    def _handle_file_drop(self, file_path):
+        """处理文件拖入"""
+        import os
+        file_name = os.path.basename(file_path)
+        file_ext = os.path.splitext(file_name)[1].lower()
+        
+        print(f"[ASU] 文件拖入: {file_path}")
+        
+        # 显示进度条
+        self.progress_widget.show()
+        self.progress_widget.start(100)
+        self.progress_widget.update(10, f"正在读取: {file_name}")
+        
+        try:
+            # 读取文件内容
+            content = None
+            if file_ext in ['.txt', '.md', '.py', '.js', '.ts', '.json', '.xml', '.html', '.css', '.yaml', '.yml']:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+            elif file_ext == '.docx':
+                try:
+                    import docx
+                    doc = docx.Document(file_path)
+                    content = '\n'.join([p.text for p in doc.paragraphs])
+                except ImportError:
+                    self.text_edit.setPlainText("❌ 需要安装 python-docx 库才能读取 .docx 文件\n\npip install python-docx")
+                    self.progress_widget.hide()
+                    return
+            elif file_ext == '.pptx':
+                try:
+                    from pptx import Presentation
+                    prs = Presentation(file_path)
+                    content = []
+                    for slide in prs.slides:
+                        for shape in slide.shapes:
+                            if hasattr(shape, "text"):
+                                content.append(shape.text)
+                    content = '\n'.join(content)
+                except ImportError:
+                    self.text_edit.setPlainText("❌ 需要安装 python-pptx 库才能读取 .pptx 文件\n\npip install python-pptx")
+                    self.progress_widget.hide()
+                    return
+            else:
+                self.text_edit.setPlainText(f"❌ 不支持的文件格式: {file_ext}\n\n支持的格式: .txt, .md, .py, .js, .ts, .json, .xml, .html, .css, .yaml, .yml, .docx, .pptx")
+                self.progress_widget.hide()
+                return
+            
+            if content:
+                self.current_text = content
+                self.context_source = "file"
+                self.context_meta = {
+                    "file_name": file_name,
+                    "file_path": file_path,
+                    "file_ext": file_ext,
+                }
+                self.tabs.setCurrentIndex(0)
+                
+                # 显示文件内容预览
+                preview = content[:300] + ("…" if len(content) > 300 else "")
+                self.text_edit.setPlainText(
+                    f"📄 已读取文件: {file_name}\n"
+                    f"📊 内容长度: {len(content)} 字符\n\n"
+                    f"---\n{preview}\n---\n\n"
+                    f"👇 请输入修改要求后按 Enter，或点击下方快捷指令。"
+                )
+                self.instruction_input.setFocus()
+                self.progress_widget.update(100, "文件读取完成!")
+                QTimer.singleShot(1000, self.progress_widget.hide)
+            else:
+                self.text_edit.setPlainText(f"❌ 文件内容为空: {file_name}")
+                self.progress_widget.hide()
+                
+        except Exception as e:
+            self.text_edit.setPlainText(f"❌ 读取文件失败: {str(e)}")
+            self.progress_widget.hide()
+            import traceback
+            traceback.print_exc()
 
     def show_card(self, x, y):
         self.current_text = ""
@@ -1714,6 +1951,11 @@ class AICardWindow(QWidget):
 
     def hideEvent(self, event):
         """拦截 macOS 对 Tool 窗口的自动隐藏：只在用户主动隐藏时才允许。"""
+        # 正在拖拽时，不允许隐藏
+        if self._is_dragging:
+            event.ignore()
+            return
+        
         if self._user_initiated_hide or self._allow_close:
             self._user_initiated_hide = False
             super().hideEvent(event)
@@ -2000,10 +2242,178 @@ class AgentWorkspace(QWidget):
         scrollbar.setValue(scrollbar.maximum())
 
     def _open_settings(self):
-        from PyQt6.QtWidgets import QDialog as QDlg
-        dialog = SettingsDialog(self)
-        dialog.config_updated.connect(self._reload_provider)
+        """打开统一设置对话框"""
+        # 创建主设置对话框
+        main_dialog = QDialog(self)
+        main_dialog.setWindowTitle("⚙️ 设置")
+        main_dialog.setMinimumSize(600, 500)
+        
+        layout = QVBoxLayout(main_dialog)
+        
+        # 创建标签页
+        tabs = QTabWidget()
+        
+        # 标签1: 引擎设置（旧的LLM配置）
+        engine_tab = QWidget()
+        engine_layout = QVBoxLayout(engine_tab)
+        engine_settings = SettingsDialog(main_dialog)  # 旧的SettingsDialog
+        engine_layout.addWidget(engine_settings)
+        tabs.addTab(engine_tab, "🔧 引擎设置")
+        
+        # 标签2: 个性化设置（新的设置）
+        personal_tab = QWidget()
+        personal_layout = QVBoxLayout(personal_tab)
+        personal_settings = NewSettingsDialog(main_dialog)  # 新的SettingsDialog
+        personal_layout.addWidget(personal_settings)
+        tabs.addTab(personal_tab, "🎨 个性化")
+        
+        # 标签3: 主题设置
+        theme_tab = self._create_theme_tab(main_dialog)
+        tabs.addTab(theme_tab, "🌈 主题")
+        
+        # 标签4: 快捷键设置
+        shortcut_tab = self._create_shortcut_tab(main_dialog)
+        tabs.addTab(shortcut_tab, "⌨️ 快捷键")
+        
+        layout.addWidget(tabs)
+        
+        # 关闭按钮
+        btn_close = QPushButton("关闭")
+        btn_close.clicked.connect(main_dialog.close)
+        layout.addWidget(btn_close)
+        
+        main_dialog.exec()
+    
+    def _create_theme_tab(self, parent):
+        """创建主题设置标签页"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        
+        # 主题选择
+        theme_group = QGroupBox("选择主题")
+        theme_layout = QVBoxLayout()
+        
+        current_theme = self.theme_manager.current_theme
+        themes = self.theme_manager.get_themes()  # 使用正确的方法名
+        
+        for theme_id, theme_info in themes.items():
+            radio = QRadioButton(theme_info.name)
+            radio.setChecked(theme_id == current_theme)
+            radio.toggled.connect(lambda checked, t=theme_id: self._apply_theme(t) if checked else None)
+            theme_layout.addWidget(radio)
+        
+        theme_group.setLayout(theme_layout)
+        layout.addWidget(theme_group)
+        
+        # 主题预览
+        preview_label = QLabel("主题预览区域")
+        preview_label.setMinimumHeight(100)
+        preview_label.setStyleSheet("background-color: #2b2b2b; color: #fff; padding: 10px;")
+        layout.addWidget(preview_label)
+        
+        layout.addStretch()
+        return tab
+    
+    def _create_shortcut_tab(self, parent):
+        """创建快捷键设置标签页"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        
+        # 快捷键列表
+        shortcut_group = QGroupBox("快捷键配置")
+        shortcut_layout = QVBoxLayout()
+        
+        shortcuts = self.shortcut_manager.get_shortcuts()  # 使用正确的方法名
+        for key, info in shortcuts.items():
+            row = QHBoxLayout()
+            row.addWidget(QLabel(info.name))
+            row.addWidget(QLabel(info.key))
+            row.addStretch()
+            shortcut_layout.addLayout(row)
+        
+        shortcut_group.setLayout(shortcut_layout)
+        layout.addWidget(shortcut_group)
+        
+        layout.addStretch()
+        return tab
+    
+    def _apply_settings(self, settings):
+        """应用新设置"""
+        # 应用主题
+        if 'theme' in settings:
+            self.theme_manager.switch_theme(settings['theme'])
+            self._apply_theme(settings['theme'])
+        
+        # 应用其他设置
+        print(f"[ASU] 设置已更新: {settings}")
+    
+    def _apply_theme(self, theme_name):
+        """应用主题到UI"""
+        config = self.theme_manager.get_theme_config(theme_name)
+        if config:
+            self.frame.setStyleSheet(f"""
+                QFrame {{
+                    background-color: {config.get('background', 'rgba(30, 30, 35, 240)')};
+                    border-radius: 12px;
+                    border: 1px solid rgba(100, 100, 100, 100);
+                }}
+            """)
+    
+    def open_batch_dialog(self):
+        """打开批量处理对话框"""
+        dialog = BatchDialog(self)
         dialog.exec()
+    
+    def _on_file_dropped(self, file_path, file_info):
+        """处理文件拖入（信号发两个参数: file_path, file_info）"""
+        print(f"[ASU] 文件拖入: {file_path}, info={file_info}")
+        self._handle_file_drop(file_path)
+    
+    def _show_text_context_menu(self, position):
+        """显示文本右键菜单"""
+        selected_text = self.text_edit.textCursor().selectedText()
+        menu = TextContextMenu(selected_text)
+        
+        # 添加自定义菜单项
+        menu.addSeparator()
+        action_terminology = menu.addAction("📚 术语库管理")
+        action_memory = menu.addAction("💾 翻译记忆")
+        
+        action = menu.exec(self.text_edit.mapToGlobal(position))
+        
+        if action:
+            if action == action_terminology:
+                self._open_terminology_dialog()
+            elif action == action_memory:
+                self._open_translation_memory_dialog()
+            else:
+                # 处理标准菜单项
+                self._handle_context_action(action.text(), selected_text)
+    
+    def _handle_context_action(self, action_text, selected_text):
+        """处理右键菜单动作"""
+        if not selected_text:
+            return
+        
+        if "翻译" in action_text:
+            self.trigger_ai("translate")
+        elif "润色" in action_text:
+            self.trigger_ai("polish")
+        elif "代码解析" in action_text:
+            self.trigger_ai("code")
+        elif "复制" in action_text:
+            QApplication.clipboard().setText(selected_text)
+    
+    def _open_terminology_dialog(self):
+        """打开术语库管理对话框"""
+        dialog = TerminologyDialog(self)
+        dialog.exec()
+    
+    def _open_translation_memory_dialog(self):
+        """打开翻译记忆对话框"""
+        # 显示翻译记忆统计
+        count = len(self.translation_memory.units)
+        QMessageBox.information(self, "翻译记忆", f"翻译记忆中共有 {count} 条记录")
 
     def _reload_provider(self):
         self.provider = ProviderFactory.create_provider()

@@ -1,7 +1,8 @@
 # OpenCopilot 下一代架构演进路线图 (Next-Gen Roadmap)
 
-> **文档状态**: V1.1 (已更新)
-> **评估时间**: 2026-05-24（2026-05-26 更新状态）
+> **文档状态**: V2.0 (已更新)
+> **评估时间**: 2026-05-24（2026-05-28 更新状态）
+> **状态**: UI组件阶段1-4已完成
 > **愿景**: 从"被动式跨端工具"演进为"具备持久心智与多模态主动感知的 OS 级智能体"
 
 ---
@@ -43,7 +44,7 @@
     *   在 Broker 端利用 PyObjC 挂载 `NSWorkspaceDidActivateApplicationNotification`（`events_probe.py` 已预留框架）。
     *   通过 WebSocket 长连接将应用切换事件主动推送给 UI。
     *   UI 收到事件后，智能切换界面（如：切到浏览器显示网页分析按钮，切到 IDE 切换为代码分析 Persona）。
-*   **当前状态**：Broker REST API 已产品化（LaunchAgent 常驻 + capabilities + 统一错误），WebSocket 待实现。
+*   **当前状态**：Broker REST API 已产品化（LaunchAgent 常驻 + capabilities + 统一错误），WebSocket 待实现。UI组件阶段1-4已完成。
 
 ### P1.2 底层高亮选区提取 (AXAPI 落地)
 *   **痛点**：当前划词提取严重依赖用户的物理拖拽，若尝试代码模拟 `Cmd+C` 会导致 IDE 光标丢失。

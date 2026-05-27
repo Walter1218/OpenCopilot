@@ -390,8 +390,9 @@ class QualityEvaluator:
         results.append(self.evaluate_grammar(content))
         results.append(self.evaluate_tone(content, scene))
         
-        # 计算总分
+        # 计算总分（加权平均，确保在1-5分范围内）
         total_score = 0.0
+        total_weight = 0.0
         for result in results:
             # 根据场景调整权重
             weight = result.weight
@@ -400,6 +401,13 @@ class QualityEvaluator:
                     weight = self.scene_weights[scene][result.dimension]
             
             total_score += result.score * weight
+            total_weight += weight
+        
+        # 计算加权平均分（确保在1-5分范围内）
+        if total_weight > 0:
+            total_score = total_score / total_weight
+        else:
+            total_score = 0.0
         
         # 生成总结
         summary = self._generate_summary(results, total_score)

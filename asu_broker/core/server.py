@@ -7,18 +7,21 @@ import asyncio
 import time
 import signal
 
-# 确保能导入同级模块
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import sys
+import os
 
-from .auth import verify_token
-from ..probes.browser_probe import get_browser_tabs, get_active_tab_dom
-from ..probes.window_probe import get_frontmost_app
-from ..probes.selection_probe import get_clipboard_content, set_clipboard_content, get_selected_text
-from ..probes.app_control_probe import get_notes_content, create_note
-from ..probes.screen_probe import capture_front_window
-from ..probes.fs_probe import read_file_as_context
-from ..probes.office_probe import read_office_file
-from ..probes.events_probe import start_events_probe
+# 将 asu_broker 的父目录添加到 sys.path 中，以便允许绝对导入 asu_broker.probes 等模块
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
+from asu_broker.core.auth import verify_token
+from asu_broker.probes.browser_probe import get_browser_tabs, get_active_tab_dom
+from asu_broker.probes.window_probe import get_frontmost_app
+from asu_broker.probes.selection_probe import get_clipboard_content, set_clipboard_content, get_selected_text
+from asu_broker.probes.app_control_probe import get_notes_content, create_note
+from asu_broker.probes.screen_probe import capture_front_window
+from asu_broker.probes.fs_probe import read_file_as_context
+from asu_broker.probes.office_probe import read_office_file
+from asu_broker.probes.events_probe import start_events_probe
 
 # ============================================================
 # 默认超时配置（秒）

@@ -253,6 +253,18 @@ def build_context_prefix(context_source, context_meta):
         elif context_source == "browser" and app_name:
             parts.append(f"浏览器：{app_name}")
 
+        # 全局系统焦点和最近使用历史（如果存在）
+        current_app = context_meta.get("current_active_app")
+        recent_apps = context_meta.get("recent_apps", [])
+        if current_app or recent_apps:
+            sys_state = "【全局系统状态】\n"
+            if current_app:
+                sys_state += f"- 当前用户正在使用的前台软件是: {current_app}\n"
+            if recent_apps:
+                sys_state += f"- 用户最近切换过的软件历史: {', '.join(recent_apps)}\n"
+            sys_state += "(如果用户询问当前在使用什么软件或开启了哪些程序，请参考上述信息回答)"
+            parts.append(sys_state)
+
         # 任务上下文：工作台设定的任务注入到所有请求中
         if task:
             parts.append(f"用户当前任务：{task}。请围绕此任务目标进行回答，将分析结果与任务关联。")

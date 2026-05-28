@@ -568,6 +568,7 @@ class AICardWindow(QWidget):
         
         self.current_active_app = ""
         self.current_bundle_id = ""
+        self.recent_apps = []  # 记录最近激活的应用历史
         self.broker_events_worker = BrokerEventsWorker()
         self.broker_events_worker.app_activated.connect(self._on_app_activated)
         self.broker_events_worker.start()
@@ -577,8 +578,16 @@ class AICardWindow(QWidget):
     def _on_app_activated(self, app_name, bundle_id):
         self.current_active_app = app_name
         self.current_bundle_id = bundle_id
+        
+        # 维护最近打开的应用列表（去重，保持最新在最后）
+        if app_name in self.recent_apps:
+            self.recent_apps.remove(app_name)
+        self.recent_apps.append(app_name)
+        # 仅保留最近 10 个
+        self.recent_apps = self.recent_apps[-10:]
+        
         # 为了调试方便，在 UI 终端打印出系统焦点切换事件
-        print(f"[UI 接收] 系统焦点已切换至: {app_name} ({bundle_id})")
+        print(f"[UI 接收] 系统焦点已切换至: {app_name} ({bundle_id}) | 最近使用: {self.recent_apps}")
 
     def initUI(self):
         # 无边框、置顶
@@ -1077,8 +1086,13 @@ class AICardWindow(QWidget):
             return
 
         if not self.current_text:
-            self.text_edit.setPlainText("⚠️ 请先拖拽或粘贴文本内容，再输入修改要求。")
+            # 修改点：如果用户没有提供任何文本上下文，直接将其作为自由对话处理
+            self.instruction_input.clear()
+            self.tabs.setCurrentIndex(1)  # 自动切换到对话 Tab
+            self.chat_input.setText(instruction)
+            self.send_chat_message()
             return
+            
         # trigger_ai 会自动读取 instruction_input 中的内容
         self.trigger_ai("custom")
 
@@ -1397,10 +1411,14 @@ class AICardWindow(QWidget):
         meta = dict(self.context_meta)
         if self.task_context:
             meta["task"] = self.task_context
-        # 关键修复：将源文本内容传入 context_meta，让 Agent 知道用户在讨论什么
+        # 将源文本内容传入 context_meta，让 Agent 知道用户在讨论什么
         if self.current_text:
             meta["source_text"] = self.current_text
             meta["source_type"] = self.context_source
+
+        # 核心修复：把底层的系统状态（当前焦点、最近打开的应用等）注入到对话的上下文元数据中
+        meta["current_active_app"] = self.current_active_app
+        meta["recent_apps"] = self.recent_apps
 
         print(f"[ASU] Chat请求 | session={self.session_id[:8]}... | text_len={len(user_text)} | has_source={bool(self.current_text)} | meta_keys={list(meta.keys())}")
 
@@ -1755,9 +1773,9 @@ class AICardWindow(QWidget):
             import traceback
             traceback.print_exc()
 
-    def show_card(self, x, y):
-        self.current_text = ""
-        self.context_source = "drag"
+    def show_card(self, x, y, selected_text=""):
+        self.current_text = selected_text
+        self.context_source = "drag" if selected_text else ""
         self.context_meta = {}
         self.session_id = str(uuid.uuid4())
         self._ide_selection_range = None
@@ -1770,11 +1788,17 @@ class AICardWindow(QWidget):
             self.btn_revision.setText("📝 全文修订")
         
         self.text_edit.clear()
-        self.text_edit.setPlainText("🎯 请将划选的文本拖拽到此窗口中，或点击「📋 粘贴剪贴板」…")
+        if selected_text:
+            self.text_edit.setPlainText(f"📌 已自动提取系统选区内容：\n\n{selected_text}")
+            self.tabs.setCurrentIndex(0)
+        else:
+            self.text_edit.setPlainText("✨ Smart Copilot 已就绪。\n\n你可以拖拽/粘贴文本到这里进行快捷处理，\n或者直接在下方输入文字与智能体对话。")
+            # 默认切换到连续对话模式，方便直接开聊
+            self.tabs.setCurrentIndex(1)
+            
         self.instruction_input.clear()
         self.btn_apply_to_ide.hide()
         self.btn_copy_result.hide()
-        self.tabs.setCurrentIndex(0)
         
         # 重置 IDE 按钮状态
         self.btn_read_ide.setText("📥 极速读取当前 IDE 全文")
@@ -2195,9 +2219,10 @@ class AgentWorkspace(QWidget):
     """
     task_changed = pyqtSignal(str)  # 任务变更时通知 CopilotManager
 
-    def __init__(self, provider):
+    def __init__(self, provider, parent_manager=None):
         super().__init__()
         self.provider = provider
+        self.parent_manager = parent_manager
         self.chat_worker = None
         self.current_task = ""
         self.session_id = str(uuid.uuid4())
@@ -2413,6 +2438,12 @@ class AgentWorkspace(QWidget):
             meta["task"] = self.current_task
             meta["source_text"] = self.current_task  # 让 Agent 知道上下文
             meta["source_type"] = "workspace_task"
+            
+        # 核心修复：工作台也需要注入系统级别的全局状态感知（焦点应用、历史应用）
+        if self.parent_manager and hasattr(self.parent_manager, 'ai_card'):
+            meta["current_active_app"] = self.parent_manager.ai_card.current_active_app
+            meta["recent_apps"] = getattr(self.parent_manager.ai_card, 'recent_apps', [])
+            
         print(f"[ASU] Workspace Chat | session={self.session_id[:8]}... | has_task={bool(self.current_task)} | meta_keys={list(meta.keys())}")
         self.chat_worker = ChatWorker(
             self.provider, text, self.session_id,
@@ -2790,7 +2821,7 @@ class CopilotManager:
         # 2. 智能卡片图层（双击右键，快捷交互）
         self.ai_card = AICardWindow(self.provider)
         # 3. 任务工作台图层（三击右键，任务定义 + 独立对话）
-        self.workspace = AgentWorkspace(self.provider)
+        self.workspace = AgentWorkspace(self.provider, parent_manager=self)
 
         # 三击 vs 双击仲裁状态
         self._pending_clicks = 0
@@ -2932,13 +2963,11 @@ class CopilotManager:
         pos = QCursor.pos()
         # 呼出卡片前尝试通过 Broker 无感读取高亮文本
         probe = SystemProbeClient()
+        selected = ""
         if probe.is_broker_alive():
-            selected = probe.get_selection()
-            if selected:
-                self.ai_card.current_text = selected
-                self.ai_card.context_source = "drag"
-                self.ai_card.text_edit.setPlainText(f"📌 已提取系统选区内容：\n\n{selected}")
-        self.ai_card.show_card(pos.x(), pos.y())
+            selected = probe.get_selection() or ""
+        
+        self.ai_card.show_card(pos.x(), pos.y(), selected_text=selected)
 
     def _on_triple_right_click(self, x, y):
         pos = QCursor.pos()

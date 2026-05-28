@@ -13,26 +13,31 @@ except ImportError:
 _async_queue: Optional[asyncio.Queue] = None
 
 async def _poll_active_app():
-    """轮询获取当前活跃应用，避免与 Uvicorn/asyncio 事件循环冲突"""
+    """轮询获取当前活跃应用"""
     if not HAS_PYOBJC:
         return
         
     last_bundle_id = None
-    workspace = NSWorkspace.sharedWorkspace()
     
     while True:
         try:
-            app = workspace.frontmostApplication()
-            if app:
-                bundle_id = app.bundleIdentifier()
-                if bundle_id != last_bundle_id:
-                    app_name = app.localizedName()
+            # 必须在主线程环境或者带有有效 NSRunLoop 的上下文中调用
+            workspace = NSWorkspace.sharedWorkspace()
+            # frontmostApplication() 对于没有 GUI 的后台进程(比如 python 直接运行)，
+            # 它返回的永远是运行这个 Python 脚本的终端应用（因为 Python 进程本身没有窗口焦点）
+            # 这也是为什么你只能看到 Terminal 的原因。
+            # 为了获取全系统的焦点，我们需要获取 activeApplication
+            active_app = workspace.activeApplication()
+            
+            if active_app:
+                bundle_id = active_app.get('NSApplicationBundleIdentifier')
+                if bundle_id and bundle_id != last_bundle_id:
+                    app_name = active_app.get('NSApplicationName', 'Unknown')
                     event = {
                         "type": "app_activated",
                         "app_name": app_name,
                         "bundle_id": bundle_id
                     }
-                    # 确保打印到终端
                     print(f"[EventsProbe] Real app activated: {app_name} ({bundle_id})")
                     logger.info(f"[EventsProbe] Real app activated: {app_name} ({bundle_id})")
                     

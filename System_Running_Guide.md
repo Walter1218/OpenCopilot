@@ -86,54 +86,49 @@ pip install -r requirements.txt
 
 ---
 
-## 四、启动方式
+## 四、启动方式 (新架构 P1 阶段)
 
-### 方式一：守护进程模式 (推荐)
+由于 macOS 沙盒权限的限制（IDE 内置终端无法获取系统级的屏幕录制和辅助功能权限），系统目前采用了**前后端分离（特权 Broker + 用户态 UI）**的运行架构。
 
-适用于日常使用，一次性安装，开机自启。
+根据您的使用场景，请选择以下一种方式：
 
-```bash
-# 1. 注册 Agent 后台守护进程
-bash scripts/install_daemon.sh
+### 方式一：开发联调期 (Development)
+在开发期，为了查看实时的报错和异常栈，需要**手动开启两个终端窗口**：
 
-# 2. 注册 Broker 特权代理守护进程 (用于视觉 OCR 和无感划词提取)
-bash scripts/install_broker_daemon.sh
+1. **启动底层特权探针 (Privileged Broker)**
+   - **必须使用 macOS 原生的 Terminal.app 或 iTerm2**（不能用 IDE 终端）。
+   - **命令**：
+     ```bash
+     source venv/bin/activate
+     python asu_broker/run.py
+     ```
+   - *此进程负责系统焦点监听、无感划词提取、视觉屏幕抓取等特权操作。*
 
-# 3. 启动 UI
-bash scripts/start_ui.sh
-```
+2. **启动前端 UI 与智能中枢 (Smart Copilot)**
+   - 可以在任何终端中运行（包括 Trae/VSCode 的内置终端）。
+   - **命令**：
+     ```bash
+     source venv/bin/activate
+     python smart_copilot.py
+     ```
 
-**说明**：
-- Agent 和 Broker 将作为后台服务运行
-- 开机自动启动
-- UI 启动时会自动探活 Agent 并建立 Broker WebSocket 连接
+### 方式二：生产使用期 (Production / Daily Use)
+作为日常工具使用时，不应每次开机都敲击命令，而是让底层的探测器静默常驻，让 UI 触手可及。
 
-### 方式二：开发调试模式
+1. **一次性注册底层探针为开机自启**
+   - 只需执行**一次**：
+     ```bash
+     bash scripts/install_broker_daemon.sh
+     ```
+   - 系统会将 Broker 注册到 `LaunchAgent`。以后每次开机它都会在后台静默运行。
+   - *（如需查看日志：`tail -f ~/Library/Logs/ASU/broker_out.log`）*
 
-适用于开发调试，需要两个终端。
+2. **日常启动主程序 UI**
+   - 当前可配置一个 Shell Alias 或 AppleScript 快速执行 `python smart_copilot.py`。
+   - *(注：在未来的 P3 阶段，该 UI 会被打包成标准的 `.app` 应用程序，双击图标即可运行)*。
 
-```bash
-# 终端 1：启动 Agent 后台服务
-python asu_custom_agent.py
-
-# 终端 2：启动 UI
-bash scripts/start_ui.sh
-```
-
-**说明**：
-- Agent 和 UI 生命周期独立
-- UI 启动时异步检测 Agent 状态
-- 标题栏显示绿/红状态点
-
-### 方式三：直接运行 Python
-
-```bash
-# 启动 Agent
-python asu_custom_agent.py &
-
-# 启动 UI
-python smart_copilot.py
-```
+> **⚠️ 注意：关于 `install_daemon.sh`**
+> 早期旧架构曾使用 `install_daemon.sh` 将 Agent 也作为独立 HTTP 服务挂载。在 P1 阶段重构合并后，此脚本已**废弃不再使用**。日常只需挂载 Broker 即可。
 
 ---
 
@@ -420,10 +415,8 @@ rm -rf /path/to/OpenCopilot
 
 | 命令 | 说明 |
 |------|------|
-| `bash scripts/install_daemon.sh` | 安装守护进程 |
-| `bash scripts/start_ui.sh` | 启动 UI |
-| `bash scripts/uninstall_daemon.sh` | 卸载守护进程 |
+| `bash scripts/install_broker_daemon.sh` | 安装底层特权 Broker (开机自启) |
+| `bash scripts/uninstall_broker_daemon.sh`| 卸载底层特权 Broker |
+| `python asu_broker/run.py` | 启动 Broker (开发联调模式) |
+| `python smart_copilot.py` | 启动 UI 与智能中枢 (开发/日常模式) |
 | `bash scripts/tail_logs.sh` | 查看日志 |
-| `curl http://127.0.0.1:18888/health` | 检查 Agent 状态 |
-| `python asu_custom_agent.py` | 启动 Agent (开发模式) |
-| `python smart_copilot.py` | 启动 UI (开发模式) |

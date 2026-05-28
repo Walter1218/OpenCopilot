@@ -373,9 +373,11 @@ class AIWorker(QThread):
                 self.text_updated.emit(display_text.strip())
                 
             print(f"[ASU] AIWorker完成 | action={self.action_type} | chunks={chunk_count} | output_len={len(full_text)}")
+            self.full_text = full_text
         except Exception as e:
             print(f"[ASU] AIWorker异常 | action={self.action_type} | error={str(e)}")
             self.text_updated.emit(f"\n[错误]: {str(e)}")
+            self.full_text = ""
             
         self.finished_signal.emit()
 
@@ -423,9 +425,11 @@ class ChatWorker(QThread):
                 self.text_updated.emit(display_text.strip())
                 
             print(f"[ASU] ChatWorker完成 | chunks={chunk_count} | output_len={len(full_text)}")
+            self.full_text = full_text
         except Exception as e:
             print(f"[ASU] ChatWorker异常 | error={str(e)}")
             self.text_updated.emit(f"\n[错误]: {str(e)}")
+            self.full_text = ""
             
         self.finished_signal.emit()
 
@@ -974,8 +978,25 @@ class AICardWindow(QWidget):
         self.btn_copy_result.clicked.connect(self._copy_result_to_clipboard)
         self.btn_copy_result.hide()  # 初始隐藏
 
+        self.btn_export_ppt = QPushButton("💾 导出为 PPT")
+        self.btn_export_ppt.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(255, 153, 51, 180);
+                color: #fff; border-radius: 8px;
+                padding: 5px 10px; font-size: 11px; font-weight: bold;
+                border: 1px solid rgba(255, 153, 51, 255);
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 153, 51, 255);
+            }
+        """)
+        self.btn_export_ppt.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_export_ppt.clicked.connect(self._export_to_ppt)
+        self.btn_export_ppt.hide()  # 初始隐藏
+
         apply_layout.addWidget(self.btn_apply_to_ide)
         apply_layout.addStretch()
+        apply_layout.addWidget(self.btn_export_ppt)
         apply_layout.addWidget(self.btn_copy_result)
         quick_layout.addLayout(apply_layout)
 
@@ -1799,6 +1820,7 @@ class AICardWindow(QWidget):
         self.instruction_input.clear()
         self.btn_apply_to_ide.hide()
         self.btn_copy_result.hide()
+        self.btn_export_ppt.hide()
         
         # 重置 IDE 按钮状态
         self.btn_read_ide.setText("📥 极速读取当前 IDE 全文")
@@ -2170,6 +2192,36 @@ class AICardWindow(QWidget):
                 self._try_get_ide_selection()
             self.btn_apply_to_ide.show()
         self.btn_copy_result.show()
+        
+        # 如果包含标题，则显示生成PPT按钮
+        if self.worker and hasattr(self.worker, 'full_text'):
+            if '# ' in self.worker.full_text or '## ' in self.worker.full_text:
+                self.btn_export_ppt.show()
+
+    def _export_to_ppt(self):
+        try:
+            import ppt_generator
+            text = ""
+            # 根据当前在哪个tab，获取内容
+            if self.tabs.currentIndex() == 0 and self.worker and hasattr(self.worker, 'full_text'):
+                text = self.worker.full_text
+            elif self.tabs.currentIndex() == 1 and self.chat_worker and hasattr(self.chat_worker, 'full_text'):
+                text = self.chat_worker.full_text
+                
+            if not text:
+                QMessageBox.warning(self, "导出失败", "没有可导出的内容。")
+                return
+                
+            save_path, _ = QFileDialog.getSaveFileName(
+                self, "导出为 PPT",
+                os.path.expanduser("~/Desktop/generated_presentation.pptx"),
+                "PowerPoint Files (*.pptx)"
+            )
+            if save_path:
+                ppt_generator.generate_ppt_from_text(text, save_path)
+                QMessageBox.information(self, "导出成功", f"PPT 已保存至:\n{save_path}")
+        except Exception as e:
+            QMessageBox.critical(self, "导出错误", f"导出失败: {e}")
 
     def hide_card(self):
         self._pending_hide = False

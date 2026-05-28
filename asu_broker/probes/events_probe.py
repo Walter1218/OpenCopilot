@@ -5,69 +5,59 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from AppKit import NSWorkspace, NSObject
-    from Foundation import NSNotificationCenter, NSRunLoop, NSDate
+    from AppKit import NSWorkspace
     HAS_PYOBJC = True
 except ImportError:
     HAS_PYOBJC = False
 
 _async_queue: Optional[asyncio.Queue] = None
-_observer = None
 
-if HAS_PYOBJC:
-    class AppActivationObserver(NSObject):
-        def appActivated_(self, notification):
-            info = notification.userInfo()
-            app = info.get("NSWorkspaceApplicationKey")
-            if app:
-                app_name = app.localizedName()
-                bundle_id = app.bundleIdentifier()
-                event = {
-                    "type": "app_activated",
-                    "app_name": app_name,
-                    "bundle_id": bundle_id
-                }
-                logger.info(f"[EventsProbe] Real app activated: {app_name} ({bundle_id})")
-                
-                if _async_queue:
-                    _async_queue.put_nowait(event)
-else:
-    class AppActivationObserver:
-        pass
-
-async def _pump_runloop():
+async def _poll_active_app():
+    """轮询获取当前活跃应用，避免与 Uvicorn/asyncio 事件循环冲突"""
     if not HAS_PYOBJC:
         return
-    runloop = NSRunLoop.currentRunLoop()
+        
+    last_bundle_id = None
+    workspace = NSWorkspace.sharedWorkspace()
+    
     while True:
-        # Pump the NSRunLoop so it can dispatch distributed notifications
-        runloop.runMode_beforeDate_(
-            "kCFRunLoopDefaultMode", 
-            NSDate.dateWithTimeIntervalSinceNow_(0.01)
-        )
-        await asyncio.sleep(0.05)
+        try:
+            app = workspace.frontmostApplication()
+            if app:
+                bundle_id = app.bundleIdentifier()
+                if bundle_id != last_bundle_id:
+                    app_name = app.localizedName()
+                    event = {
+                        "type": "app_activated",
+                        "app_name": app_name,
+                        "bundle_id": bundle_id
+                    }
+                    # 确保打印到终端
+                    print(f"[EventsProbe] Real app activated: {app_name} ({bundle_id})")
+                    logger.info(f"[EventsProbe] Real app activated: {app_name} ({bundle_id})")
+                    
+                    if _async_queue:
+                        _async_queue.put_nowait(event)
+                    
+                    last_bundle_id = bundle_id
+        except Exception as e:
+            logger.error(f"[EventsProbe] Error polling active app: {e}")
+            
+        await asyncio.sleep(0.5)
 
 def start_events_probe(loop: asyncio.AbstractEventLoop, async_queue: asyncio.Queue):
     """启动全局事件探针协程"""
-    global _async_queue, _observer
+    global _async_queue
     _async_queue = async_queue
     
     if not HAS_PYOBJC:
         logger.error("Cannot start events probe: PyObjC not installed.")
+        print("❌ Cannot start events probe: PyObjC not installed. Please run `pip install pyobjc`.")
         return False
         
-    workspace = NSWorkspace.sharedWorkspace()
-    notification_center = workspace.notificationCenter()
+    print("[EventsProbe] Started macOS active app polling probe.")
+    logger.info("[EventsProbe] Started macOS active app polling probe.")
     
-    _observer = AppActivationObserver.alloc().init()
-    
-    notification_center.addObserver_selector_name_object_(
-        _observer,
-        b'appActivated:',
-        "NSWorkspaceDidActivateApplicationNotification",
-        None
-    )
-    
-    logger.info("[EventsProbe] Started macOS NSWorkspace events probe.")
-    asyncio.create_task(_pump_runloop())
+    # 将轮询任务加入当前事件循环
+    loop.create_task(_poll_active_app())
     return True

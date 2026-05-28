@@ -577,6 +577,8 @@ class AICardWindow(QWidget):
     def _on_app_activated(self, app_name, bundle_id):
         self.current_active_app = app_name
         self.current_bundle_id = bundle_id
+        # 为了调试方便，在 UI 终端打印出系统焦点切换事件
+        print(f"[UI 接收] 系统焦点已切换至: {app_name} ({bundle_id})")
 
     def initUI(self):
         # 无边框、置顶

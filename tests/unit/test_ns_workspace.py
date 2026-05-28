@@ -3,7 +3,7 @@ from AppKit import NSWorkspace, NSObject, NSApplication
 from Foundation import NSNotificationCenter, NSRunLoop, NSDate
 from PyObjCTools import AppHelper
 
-class Observer(NSObject):
+class TestNsObserver(NSObject):
     def appActivated_(self, notification):
         info = notification.userInfo()
         app = info.get("NSWorkspaceApplicationKey")
@@ -14,7 +14,7 @@ def main():
     workspace = NSWorkspace.sharedWorkspace()
     nc = workspace.notificationCenter()
     
-    obs = Observer.alloc().init()
+    obs = TestNsObserver.alloc().init()
     nc.addObserver_selector_name_object_(
         obs,
         b'appActivated:',

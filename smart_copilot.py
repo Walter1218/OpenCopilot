@@ -1272,12 +1272,43 @@ class AICardWindow(QWidget):
                 sel_text = sel_data.get("text", "")
                 sel_range = sel_data.get("range", None)
 
+            # 读取诊断、diff、symbol等高级上下文
+            diagnostics_data = []
+            git_diff_data = ""
+            symbol_data = None
+            try:
+                diag_resp = httpx.get(f"http://127.0.0.1:{port}/diagnostics", timeout=1.0)
+                if diag_resp.status_code == 200:
+                    diagnostics_data = diag_resp.json().get("diagnostics", [])
+            except Exception: pass
+            try:
+                diff_resp = httpx.get(f"http://127.0.0.1:{port}/git-diff", timeout=1.0)
+                if diff_resp.status_code == 200:
+                    git_diff_data = diff_resp.json().get("diff", "")
+            except Exception: pass
+            try:
+                sym_resp = httpx.get(f"http://127.0.0.1:{port}/symbol", timeout=1.0)
+                if sym_resp.status_code == 200:
+                    symbol_data = sym_resp.json() # symbol_data is the whole object with name, kind, text, range
+                    if "error" in symbol_data or ("symbol" in symbol_data and symbol_data["symbol"] is None):
+                        symbol_data = None
+            except Exception: pass
+
             # 读取全文
             response = httpx.get(f"http://127.0.0.1:{port}/context", timeout=2.0)
             if response.status_code == 200:
                 data = response.json()
                 content = data.get("content", "")
                 filename = data.get("fileName", "Unknown")
+                
+                meta_dict = {
+                    "file_name": filename,
+                    "language": data.get("languageId", ""),
+                    "diagnostics": diagnostics_data,
+                    "git_diff": git_diff_data,
+                    "symbol": symbol_data
+                }
+                
                 if content:
                     # 如果有选中文本，优先使用选中文本作为操作目标
                     if sel_text and sel_text.strip():
@@ -1285,30 +1316,56 @@ class AICardWindow(QWidget):
                         self.context_source = "ide"
                         self._ide_selection_range = sel_range  # 记录选区范围，用于局部回写
                         self._ide_full_document = content       # 记录全文，用于上下文
-                        self.context_meta = {
-                            "file_name": data.get("fileName", "Unknown"),
-                            "language": data.get("languageId", ""),
-                        }
+                        self.context_meta = meta_dict
                         self.text_edit.clear()
                         preview = sel_text[:200] + ("…" if len(sel_text) > 200 else "")
+                        
+                        diag_count = len(diagnostics_data)
+                        diag_msg = f" | 发现 {diag_count} 个诊断报错 🎯" if diag_count > 0 else ""
+                        
                         self.text_edit.setPlainText(
-                            f"✅ 已读取 IDE 选中文本 [{filename}]\n\n"
+                            f"✅ 已读取 IDE 选中文本 [{filename}]{diag_msg}\n\n"
                             f"选中: {len(sel_text)} 字符 / 全文: {len(content)} 字符\n\n"
                             f"📄 预览:\n{preview}\n\n"
                             f"👇 请输入修改要求后按 Enter，或点击下方快捷指令。\n"
                             f"💡 回写时将只替换选中的文本片段。"
                         )
                     else:
-                        self.current_text = content
-                        self.context_source = "ide"
-                        self._ide_selection_range = None
-                        self._ide_full_document = content
-                        self.context_meta = {
-                            "file_name": data.get("fileName", "Unknown"),
-                            "language": data.get("languageId", ""),
-                        }
-                        self.text_edit.clear()
-                        self.text_edit.setPlainText(f"✅ 已成功从 IDE 插件读取全文 [{filename}]\n\n文件大小: {len(content)} 字符\n\n请点击下方快捷指令进行分析。")
+                        # 没有选区，判断是否有光标下的 symbol
+                        if symbol_data and symbol_data.get("text"):
+                            self.current_text = symbol_data["text"]
+                            self.context_source = "ide"
+                            self._ide_selection_range = symbol_data["range"]
+                            self._ide_full_document = content
+                            self.context_meta = meta_dict
+                            self.text_edit.clear()
+                            
+                            sym_name = symbol_data.get("name", "Unknown")
+                            sym_text = symbol_data.get("text", "")
+                            preview = sym_text[:200] + ("…" if len(sym_text) > 200 else "")
+                            
+                            diag_count = len(diagnostics_data)
+                            diag_msg = f" | 发现 {diag_count} 个诊断报错 🎯" if diag_count > 0 else ""
+                            
+                            self.text_edit.setPlainText(
+                                f"✅ 已智能截取光标所在代码块 [{sym_name}]{diag_msg}\n\n"
+                                f"块大小: {len(sym_text)} 字符 / 全文: {len(content)} 字符\n\n"
+                                f"📄 预览:\n{preview}\n\n"
+                                f"👇 请输入修改要求后按 Enter，或点击下方快捷指令。\n"
+                                f"💡 回写时将只替换该代码块片段。"
+                            )
+                        else:
+                            self.current_text = content
+                            self.context_source = "ide"
+                            self._ide_selection_range = None
+                            self._ide_full_document = content
+                            self.context_meta = meta_dict
+                            self.text_edit.clear()
+                            
+                            diag_count = len(diagnostics_data)
+                            diag_msg = f" | 发现 {diag_count} 个诊断报错 🎯" if diag_count > 0 else ""
+                            
+                            self.text_edit.setPlainText(f"✅ 已成功从 IDE 插件读取全文 [{filename}]{diag_msg}\n\n文件大小: {len(content)} 字符\n\n请点击下方快捷指令进行分析。")
                     self.tabs.setCurrentIndex(0)
                     self.btn_read_ide.setText("✅ 已读取")
                     self.btn_read_ide.setStyleSheet(self.btn_read_ide.styleSheet().replace("rgba(77, 166, 255, 180)", "rgba(40, 167, 69, 180)").replace("rgba(77, 166, 255, 255)", "rgba(40, 167, 69, 255)"))

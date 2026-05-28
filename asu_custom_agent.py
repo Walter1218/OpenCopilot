@@ -86,10 +86,26 @@ class ContextWindowManager:
             payload_parts.append(f"[task] {task}")
         if meta_text:
             payload_parts.append(f"[meta] {meta_text}")
+            
+        # 注入高级 IDE 上下文
+        diagnostics = meta.get("diagnostics")
+        if diagnostics and isinstance(diagnostics, list):
+            diag_lines = []
+            for d in diagnostics:
+                sev_idx = d.get("severity", 0)
+                severity = ["Error", "Warning", "Information", "Hint"][sev_idx] if isinstance(sev_idx, int) and 0 <= sev_idx <= 3 else "Error"
+                diag_lines.append(f"- Line {d.get('line')}: [{severity}] {d.get('message')}")
+            if diag_lines:
+                payload_parts.append("[diagnostics] (当前文件存在的诊断报错)\n" + "\n".join(diag_lines))
+        
+        git_diff = meta.get("git_diff")
+        if git_diff and isinstance(git_diff, str) and git_diff.strip():
+            payload_parts.append(f"[git_diff] (当前文件的未提交变更)\n{git_diff[:2000]}") # 限制长度防止超限
+
         if custom_instruction:
             payload_parts.append(
                 f"[custom_instruction]\n{custom_instruction}\n\n"
-                f"请严格按照上述指令对 [selection] 中的文本进行修改，只输出修改后的文本，不要输出任何解释或说明。"
+                f"请严格按照上述指令对 [selection] 或当前代码块中的文本进行修改，只输出修改后的文本，不要输出任何解释或说明。"
             )
         if selection:
             payload_parts.append(f"[selection]\n{selection}")
@@ -192,9 +208,10 @@ def normalize_context_envelope(req, fallback_text, fallback_source, fallback_met
 CONTEXT_DESCRIPTIONS = {
     "ide": (
         "当前用户正在代码编辑器（IDE）中工作。"
-        "如果请求中包含 [selection]（用户选中的文本片段）和 [content]（完整文件内容），"
-        "说明用户只想修改选中的片段。此时：只输出修改后的选中文本，不要输出全文，不要输出解释。"
-        "如果只有 [content] 没有选区，则以代码审查/架构分析的角度来理解和回应。"
+        "如果请求中包含 [diagnostics]（诊断报错）或 [git_diff]（版本变更），请重点结合这些信息来分析代码问题或代码变动。"
+        "如果请求中包含 [selection]（用户选中的文本片段）或 [content] 只是一个局部代码块，"
+        "说明用户只想修改当前聚焦的代码。此时：只输出修改后的代码片段，不要输出全文，不要输出解释。"
+        "如果没有选区，则以代码审查/架构分析的角度来理解和回应。"
     ),
     "browser": (
         "当前用户正在浏览器中浏览网页。用户提供的是网页文本内容。"

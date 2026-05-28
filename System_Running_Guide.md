@@ -64,6 +64,7 @@ pip install -r requirements.txt
 | Pygments | >=2.17.0 | 代码高亮 |
 | fastapi | >=0.100.0 | Agent 服务框架 |
 | uvicorn | >=0.23.0 | ASGI 服务器 |
+| python-pptx | >=0.6.23 | PPT 幻灯片生成 |
 
 ---
 

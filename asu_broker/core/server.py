@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Request, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, Request, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import sys
@@ -10,14 +10,15 @@ import signal
 # 确保能导入同级模块
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.auth import verify_token
-from probes.browser_probe import get_browser_tabs, get_active_tab_dom
-from probes.window_probe import get_frontmost_app
-from probes.selection_probe import get_clipboard_content, set_clipboard_content, get_selected_text_via_applescript
-from probes.app_control_probe import get_notes_content, create_note
-from probes.screen_probe import capture_front_window
-from probes.fs_probe import read_file_as_context
-from probes.office_probe import read_office_file
+from .auth import verify_token
+from ..probes.browser_probe import get_browser_tabs, get_active_tab_dom
+from ..probes.window_probe import get_frontmost_app
+from ..probes.selection_probe import get_clipboard_content, set_clipboard_content, get_selected_text
+from ..probes.app_control_probe import get_notes_content, create_note
+from ..probes.screen_probe import capture_front_window
+from ..probes.fs_probe import read_file_as_context
+from ..probes.office_probe import read_office_file
+from ..probes.events_probe import start_events_probe
 
 # ============================================================
 # 默认超时配置（秒）
@@ -42,10 +43,67 @@ app = FastAPI(
     version="1.1.0"
 )
 
+# ============================================================
+# WebSocket 事件推送架构
+# ============================================================
+events_queue = asyncio.Queue()
+active_websockets = set()
 
-# ============================================================
-# 统一错误格式 —— 异常处理器
-# ============================================================
+@app.on_event("startup")
+async def startup_event():
+    loop = asyncio.get_running_loop()
+    # 启动 macOS 系统事件监听探针
+    start_events_probe(loop, events_queue)
+    # 启动 WebSocket 广播消费协程
+    asyncio.create_task(broadcast_events())
+
+async def broadcast_events():
+    """将从探针收集到的事件广播给所有连接的客户端"""
+    while True:
+        event = await events_queue.get()
+        dead_ws = set()
+        for ws in active_websockets:
+            try:
+                await ws.send_json(event)
+            except Exception:
+                dead_ws.add(ws)
+        # 移除已断开的连接
+        for ws in dead_ws:
+            active_websockets.remove(ws)
+
+@app.websocket("/api/v1/events")
+async def websocket_events(websocket: WebSocket):
+    """Client (如 ASU) 连接此 WebSocket 接收实时系统事件"""
+    await websocket.accept()
+    active_websockets.add(websocket)
+    try:
+        while True:
+            # 保持连接活跃
+            _ = await websocket.receive_text()
+    except WebSocketDisconnect:
+        if websocket in active_websockets:
+            active_websockets.remove(websocket)
+    except Exception as e:
+        print(f"[Broker] WebSocket error: {e}")
+        if websocket in active_websockets:
+            active_websockets.remove(websocket)
+
+@app.get("/api/v1/system/screen/front", dependencies=[Depends(verify_token)])
+async def api_get_front_window_screenshot():
+    """获取当前前台窗口的截图 (Base64)"""
+    try:
+        base64_image = await asyncio.wait_for(capture_front_window(), timeout=TIMEOUT_FRONT_WINDOW)
+        return {
+            "status": "success",
+            "data": {
+                "format": "base64_png",
+                "image": base64_image
+            }
+        }
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="截图超时，可能缺少屏幕录制权限。")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取窗口截图失败: {str(e)}")
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
@@ -139,9 +197,9 @@ async def api_get_capabilities():
                     },
                     "selection_read": {
                         "supported": True,
-                        "method": "applescript_cmd_c",
+                        "method": "axuielement_with_applescript_fallback",
                         "endpoint": "GET /api/v1/system/selection",
-                        "note": "模拟 Cmd+C 实现，可能对某些应用有副作用"
+                        "note": "优先使用 AXUIElement 无感读取，失败则降级到 Cmd+C"
                     },
                     "screenshot_front_window": {
                         "supported": True,
@@ -175,9 +233,9 @@ async def api_get_capabilities():
                 },
                 "realtime": {
                     "websocket_events": {
-                        "supported": False,
-                        "planned": "v2.0",
-                        "description": "前台应用切换、浏览器标签变更等事件主动推送"
+                        "supported": True,
+                        "endpoint": "ws://[host]:[port]/api/v1/events",
+                        "description": "前台应用切换等事件主动推送"
                     }
                 }
             }
@@ -250,13 +308,19 @@ async def api_set_clipboard(req: ClipboardRequest):
 
 @app.get("/api/v1/system/selection", dependencies=[Depends(verify_token)])
 async def api_get_selection():
+    """获取当前用户在任意应用中选中的文本"""
     try:
-        content = await asyncio.wait_for(get_selected_text_via_applescript(), timeout=TIMEOUT_SELECTION)
-        return {"status": "success", "data": {"content": content}}
+        content = await asyncio.wait_for(get_selected_text(), timeout=TIMEOUT_SELECTION)
+        return {
+            "status": "success",
+            "data": {
+                "content": content
+            }
+        }
     except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail="Probe selection_read timed out")
+        raise HTTPException(status_code=504, detail="获取选中内容超时，可能目标应用卡死或不支持无感读取。")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"获取选中内容失败: {str(e)}")
 
 
 # ---------- 备忘录操作 ----------

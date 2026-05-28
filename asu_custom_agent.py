@@ -429,8 +429,35 @@ class AgentHTTPRequestHandler(BaseHTTPRequestHandler):
                 history_messages=ctx["messages"],
             )
 
+            image_base64 = req.get("image_base64")
+            
+            if image_base64:
+                last_msg_content = messages[-1]["content"]
+                messages[-1]["content"] = [
+                    {"type": "text", "text": last_msg_content},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}}
+                ]
+
             # 持久化原始用户输入，避免丢信息
-            memory.add_message(session_id, "user", envelope.get("content", text))
+            user_message_content = []
+            user_content = envelope.get("content", text)
+            
+            if user_content:
+                user_message_content.append({"type": "text", "text": user_content})
+                
+            if image_base64:
+                user_message_content.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/png;base64,{image_base64}"
+                    }
+                })
+
+            if not user_message_content:
+                user_message_content.append({"type": "text", "text": "你好"})
+
+            # 将多模态结构直接传入 memory
+            memory.add_message(session_id, "user", json.dumps(user_message_content, ensure_ascii=False) if len(user_message_content) > 1 else user_message_content[0]["text"])
 
             self.send_response(200)
             self.send_header('Content-Type', 'text/event-stream')

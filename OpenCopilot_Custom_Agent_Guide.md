@@ -1,8 +1,8 @@
 # OpenCopilot 定制智能体 (Custom Agent) 开发与使用指南
 
-> **文档状态**: V2.0
+> **文档状态**: V2.1
 > **更新日期**: 2026-05-28
-> **状态**: UI组件阶段1-4已完成
+> **状态**: P0-P2 阶段（主动感知、多模态、无感划词、Persona 工作坊）已全面完成
 
 ## 1. 什么是 OpenCopilot 定制智能体？
 
@@ -91,15 +91,17 @@ Agent 基于 **SQLite 本地持久化**（`asu_agent.db`）管理会话记忆，
 已完成（✅）：
 - SQLite 持久记忆 + 会话恢复
 - 上下文窗口管理（预算驱动裁剪，69% 平均压缩率）
-- Persona 文件化 + 热加载
+- Persona 文件化 + 角色工坊 (Persona Workshop) 动态热加载
 - ContextEnvelope 协议兼容层
 - UI/Agent 生命周期解耦 + LaunchAgent 常驻
 - 自定义指令修改（custom Persona + custom_instruction 传递）
 - IDE 选区读取 + 回写（/selection + /apply 端点）
+- 多模态视觉感知支持 (image_base64 透传)
+- 基于 WebSocket 的主动状态推送与托盘联动
 
 待推进（🔶）：
 - IDE Extension v2：补充 `/diagnostics`、`/git-diff` 端点
 - 多 Provider 故障转移
 - SSE 错误边界优化
 
-详细路线图见 [ASU 本地专属智能体现状与开发路线建议](ASU_Local_Agent_Roadmap.md)。
+详细路线图见 [OpenCopilot 本地专属智能体现状与开发路线建议](OpenCopilot_Local_Agent_Roadmap.md)。

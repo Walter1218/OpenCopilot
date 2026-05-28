@@ -60,6 +60,21 @@ class SystemProbeClient:
                 return resp.json().get("data", {}).get("content", "")
         except Exception:
             pass
+            
+    def get_front_window_screenshot(self) -> str:
+        """获取前台窗口截图的 Base64 字符串"""
+        try:
+            resp = httpx.get(f"{BROKER_URL}/api/v1/system/screen/front", headers=self.headers, timeout=5.0)
+            if resp.status_code == 200:
+                return resp.json().get("data", {}).get("image", "")
+            else:
+                err_detail = resp.json().get("detail", "Unknown error")
+                raise Exception(f"Broker 返回错误 ({resp.status_code}): {err_detail}")
+        except httpx.ReadTimeout:
+            raise Exception("截图请求超时，请检查是否已在系统设置中授予屏幕录制权限。")
+        except Exception as e:
+            raise Exception(f"请求 Broker 失败: {str(e)}")
+
     def get_browser_dom(self, browser_name: str) -> str:
         """获取指定浏览器的当前标签页全文。"""
         try:

@@ -1,8 +1,8 @@
 # OpenCopilot 特权代理 (Privileged Broker) 开发与设计规范
 
-> **文档状态**: V2.0 (已更新)
+> **文档状态**: V2.1 (已更新)
 > **更新日期**: 2026-05-28
-> **状态**: UI组件阶段1-4已完成
+> **状态**: P0-P2 阶段（主动感知、多模态、无感划词等）已全面完成
 > **目标读者**: OpenCopilot 核心开发者、需要进行 macOS 底层 API 联调的贡献者
 
 ---
@@ -27,16 +27,16 @@ asu_broker/
 │   ├── __init__.py
 │   ├── server.py              # FastAPI 主服务逻辑 (端口 18889) ✅
 │   ├── auth.py                # 动态 Token 鉴权模块 ✅
-│   └── ws_manager.py          # WebSocket 连接管理器 🔶 待开发
+│   └── ws_manager.py          # WebSocket 连接管理器 ✅ 已实现
 ├── probes/                    # 探针组件库 ✅
 │   ├── __init__.py
 │   ├── browser_probe.py       # 主流浏览器 URL/DOM
 │   ├── window_probe.py        # 活动窗口/BundleID 探测
-│   ├── selection_probe.py     # 高亮文本/剪贴板
-│   ├── screen_probe.py        # 屏幕截图
+│   ├── selection_probe.py     # 高亮文本/剪贴板 (AXUIElement 无感提取)
+│   ├── screen_probe.py        # 屏幕截图 (Vision OCR 支持)
 │   ├── fs_probe.py            # 文件系统读取
 │   ├── app_control_probe.py   # 备忘录等原生应用操作
-│   └── events_probe.py        # 系统事件监听 🔶 占位
+│   └── events_probe.py        # 系统事件监听 (前台应用切换 WebSocket 推送) ✅ 已实现
 ├── scripts/                   # 复杂 AppleScript 脚本 🔶 待添加
 │   └── get_browser_dom.applescript
 ├── deploy/                    # 部署配置（对应项目顶层 deploy/）

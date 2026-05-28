@@ -7,6 +7,8 @@ import time
 import uuid
 import threading
 import tempfile
+import asyncio
+import websockets
 from pynput import mouse
 
 from PyQt6.QtWidgets import (
@@ -292,12 +294,45 @@ class SettingsDialog(QDialog):
 # ==========================================
 # 1. 后台大模型请求线程 (避免阻塞UI)
 # ==========================================
+class BrokerEventsWorker(QThread):
+    app_activated = pyqtSignal(str, str)
+    connection_status = pyqtSignal(bool)
+
+    def __init__(self, broker_url="ws://127.0.0.1:18889/api/v1/events"):
+        super().__init__()
+        self.broker_url = broker_url
+        self._is_running = True
+        
+    def run(self):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(self._listen())
+        finally:
+            loop.close()
+            
+    async def _listen(self):
+        while self._is_running:
+            try:
+                async with websockets.connect(self.broker_url, close_timeout=1.0) as ws:
+                    self.connection_status.emit(True)
+                    print("[ASU Client] 已连接到 Broker WebSocket.")
+                    while self._is_running:
+                        msg = await ws.recv()
+                        data = json.loads(msg)
+                        if data.get("type") == "app_activated":
+                            self.app_activated.emit(data.get("app_name", ""), data.get("bundle_id", ""))
+            except Exception as e:
+                self.connection_status.emit(False)
+                await asyncio.sleep(2)
+
 class AIWorker(QThread):
     text_updated = pyqtSignal(str)
     finished_signal = pyqtSignal()
 
     def __init__(self, provider, prompt, action_type="auto", session_id="default",
-                 context_source="drag", context_meta=None, context_envelope=None):
+                 context_source="drag", context_meta=None, context_envelope=None,
+                 image_base64=None):
         super().__init__()
         self.provider = provider
         self.prompt = prompt
@@ -306,6 +341,7 @@ class AIWorker(QThread):
         self.context_source = context_source
         self.context_meta = context_meta or {}
         self.context_envelope = context_envelope
+        self.image_base64 = image_base64
         self._is_running = True
 
     def run(self):
@@ -318,7 +354,8 @@ class AIWorker(QThread):
                 session_id=self.session_id, is_new_task=True,
                 context_source=self.context_source,
                 context_meta=self.context_meta,
-                context_envelope=self.context_envelope
+                context_envelope=self.context_envelope,
+                image_base64=self.image_base64
             ):
                 if not self._is_running:
                     print(f"[ASU] AIWorker被中断 | chunks={chunk_count}")
@@ -529,7 +566,17 @@ class AICardWindow(QWidget):
         self.progress_widget = ProgressWidget()
         self.multi_step_progress = MultiStepProgressWidget()
         
+        self.current_active_app = ""
+        self.current_bundle_id = ""
+        self.broker_events_worker = BrokerEventsWorker()
+        self.broker_events_worker.app_activated.connect(self._on_app_activated)
+        self.broker_events_worker.start()
+
         self.initUI()
+
+    def _on_app_activated(self, app_name, bundle_id):
+        self.current_active_app = app_name
+        self.current_bundle_id = bundle_id
 
     def initUI(self):
         # 无边框、置顶
@@ -581,6 +628,15 @@ class AICardWindow(QWidget):
         self.agent_status_dot = QLabel("●", self)
         self.agent_status_dot.setStyleSheet("color: #4caf50; font-size: 10px; background: transparent; border: none;")
         self.agent_status_dot.setToolTip("ASU 核心守护服务在线")
+        
+        self.btn_persona = QPushButton("🎭", self)
+        self.btn_persona.setStyleSheet("""
+            QPushButton { background: transparent; border: none; font-size: 14px; }
+            QPushButton:hover { color: #fff; }
+        """)
+        self.btn_persona.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_persona.setToolTip("角色工坊")
+        self.btn_persona.clicked.connect(self.open_persona_workshop)
         
         self.btn_settings = QPushButton("⚙️", self)
         self.btn_settings.setStyleSheet("""
@@ -646,6 +702,33 @@ class AICardWindow(QWidget):
         self.tab_quick = QWidget()
         quick_layout = QVBoxLayout(self.tab_quick)
         quick_layout.setContentsMargins(0, 10, 0, 0)
+        
+        # 全局悬浮操作按钮区
+        global_actions_layout = QHBoxLayout()
+        global_actions_layout.setContentsMargins(0, 0, 0, 5)
+        global_actions_layout.setSpacing(10)
+        
+        # [视觉分析] 按钮
+        self.btn_vision_analyze = QPushButton("👁️ 视觉分析前台", self)
+        self.btn_vision_analyze.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(147, 112, 219, 180);
+                color: #fff;
+                border-radius: 8px;
+                padding: 6px 12px;
+                font-size: 12px;
+                font-weight: bold;
+                border: 1px solid rgba(147, 112, 219, 255);
+            }
+            QPushButton:hover {
+                background-color: rgba(147, 112, 219, 255);
+            }
+        """)
+        self.btn_vision_analyze.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_vision_analyze.clicked.connect(self._on_vision_analyze_clicked)
+        global_actions_layout.addWidget(self.btn_vision_analyze)
+        global_actions_layout.addStretch()
+        quick_layout.addLayout(global_actions_layout)
         
         # IDE 插件探测状态栏
         self.ide_status_layout = QHBoxLayout()
@@ -983,6 +1066,14 @@ class AICardWindow(QWidget):
         instruction = self.instruction_input.text().strip()
         if not instruction:
             return
+            
+        # 如果是视觉分析模式且带有截图缓存
+        if self.context_source == "vision" and hasattr(self, 'ai_card_image_base64') and self.ai_card_image_base64:
+            self.trigger_ai("custom", custom_instruction=instruction, image_base64=self.ai_card_image_base64)
+            # 发送后清除图片缓存
+            self.ai_card_image_base64 = None
+            return
+
         if not self.current_text:
             self.text_edit.setPlainText("⚠️ 请先拖拽或粘贴文本内容，再输入修改要求。")
             return
@@ -1116,6 +1207,54 @@ class AICardWindow(QWidget):
             f"👇 请输入修改要求后按 Enter，或点击下方快捷指令。"
         )
         self.instruction_input.setFocus()
+
+    def _on_vision_analyze_clicked(self):
+        """处理视觉分析按钮点击：通过 Broker 获取截图并设置状态"""
+        self.btn_vision_analyze.setEnabled(False)
+        self.btn_vision_analyze.setText("⏳ 正在截取...")
+        
+        # 使用 QThread 防止网络请求阻塞 UI
+        class VisionWorker(QThread):
+            finished = pyqtSignal(str, str) # status, base64_or_err
+            
+            def run(self):
+                try:
+                    probe = SystemProbeClient()
+                    if not probe.is_broker_alive():
+                        self.finished.emit("error", "无法连接到 Privileged Broker，请确保它已启动。")
+                        return
+                    
+                    b64_img = probe.get_front_window_screenshot()
+                    if b64_img:
+                        self.finished.emit("success", b64_img)
+                    else:
+                        self.finished.emit("error", "获取到的截图数据为空。")
+                except Exception as e:
+                    self.finished.emit("error", str(e))
+                    
+        self._vision_worker = VisionWorker()
+        self._vision_worker.finished.connect(self._on_vision_capture_result)
+        self._vision_worker.start()
+        
+    def _on_vision_capture_result(self, status, result):
+        self.btn_vision_analyze.setEnabled(True)
+        self.btn_vision_analyze.setText("👁️ 视觉分析前台")
+        
+        if status == "success":
+            self.context_source = "vision"
+            self.context_meta = {"has_image": True}
+            # 将 base64 存入特殊的变量中供 _on_send_clicked 提取
+            self.ai_card_image_base64 = result
+            
+            # 显示缩略提示
+            self.text_edit.setPlainText(
+                "📸 已成功捕获前台窗口截图！\n\n"
+                "图像已作为多模态输入准备就绪。\n"
+                "请在下方输入框中输入您对该图像的分析指令（例如：'提取图中的表格数据'，'解释图中的架构逻辑'等），然后按 Enter 发送。"
+            )
+            self.instruction_input.setFocus()
+        else:
+            QMessageBox.warning(self, "视觉分析失败", f"截图提取失败：\n{result}")
 
     def read_from_ide_extension(self):
         port = self._get_ide_port()
@@ -1322,6 +1461,11 @@ class AICardWindow(QWidget):
 
     def reload_provider(self):
         self.provider = ProviderFactory.create_provider()
+
+    def open_persona_workshop(self):
+        from persona_gui import PersonaManagerDialog
+        self.persona_dialog = PersonaManagerDialog(self)
+        self.persona_dialog.show()
 
     def set_agent_status(self, is_online: bool):
         """根据 Agent 守护服务的探活结果更新 UI 状态灯和离线横幅。"""
@@ -1735,12 +1879,13 @@ class AICardWindow(QWidget):
         self.text_edit.setPlainText(err_msg)
         self.btn_read_browser.setText("🌐 一键读取当前网页全文")
 
-    def trigger_ai(self, action_type):
-        if not self.current_text:
+    def trigger_ai(self, action_type, custom_instruction=None, image_base64=None):
+        if not self.current_text and not image_base64:
             return
             
         # 读取自定义指令（如果有）
-        custom_instruction = self.instruction_input.text().strip()
+        if not custom_instruction:
+            custom_instruction = self.instruction_input.text().strip()
         if custom_instruction:
             action_type = "custom"
 
@@ -1824,7 +1969,8 @@ class AICardWindow(QWidget):
 
         self.worker = AIWorker(self.provider, self.current_text, action_type,
                                self.session_id, self.context_source, meta,
-                               context_envelope=envelope)
+                               context_envelope=envelope,
+                               image_base64=image_base64)
         self.worker.text_updated.connect(self.on_text_updated)
         self.worker.finished_signal.connect(self._on_ai_finished)
         self.worker.start()
@@ -2725,6 +2871,14 @@ class CopilotManager:
 
     def _on_double_right_click(self, x, y):
         pos = QCursor.pos()
+        # 呼出卡片前尝试通过 Broker 无感读取高亮文本
+        probe = SystemProbeClient()
+        if probe.is_broker_alive():
+            selected = probe.get_selection()
+            if selected:
+                self.ai_card.current_text = selected
+                self.ai_card.context_source = "drag"
+                self.ai_card.text_edit.setPlainText(f"📌 已提取系统选区内容：\n\n{selected}")
         self.ai_card.show_card(pos.x(), pos.y())
 
     def _on_triple_right_click(self, x, y):

@@ -1,20 +1,73 @@
 import asyncio
+from typing import Optional
+import logging
 
-async def subscribe_to_workspace_events():
-    """
-    [预埋] 系统级感知：通过 PyObjC (Foundation/AppKit) 监听 macOS 全局事件。
-    例如：NSWorkspaceDidActivateApplicationNotification（应用切换事件）。
-    由于当前环境不强制依赖 PyObjC，这里仅作架构预埋占位。
+logger = logging.getLogger(__name__)
+
+try:
+    from AppKit import NSWorkspace, NSObject
+    from Foundation import NSNotificationCenter, NSRunLoop, NSDate
+    HAS_PYOBJC = True
+except ImportError:
+    HAS_PYOBJC = False
+
+_async_queue: Optional[asyncio.Queue] = None
+_observer = None
+
+if HAS_PYOBJC:
+    class AppActivationObserver(NSObject):
+        def appActivated_(self, notification):
+            info = notification.userInfo()
+            app = info.get("NSWorkspaceApplicationKey")
+            if app:
+                app_name = app.localizedName()
+                bundle_id = app.bundleIdentifier()
+                event = {
+                    "type": "app_activated",
+                    "app_name": app_name,
+                    "bundle_id": bundle_id
+                }
+                logger.info(f"[EventsProbe] Real app activated: {app_name} ({bundle_id})")
+                
+                if _async_queue:
+                    _async_queue.put_nowait(event)
+else:
+    class AppActivationObserver:
+        pass
+
+async def _pump_runloop():
+    if not HAS_PYOBJC:
+        return
+    runloop = NSRunLoop.currentRunLoop()
+    while True:
+        # Pump the NSRunLoop so it can dispatch distributed notifications
+        runloop.runMode_beforeDate_(
+            "kCFRunLoopDefaultMode", 
+            NSDate.dateWithTimeIntervalSinceNow_(0.01)
+        )
+        await asyncio.sleep(0.05)
+
+def start_events_probe(loop: asyncio.AbstractEventLoop, async_queue: asyncio.Queue):
+    """启动全局事件探针协程"""
+    global _async_queue, _observer
+    _async_queue = async_queue
     
-    一旦实现，Broker 可以在用户从 Trae 切换到 Chrome 时，通过 WebSocket 主动通知 ASU Copilot：
-    "用户切到了浏览器，请准备切换为网页总结 Persona。"
-    """
-    # 伪代码：
-    # from AppKit import NSWorkspace
-    # nc = NSWorkspace.sharedWorkspace().notificationCenter()
-    # nc.addObserver_selector_name_object_(
-    #     self, b'appActivated:',
-    #     "NSWorkspaceDidActivateApplicationNotification", None
-    # )
-    # 阻塞监听并在触发时推送到 asyncio 队列...
-    pass
+    if not HAS_PYOBJC:
+        logger.error("Cannot start events probe: PyObjC not installed.")
+        return False
+        
+    workspace = NSWorkspace.sharedWorkspace()
+    notification_center = workspace.notificationCenter()
+    
+    _observer = AppActivationObserver.alloc().init()
+    
+    notification_center.addObserver_selector_name_object_(
+        _observer,
+        b'appActivated:',
+        "NSWorkspaceDidActivateApplicationNotification",
+        None
+    )
+    
+    logger.info("[EventsProbe] Started macOS NSWorkspace events probe.")
+    asyncio.create_task(_pump_runloop())
+    return True

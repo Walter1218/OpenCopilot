@@ -130,7 +130,8 @@ class ASUCustomAgentClient(BaseProvider):
 
     def stream_agent_task(self, text: str, action_type: str = "default", session_id: str = "default",
                           is_new_task: bool = False, context_source: str = "drag",
-                          context_meta: dict = None, context_envelope: dict = None):
+                          context_meta: dict = None, context_envelope: dict = None,
+                          image_base64: str = None):
         payload = {
             "text": text,
             "action_type": action_type,
@@ -141,6 +142,8 @@ class ASUCustomAgentClient(BaseProvider):
         }
         if context_envelope:
             payload["context_envelope"] = context_envelope
+        if image_base64:
+            payload["image_base64"] = image_base64
         try:
             # timeout: connect=5s, read=120s（AI 思考可能较慢），write=10s, pool=5s
             timeout = httpx.Timeout(connect=5.0, read=120.0, write=10.0, pool=5.0)

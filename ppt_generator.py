@@ -24,33 +24,35 @@ def add_decorative_shape(slide, prs):
     shape.line.fill.background()
 
 def add_placeholder_image(slide, prs):
-    """为内容页右侧添加配图"""
+    """为内容页右侧添加本地生成的装饰性占位图形，避免网络请求导致卡顿"""
     try:
-        # 使用 picsum 获取随机高质量配图 (商业/抽象风格偏好可以用特定种子，这里用随机)
-        url = "https://picsum.photos/600/800/?blur=2"
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=3) as response:
-            image_stream = BytesIO(response.read())
-            
-        # 图片放置在右侧
-        img_width = Inches(5.33)
+        # 使用几何图形拼接出具有设计感的占位图
+        img_width = Inches(4.5)
         img_height = prs.slide_height
         left = prs.slide_width - img_width
         top = Inches(0)
         
-        slide.shapes.add_picture(image_stream, left, top, img_width, img_height)
+        # 底部浅灰蓝色大色块
+        shape1 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, left, top, img_width, img_height)
+        shape1.fill.solid()
+        shape1.fill.fore_color.rgb = RGBColor(235, 240, 245)
+        shape1.line.fill.background()
+        
+        # 叠加深蓝色强调色块
+        shape2 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, left + Inches(0.5), top + Inches(1.5), img_width - Inches(1.0), Inches(4.5))
+        shape2.fill.solid()
+        shape2.fill.fore_color.rgb = RGBColor(0, 102, 204)
+        shape2.line.fill.background()
+        
+        # 叠加半透明点缀
+        shape3 = slide.shapes.add_shape(MSO_SHAPE.OVAL, left + Inches(3.0), top + Inches(4.5), Inches(2.0), Inches(2.0))
+        shape3.fill.solid()
+        shape3.fill.fore_color.rgb = RGBColor(255, 153, 51)
+        shape3.line.fill.background()
+        
         return True
     except Exception as e:
-        print(f"Failed to fetch image: {e}")
-        # 如果网络失败，用装饰色块替代
-        left = prs.slide_width - Inches(3)
-        top = Inches(0)
-        width = Inches(3)
-        height = prs.slide_height
-        shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, left, top, width, height)
-        shape.fill.solid()
-        shape.fill.fore_color.rgb = RGBColor(240, 240, 245)
-        shape.line.fill.background()
+        print(f"Failed to add placeholder shapes: {e}")
         return False
 
 def generate_ppt_from_text(text, output_path="output.pptx"):
@@ -67,9 +69,7 @@ def generate_ppt_from_text(text, output_path="output.pptx"):
     
     is_first_slide = True
     
-    # 强制分块逻辑：如果大模型没有输出任何 # 或 ##，我们需要人为分块
-    has_headers = any(line.strip().startswith('#') for line in lines)
-    
+    # 强制分块逻辑：单页内容超过 6 行自动分页
     slide_content_count = 0  # 记录当前页的内容行数，过多则自动分页
     
     for line in lines:
@@ -77,19 +77,23 @@ def generate_ppt_from_text(text, output_path="output.pptx"):
         if not line:
             continue
             
-        # 判断是否应该开启新一页：遇到一级/二级标题，或中文大写序号，或单页内容超过 8 行且没有 Markdown 标题
+        # 判断是否应该开启新一页：遇到一级/二级标题，或中文大写序号，或单页内容超过 6 行
         is_new_slide_marker = line.startswith('# ') or line.startswith('## ') or re.match(r'^[一二三四五六七八九十]+、', line)
-        if (not has_headers and slide_content_count >= 8) or is_new_slide_marker:
+        
+        if slide_content_count >= 6 or is_new_slide_marker:
             
             layout_idx = 0 if is_first_slide else 1
             current_slide = prs.slides.add_slide(prs.slide_layouts[layout_idx])
             slide_content_count = 0
             
             title_shape = current_slide.shapes.title
-            body_shape = current_slide.placeholders[1] if layout_idx == 1 else current_slide.placeholders[1]
-                
-            raw_text = re.sub(r'^#+\s*', '', line).strip()  # 移除 # 标记
-            title_shape.text = clean_markdown_bold(raw_text)
+            body_shape = current_slide.placeholders[1]
+            
+            if is_new_slide_marker:
+                raw_text = re.sub(r'^#+\s*', '', line).strip()  # 移除 # 标记
+                title_shape.text = clean_markdown_bold(raw_text)
+            else:
+                title_shape.text = "续前页"
             
             # 美化标题
             for p in title_shape.text_frame.paragraphs:
@@ -110,7 +114,10 @@ def generate_ppt_from_text(text, output_path="output.pptx"):
             
             body_shape.text = ""
             is_first_slide = False
-            continue
+            
+            if is_new_slide_marker:
+                continue
+            # 如果是因为超出长度自动分页，则继续往下执行，将当前 line 添加到 body 中
             
         elif line.startswith('### '):
              if current_slide and body_shape:

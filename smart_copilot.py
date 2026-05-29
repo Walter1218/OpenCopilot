@@ -9,6 +9,7 @@ import threading
 import tempfile
 import asyncio
 import websockets
+import httpx
 from pynput import mouse
 
 from PyQt6.QtWidgets import (

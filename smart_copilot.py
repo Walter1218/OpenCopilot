@@ -364,8 +364,10 @@ class PPTPreviewDialog(QDialog):
         
         # 中间：表单编辑区
         right_panel = QWidget()
-        self.right_layout = QFormLayout(right_panel)
-        self.right_layout.setContentsMargins(20, 10, 20, 10)
+        right_outer_layout = QVBoxLayout(right_panel)
+        right_outer_layout.setContentsMargins(20, 10, 20, 10)
+
+        self.right_layout = QFormLayout()
         
         self.title_edit = QLineEdit()
         self.subtitle_edit = QLineEdit()
@@ -400,11 +402,9 @@ class PPTPreviewDialog(QDialog):
         btn_layout.addStretch()
         btn_layout.addWidget(self.btn_save)
 
-        right_outer_layout = QVBoxLayout()
         right_outer_layout.addLayout(self.right_layout)
         right_outer_layout.addStretch()
         right_outer_layout.addLayout(btn_layout)
-        right_panel.setLayout(right_outer_layout)
 
         splitter.addWidget(left_panel)
         splitter.addWidget(right_panel)

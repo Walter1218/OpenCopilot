@@ -80,7 +80,8 @@ def generate_ppt_from_text(text, output_path="output.pptx"):
         # 判断是否应该开启新一页：遇到一级/二级标题，或中文大写序号，或单页内容超过 6 行
         is_new_slide_marker = line.startswith('# ') or line.startswith('## ') or re.match(r'^[一二三四五六七八九十]+、', line)
         
-        if slide_content_count >= 6 or is_new_slide_marker:
+        # 如果当前没有 current_slide，无论如何都需要新建一页
+        if current_slide is None or slide_content_count >= 6 or is_new_slide_marker:
             
             layout_idx = 0 if is_first_slide else 1
             current_slide = prs.slides.add_slide(prs.slide_layouts[layout_idx])
@@ -112,16 +113,23 @@ def generate_ppt_from_text(text, output_path="output.pptx"):
                     # 插入配图
                     add_placeholder_image(current_slide, prs)
             
-            body_shape.text = ""
+            body_shape.text = "" # 清空默认占位符内容
             is_first_slide = False
             
             if is_new_slide_marker:
                 continue
             # 如果是因为超出长度自动分页，则继续往下执行，将当前 line 添加到 body 中
             
-        elif line.startswith('### '):
+        # ---------------- 内容写入逻辑 ----------------
+        if line.startswith('### '):
              if current_slide and body_shape:
-                 p = body_shape.text_frame.add_paragraph()
+                 # pptx 在给 text 赋值空字符串后，默认可能保留一个空段落。这里复用该段落或新增。
+                 if not body_shape.text_frame.text.strip():
+                     body_shape.text_frame.clear()
+                     p = body_shape.text_frame.paragraphs[0]
+                 else:
+                     p = body_shape.text_frame.add_paragraph()
+                     
                  p.text = clean_markdown_bold(line[4:].strip())
                  p.font.bold = True
                  p.font.size = Pt(28)
@@ -131,7 +139,13 @@ def generate_ppt_from_text(text, output_path="output.pptx"):
                  
         elif line.startswith('- ') or line.startswith('* '):
             if current_slide and body_shape:
-                p = body_shape.text_frame.add_paragraph()
+                if not body_shape.text_frame.text.strip():
+                     p = body_shape.text_frame.paragraphs[0]
+                     body_shape.text_frame.clear() # 确保真正清空
+                     p = body_shape.text_frame.paragraphs[0]
+                else:
+                     p = body_shape.text_frame.add_paragraph()
+                     
                 p.text = clean_markdown_bold(line[2:].strip())
                 p.font.size = Pt(22)
                 p.level = 1 if current_slide.slide_layout.name != "Title Slide" else 0
@@ -139,7 +153,12 @@ def generate_ppt_from_text(text, output_path="output.pptx"):
                 
         elif re.match(r'^\d+\.\s', line):
             if current_slide and body_shape:
-                p = body_shape.text_frame.add_paragraph()
+                if not body_shape.text_frame.text.strip():
+                     body_shape.text_frame.clear()
+                     p = body_shape.text_frame.paragraphs[0]
+                else:
+                     p = body_shape.text_frame.add_paragraph()
+                     
                 p.text = clean_markdown_bold(re.sub(r'^\d+\.\s', '', line).strip())
                 p.font.size = Pt(22)
                 p.level = 1 if current_slide.slide_layout.name != "Title Slide" else 0
@@ -149,7 +168,13 @@ def generate_ppt_from_text(text, output_path="output.pptx"):
             if current_slide and body_shape:
                 if line.startswith('```'):
                     continue
-                p = body_shape.text_frame.add_paragraph()
+                    
+                if not body_shape.text_frame.text.strip():
+                     body_shape.text_frame.clear()
+                     p = body_shape.text_frame.paragraphs[0]
+                else:
+                     p = body_shape.text_frame.add_paragraph()
+                     
                 p.text = clean_markdown_bold(line)
                 
                 if current_slide.slide_layout.name == "Title Slide":

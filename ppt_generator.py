@@ -1,5 +1,6 @@
 import re
 import os
+import json
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
@@ -14,13 +15,11 @@ def clean_markdown(text):
 
 def apply_corporate_theme(slide, prs, is_title_slide=False):
     """应用现代化极简商务主题"""
-    # 纯净白灰背景
     background = slide.background
     fill = background.fill
     fill.solid()
     fill.fore_color.rgb = RGBColor(250, 250, 252)
     
-    # 底部贯穿的品牌色线
     shape = slide.shapes.add_shape(
         MSO_SHAPE.RECTANGLE, 
         Inches(0), prs.slide_height - Inches(0.1), 
@@ -31,7 +30,6 @@ def apply_corporate_theme(slide, prs, is_title_slide=False):
     shape.line.fill.background()
 
     if is_title_slide:
-        # 封面几何装饰
         dec1 = slide.shapes.add_shape(
             MSO_SHAPE.RIGHT_TRIANGLE, 
             prs.slide_width - Inches(5), Inches(0), 
@@ -50,19 +48,11 @@ def apply_corporate_theme(slide, prs, is_title_slide=False):
         dec2.fill.fore_color.rgb = RGBColor(0, 82, 204)
         dec2.line.fill.background()
 
-def calculate_lines(text):
-    """估算文本占据的物理行数，避免内容溢出"""
-    # 宽屏文本框，24号字，一行约能容纳 40 个中文字符
-    chars_per_line = 40
-    lines = max(1, len(text) // chars_per_line + 1)
-    return lines
-
-def format_title_slide(slide, title_text):
+def format_title_slide(slide, title_text, subtitle_text=""):
     """格式化封面"""
     title_shape = slide.shapes.title
-    title_shape.text = title_text
+    title_shape.text = clean_markdown(title_text)
     
-    # 将标题框居中并调整大小
     title_shape.width = Inches(8)
     title_shape.left = Inches(1)
     title_shape.top = Inches(2.5)
@@ -72,132 +62,116 @@ def format_title_slide(slide, title_text):
         p.font.size = Pt(44)
         p.font.color.rgb = RGBColor(15, 25, 45)
         p.alignment = PP_ALIGN.LEFT
+        
+    if subtitle_text and len(slide.placeholders) > 1:
+        subtitle_shape = slide.placeholders[1]
+        subtitle_shape.text = clean_markdown(subtitle_text)
+        subtitle_shape.width = Inches(8)
+        subtitle_shape.left = Inches(1)
+        subtitle_shape.top = Inches(3.8)
+        for p in subtitle_shape.text_frame.paragraphs:
+            p.font.size = Pt(24)
+            p.font.color.rgb = RGBColor(100, 100, 110)
+            p.alignment = PP_ALIGN.LEFT
 
-def generate_ppt_from_text(text, output_path="output.pptx"):
-    prs = Presentation()
+def format_content_slide(slide, title_text, items):
+    """格式化内容页"""
+    title_shape = slide.shapes.title
+    body_shape = slide.placeholders[1]
     
-    # 16:9 宽屏
-    prs.slide_width = Inches(13.333)
-    prs.slide_height = Inches(7.5)
+    title_shape.text = clean_markdown(title_text)
+    title_shape.width = Inches(11.333)
+    title_shape.left = Inches(1)
+    title_shape.top = Inches(0.5)
+    title_shape.height = Inches(1.2)
     
-    lines = text.split('\n')
-    current_slide = None
-    title_shape = None
-    body_shape = None
-    
-    is_first_slide = True
-    slide_content_lines = 0
-    MAX_LINES_PER_SLIDE = 10
-    
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-            
-        # 解析是否需要开启新页
-        is_h1 = line.startswith('# ')
-        is_h2 = line.startswith('## ')
-        is_cn_num = re.match(r'^[一二三四五六七八九十]+、', line) is not None
+    for p in title_shape.text_frame.paragraphs:
+        p.font.bold = True
+        p.font.size = Pt(36)
+        p.font.color.rgb = RGBColor(0, 82, 204)
+        p.alignment = PP_ALIGN.LEFT
         
-        is_new_slide_marker = is_h1 or is_h2 or is_cn_num
-        
-        # 估算当前行占据的排版行数 (如果是标题，权重视为占用大一些)
-        needed_lines = 2 if line.startswith('###') else calculate_lines(line)
-        
-        if current_slide is None or (slide_content_lines + needed_lines > MAX_LINES_PER_SLIDE) or is_new_slide_marker:
-            
-            layout_idx = 0 if is_first_slide else 1
-            current_slide = prs.slides.add_slide(prs.slide_layouts[layout_idx])
-            slide_content_lines = 0
-            
-            apply_corporate_theme(current_slide, prs, is_title_slide=is_first_slide)
-            
-            title_shape = current_slide.shapes.title
-            body_shape = current_slide.placeholders[1] if layout_idx == 1 else None
-            
-            # 设置标题内容
-            if is_new_slide_marker:
-                raw_text = clean_markdown(re.sub(r'^#+\s*', '', line))
-                if is_first_slide:
-                    format_title_slide(current_slide, raw_text)
-                else:
-                    title_shape.text = raw_text
-            else:
-                if not is_first_slide:
-                    title_shape.text = "续前页"
-                else:
-                    format_title_slide(current_slide, "报告内容")
-            
-            # 美化内容页标题
-            if not is_first_slide:
-                title_shape.width = Inches(11.333)
-                title_shape.left = Inches(1)
-                title_shape.top = Inches(0.5)
-                title_shape.height = Inches(1.2)
-                for p in title_shape.text_frame.paragraphs:
-                    p.font.bold = True
-                    p.font.size = Pt(36)
-                    p.font.color.rgb = RGBColor(0, 82, 204)
-                    p.alignment = PP_ALIGN.LEFT
-                    
-                # 调整正文文本框以适应全宽
-                body_shape.width = Inches(11.333)
-                body_shape.left = Inches(1)
-                body_shape.top = Inches(1.8)
-                body_shape.height = Inches(5.0)
-                body_shape.text_frame.clear()
-            
-            is_first_slide = False
-            
-            if is_new_slide_marker:
-                continue
-                
-        # ---------------- 内容写入逻辑 ----------------
-        if not body_shape:
+    body_shape.width = Inches(11.333)
+    body_shape.left = Inches(1)
+    body_shape.top = Inches(1.8)
+    body_shape.height = Inches(5.0)
+    body_shape.text_frame.clear()
+    
+    for item in items:
+        level = item.get("level", 0)
+        text = clean_markdown(item.get("text", ""))
+        if not text:
             continue
             
         p = body_shape.text_frame.paragraphs[0] if not body_shape.text_frame.text.strip() else body_shape.text_frame.add_paragraph()
-        p.space_after = Pt(12)  # 增加段落间距，让排版呼吸感更好
+        p.text = text
+        p.level = level
+        p.space_after = Pt(12)
         
-        if line.startswith('### '):
-            p.text = clean_markdown(line[4:])
+        if level == 0:
             p.font.bold = True
             p.font.size = Pt(28)
             p.font.color.rgb = RGBColor(15, 25, 45)
-            p.level = 0
-            slide_content_lines += 2
-            
-        elif line.startswith('- ') or line.startswith('* '):
-            p.text = clean_markdown(line[2:])
-            p.font.size = Pt(22)
-            p.font.color.rgb = RGBColor(60, 64, 67)
-            p.level = 1
-            slide_content_lines += needed_lines
-            
-        elif re.match(r'^\d+\.\s', line):
-            p.text = clean_markdown(re.sub(r'^\d+\.\s', '', line))
-            p.font.size = Pt(22)
-            p.font.color.rgb = RGBColor(60, 64, 67)
-            p.level = 1
-            slide_content_lines += needed_lines
-            
         else:
-            if line.startswith('```'):
-                continue
-            p.text = clean_markdown(line)
-            p.font.size = Pt(20)
-            p.font.color.rgb = RGBColor(80, 84, 87)
-            p.level = 0
-            slide_content_lines += needed_lines
+            p.font.size = Pt(22)
+            p.font.color.rgb = RGBColor(60, 64, 67)
+
+def extract_json_from_text(text):
+    """从大模型的混合输出中提取 JSON 数组"""
+    # 尝试找到被 ```json ``` 包裹的内容
+    match = re.search(r'```(?:json)?\s*(\[.*?\])\s*```', text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except:
+            pass
             
-    # 兜底：如果没有任何内容
+    # 尝试直接解析
+    try:
+        start_idx = text.find('[')
+        end_idx = text.rfind(']') + 1
+        if start_idx != -1 and end_idx > start_idx:
+            return json.loads(text[start_idx:end_idx])
+    except:
+        pass
+        
+    return None
+
+def generate_ppt_from_json(json_data, output_path="output.pptx"):
+    prs = Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+    
+    for slide_data in json_data:
+        slide_type = slide_data.get("type", "content")
+        
+        if slide_type == "title":
+            slide = prs.slides.add_slide(prs.slide_layouts[0])
+            apply_corporate_theme(slide, prs, is_title_slide=True)
+            format_title_slide(slide, slide_data.get("title", "演示文稿"), slide_data.get("subtitle", ""))
+            
+        elif slide_type == "content":
+            slide = prs.slides.add_slide(prs.slide_layouts[1])
+            apply_corporate_theme(slide, prs, is_title_slide=False)
+            format_content_slide(slide, slide_data.get("title", "内容"), slide_data.get("items", []))
+            
     if len(prs.slides) == 0:
-        current_slide = prs.slides.add_slide(prs.slide_layouts[0])
-        apply_corporate_theme(current_slide, prs, is_title_slide=True)
-        format_title_slide(current_slide, "自动生成的幻灯片")
+        slide = prs.slides.add_slide(prs.slide_layouts[0])
+        apply_corporate_theme(slide, prs, is_title_slide=True)
+        format_title_slide(slide, "自动生成的幻灯片")
         
     prs.save(output_path)
     return os.path.abspath(output_path)
+
+def generate_ppt_from_text(text, output_path="output.pptx"):
+    """入口函数，兼容 JSON 提取与旧版降级处理"""
+    json_data = extract_json_from_text(text)
+    
+    if json_data and isinstance(json_data, list):
+        return generate_ppt_from_json(json_data, output_path)
+    
+    # 如果没提取到 JSON，说明大模型没有按规范输出（或者走的是旧流程），抛出异常让上层处理
+    raise ValueError("无法从内容中提取出有效的幻灯片 JSON 结构。")
 
 if __name__ == "__main__":
     pass

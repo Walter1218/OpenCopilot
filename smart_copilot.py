@@ -2193,9 +2193,14 @@ class AICardWindow(QWidget):
             self.btn_apply_to_ide.show()
         self.btn_copy_result.show()
         
-        # 如果包含标题，则显示生成PPT按钮
+        # 如果包含标题或者是 JSON 数组格式，则显示生成PPT按钮
         if self.worker and hasattr(self.worker, 'full_text'):
-            if '# ' in self.worker.full_text or '## ' in self.worker.full_text:
+            text = self.worker.full_text
+            if '# ' in text or '## ' in text or (text.strip().startswith('[') and '{"type"' in text):
+                self.btn_export_ppt.show()
+        elif self.chat_worker and hasattr(self.chat_worker, 'full_text'):
+            text = self.chat_worker.full_text
+            if '# ' in text or '## ' in text or (text.strip().startswith('[') and '{"type"' in text):
                 self.btn_export_ppt.show()
 
     def _export_to_ppt(self):

@@ -74,8 +74,34 @@ def format_title_slide(slide, title_text, subtitle_text=""):
             p.font.color.rgb = RGBColor(100, 100, 110)
             p.alignment = PP_ALIGN.LEFT
 
-def format_content_slide(slide, title_text, items):
-    """格式化内容页"""
+def add_placeholder_image(slide, prs):
+    """为 image_right 版式添加右侧配图占位"""
+    try:
+        img_width = Inches(4.5)
+        img_height = prs.slide_height
+        left = prs.slide_width - img_width
+        top = Inches(0)
+        
+        # 使用几何图形拼接出具有设计感的占位图
+        shape1 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, left, top, img_width, img_height)
+        shape1.fill.solid()
+        shape1.fill.fore_color.rgb = RGBColor(235, 240, 245)
+        shape1.line.fill.background()
+        
+        shape2 = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, left + Inches(0.5), top + Inches(1.5), img_width - Inches(1.0), Inches(4.5))
+        shape2.fill.solid()
+        shape2.fill.fore_color.rgb = RGBColor(0, 102, 204)
+        shape2.line.fill.background()
+        
+        shape3 = slide.shapes.add_shape(MSO_SHAPE.OVAL, left + Inches(3.0), top + Inches(4.5), Inches(2.0), Inches(2.0))
+        shape3.fill.solid()
+        shape3.fill.fore_color.rgb = RGBColor(255, 153, 51)
+        shape3.line.fill.background()
+    except Exception as e:
+        pass
+
+def format_content_slide(slide, title_text, items, layout_type="text_only", prs=None):
+    """格式化内容页，支持多种版式"""
     title_shape = slide.shapes.title
     body_shape = slide.placeholders[1]
     
@@ -91,7 +117,38 @@ def format_content_slide(slide, title_text, items):
         p.font.color.rgb = RGBColor(0, 82, 204)
         p.alignment = PP_ALIGN.LEFT
         
-    body_shape.width = Inches(11.333)
+    # 根据 layout_type 调整文本框宽度
+    if layout_type == "image_right":
+        body_shape.width = Inches(7.5)
+        if prs:
+            add_placeholder_image(slide, prs)
+    elif layout_type == "three_columns":
+        # 三栏对比模式：清空原 body_shape，手动创建三个文本框
+        body_shape.text_frame.clear()
+        col_width = Inches(3.5)
+        for i in range(min(3, len(items))):
+            left_pos = Inches(1) + i * Inches(3.8)
+            txBox = slide.shapes.add_textbox(left_pos, Inches(2.0), col_width, Inches(4.0))
+            tf = txBox.text_frame
+            tf.word_wrap = True
+            
+            p = tf.paragraphs[0]
+            p.text = clean_markdown(items[i].get("text", ""))
+            p.font.bold = True
+            p.font.size = Pt(24)
+            p.font.color.rgb = RGBColor(15, 25, 45)
+            p.alignment = PP_ALIGN.CENTER
+            
+            # 在上方添加一个修饰图标(圆形色块)
+            icon = slide.shapes.add_shape(MSO_SHAPE.OVAL, left_pos + Inches(1.25), Inches(1.2), Inches(1.0), Inches(1.0))
+            icon.fill.solid()
+            icon.fill.fore_color.rgb = RGBColor(235, 240, 248)
+            icon.line.fill.background()
+        return # 三栏模式自行处理 items，直接返回
+    else:
+        # text_only
+        body_shape.width = Inches(11.333)
+        
     body_shape.left = Inches(1)
     body_shape.top = Inches(1.8)
     body_shape.height = Inches(5.0)
@@ -153,7 +210,8 @@ def generate_ppt_from_json(json_data, output_path="output.pptx"):
         elif slide_type == "content":
             slide = prs.slides.add_slide(prs.slide_layouts[1])
             apply_corporate_theme(slide, prs, is_title_slide=False)
-            format_content_slide(slide, slide_data.get("title", "内容"), slide_data.get("items", []))
+            layout_type = slide_data.get("layout", "text_only")
+            format_content_slide(slide, slide_data.get("title", "内容"), slide_data.get("items", []), layout_type, prs)
             
     if len(prs.slides) == 0:
         slide = prs.slides.add_slide(prs.slide_layouts[0])

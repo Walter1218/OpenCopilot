@@ -235,11 +235,13 @@ CONTEXT_DESCRIPTIONS = {
         "[\n"
         "  {\n"
         "    \"type\": \"title\", // 封面页\n"
+        "    \"layout\": \"center\", // title 页默认 center\n"
         "    \"title\": \"主标题\",\n"
         "    \"subtitle\": \"副标题或日期\"\n"
         "  },\n"
         "  {\n"
         "    \"type\": \"content\", // 内容页\n"
+        "    \"layout\": \"text_only\", // 页面版式：text_only(纯文本), image_right(右侧配图), three_columns(三栏对比)\n"
         "    \"title\": \"页面大标题\",\n"
         "    \"items\": [\n"
         "      {\"level\": 0, \"text\": \"一级要点\"},\n"
@@ -249,7 +251,8 @@ CONTEXT_DESCRIPTIONS = {
         "]\n"
         "要求：\n"
         "1. 必须对长篇大论进行提炼压缩，不要把长段落直接塞进 PPT。\n"
-        "2. 页面不能过载，单页 items 超过 6 条时，请主动切分为新的一页（title后加'（续）'）。"
+        "2. 页面不能过载，单页 items 超过 6 条时，请主动切分为新的一页（title后加'（续）'）。\n"
+        "3. 智能选择版式：如果内容适合配图说明，设置 layout 为 'image_right'；如果是多项并列对比，设置 layout 为 'three_columns'；默认使用 'text_only'。"
     ),
 }
 

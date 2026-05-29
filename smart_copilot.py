@@ -2398,29 +2398,43 @@ class AICardWindow(QWidget):
                 self.btn_export_ppt.show()
 
     def _export_to_ppt(self):
-        try:
-            import ppt_generator
-            text = ""
-            # 根据当前在哪个tab，获取内容
-            if self.tabs.currentIndex() == 0 and self.worker and hasattr(self.worker, 'full_text'):
-                text = self.worker.full_text
-            elif self.tabs.currentIndex() == 1 and self.chat_worker and hasattr(self.chat_worker, 'full_text'):
-                text = self.chat_worker.full_text
-                
-            if not text:
-                QMessageBox.warning(self, "导出失败", "没有可导出的内容。")
-                return
-                
-            save_path, _ = QFileDialog.getSaveFileName(
-                self, "导出为 PPT",
-                os.path.expanduser("~/Desktop/generated_presentation.pptx"),
-                "PowerPoint Files (*.pptx)"
-            )
-            if save_path:
-                ppt_generator.generate_ppt_from_text(text, save_path)
-                QMessageBox.information(self, "导出成功", f"PPT 已保存至:\n{save_path}")
-        except Exception as e:
-            QMessageBox.critical(self, "导出错误", f"导出失败: {e}")
+        """将 AI 生成的 Markdown 大纲，通过人机共创界面，最终导出为 PPT"""
+        text = ""
+        # 根据当前在哪个tab，获取内容
+        if self.tabs.currentIndex() == 0 and self.worker and hasattr(self.worker, 'full_text'):
+            text = self.worker.full_text
+        elif self.tabs.currentIndex() == 1 and self.chat_worker and hasattr(self.chat_worker, 'full_text'):
+            text = self.chat_worker.full_text
+            
+        if not text:
+            QMessageBox.warning(self, "导出失败", "没有可导出的内容。")
+            return
+            
+        json_data = extract_json_from_text(text)
+        if not json_data:
+            QMessageBox.warning(self, "解析失败", "大模型输出的内容不符合预期的 JSON 大纲格式。")
+            return
+            
+        # 唤起人机共创编辑器
+        dialog = PPTPreviewDialog(json_data, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            final_json = dialog.get_final_json()
+            try:
+                save_path, _ = QFileDialog.getSaveFileName(
+                    self, "导出为 PPT",
+                    os.path.expanduser("~/Desktop/generated_presentation.pptx"),
+                    "PowerPoint Files (*.pptx)"
+                )
+                if save_path:
+                    # 调用底层排版引擎生成 PPT
+                    generate_ppt_from_json(final_json, save_path)
+                    QMessageBox.information(self, "导出成功", f"PPT 已保存至:\n{save_path}")
+                    # macOS 自动打开文件
+                    subprocess.run(["open", save_path])
+            except Exception as e:
+                import traceback
+                print(traceback.format_exc())
+                QMessageBox.critical(self, "导出错误", f"导出失败: {e}")
 
     def hide_card(self):
         self._pending_hide = False

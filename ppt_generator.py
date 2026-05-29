@@ -174,24 +174,68 @@ def format_content_slide(slide, title_text, items, layout_type="text_only", prs=
             p.font.color.rgb = RGBColor(60, 64, 67)
 
 def extract_json_from_text(text):
-    """从大模型的混合输出中提取 JSON 数组"""
-    # 尝试找到被 ```json ``` 包裹的内容
-    match = re.search(r'```(?:json)?\s*(\[.*?\])\s*```', text, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(1))
-        except:
-            pass
-            
-    # 尝试直接解析
+    """从大模型的混合输出中提取 JSON 数据，或降级解析 Markdown 为 PPT 大纲"""
+    # 1. 尝试匹配 ```json ... ``` 块（支持对象 {} 或数组 []）
+    match = re.search(r'```(?:json)?\s*(\{.*?\}|\[.*?\])\s*```', text, re.DOTALL)
+    json_str = match.group(1) if match else text
+
+    # 2. 尝试直接解析 JSON
     try:
-        start_idx = text.find('[')
-        end_idx = text.rfind(']') + 1
-        if start_idx != -1 and end_idx > start_idx:
-            return json.loads(text[start_idx:end_idx])
-    except:
+        start_obj = json_str.find('{')
+        start_arr = json_str.find('[')
+        start_idx = -1
+        
+        if start_obj != -1 and start_arr != -1:
+            start_idx = min(start_obj, start_arr)
+        else:
+            start_idx = max(start_obj, start_arr)
+            
+        if start_idx != -1:
+            end_idx = -1
+            if json_str[start_idx] == '{':
+                end_idx = json_str.rfind('}') + 1
+            else:
+                end_idx = json_str.rfind(']') + 1
+                
+            if end_idx > start_idx:
+                clean_str = json_str[start_idx:end_idx]
+                parsed = json.loads(clean_str)
+                
+                # 兼容设计文档中的 {"slides": [...]} 格式
+                if isinstance(parsed, dict) and "slides" in parsed:
+                    return parsed["slides"]
+                elif isinstance(parsed, list):
+                    return parsed
+    except Exception:
         pass
         
+    # 3. 如果 JSON 解析失败，但包含 Markdown 标题，则降级将 Markdown 转换为 JSON 结构
+    if '# ' in text or '## ' in text:
+        slides = []
+        current_slide = None
+        for line in text.split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith('# '):
+                if current_slide: slides.append(current_slide)
+                current_slide = {"type": "title", "layout": "center", "title": line[2:].strip(), "subtitle": "", "items": []}
+            elif line.startswith('## '):
+                if current_slide: slides.append(current_slide)
+                current_slide = {"type": "content", "layout": "text_only", "title": line[3:].strip(), "items": []}
+            elif line.startswith('- ') or line.startswith('* '):
+                if current_slide:
+                    if "items" not in current_slide: current_slide["items"] = []
+                    current_slide["items"].append({"level": 0, "text": line[2:].strip()})
+            else:
+                if current_slide and current_slide.get("type") == "content":
+                    if "items" not in current_slide: current_slide["items"] = []
+                    current_slide["items"].append({"level": 0, "text": line})
+        if current_slide:
+            slides.append(current_slide)
+        if slides:
+            return slides
+            
     return None
 
 def generate_ppt_from_json(json_data, output_path="output.pptx"):

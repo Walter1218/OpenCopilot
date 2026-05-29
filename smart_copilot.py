@@ -2391,11 +2391,11 @@ class AICardWindow(QWidget):
         # 如果包含标题或者是 JSON 数组格式，则显示生成PPT按钮
         if self.worker and hasattr(self.worker, 'full_text'):
             text = self.worker.full_text
-            if '# ' in text or '## ' in text or (text.strip().startswith('[') and '{"type"' in text):
+            if '# ' in text or '## ' in text or extract_json_from_text(text):
                 self.btn_export_ppt.show()
         elif self.chat_worker and hasattr(self.chat_worker, 'full_text'):
             text = self.chat_worker.full_text
-            if '# ' in text or '## ' in text or (text.strip().startswith('[') and '{"type"' in text):
+            if '# ' in text or '## ' in text or extract_json_from_text(text):
                 self.btn_export_ppt.show()
 
     def _export_to_ppt(self):

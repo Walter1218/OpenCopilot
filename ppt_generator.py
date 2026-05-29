@@ -107,9 +107,16 @@ def generate_ppt_from_text(text, output_path="output.pptx"):
                     p.font.size = Pt(40)
                     p.font.color.rgb = RGBColor(0, 102, 204)
                     
-                    # 调整文本框宽度，留出右侧放图片的空间
+                    # 调整文本框宽度，留出右侧放图片的空间，同时必须保留原有高度（python-pptx 改变 placeholder 宽度时会导致高度归零）
+                    old_title_height = title_shape.height
+                    old_body_height = body_shape.height
+                    
                     title_shape.width = Inches(7.5)
+                    title_shape.height = old_title_height
+                    
                     body_shape.width = Inches(7.5)
+                    body_shape.height = old_body_height
+                    
                     # 插入配图
                     add_placeholder_image(current_slide, prs)
             

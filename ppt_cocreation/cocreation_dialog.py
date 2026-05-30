@@ -34,6 +34,58 @@ from ppt_generator import generate_ppt_from_json, extract_json_from_text
 class CoCreationDialog(QDialog):
     """PPT 人机共创主对话框"""
     
+    # 主题定义
+    THEMES = {
+        "dark": {
+            "name": "深色",
+            "dialog_bg": "#1e1e1e",
+            "dialog_color": "#d4d4d4",
+            "splitter_handle": "#3c3c3c",
+            "toolbar_bg": "#2d2d2d",
+            "button_bg": "#3c3c3c",
+            "button_hover": "#4c4c4c",
+            "button_pressed": "#5c5c5c",
+            "accent_color": "#007bff",
+            "border_color": "#555555"
+        },
+        "light": {
+            "name": "浅色",
+            "dialog_bg": "#f5f5f5",
+            "dialog_color": "#333333",
+            "splitter_handle": "#cccccc",
+            "toolbar_bg": "#ffffff",
+            "button_bg": "#e0e0e0",
+            "button_hover": "#d0d0d0",
+            "button_pressed": "#c0c0c0",
+            "accent_color": "#0066cc",
+            "border_color": "#cccccc"
+        },
+        "blue": {
+            "name": "蓝色",
+            "dialog_bg": "#0d1b2a",
+            "dialog_color": "#e0e0e0",
+            "splitter_handle": "#1b3a5c",
+            "toolbar_bg": "#1b2838",
+            "button_bg": "#2a4a6b",
+            "button_hover": "#3a5a7b",
+            "button_pressed": "#4a6a8b",
+            "accent_color": "#4da6ff",
+            "border_color": "#3a5a7b"
+        },
+        "green": {
+            "name": "绿色",
+            "dialog_bg": "#0a1f0a",
+            "dialog_color": "#d4d4d4",
+            "splitter_handle": "#1a3a1a",
+            "toolbar_bg": "#1a2a1a",
+            "button_bg": "#2a4a2a",
+            "button_hover": "#3a5a3a",
+            "button_pressed": "#4a6a4a",
+            "accent_color": "#4dff4d",
+            "border_color": "#3a5a3a"
+        }
+    }
+    
     def __init__(
         self,
         original_text: str,
@@ -48,6 +100,9 @@ class CoCreationDialog(QDialog):
         self.json_data = json_data if isinstance(json_data, list) else json_data.get('slides', [])
         self.agent_url = agent_url
         self.output_path = None
+        
+        # 主题
+        self.current_theme = "dark"
         
         # 原文匹配器
         self.source_matcher = SourceMatcher()
@@ -85,18 +140,8 @@ class CoCreationDialog(QDialog):
             self.setMinimumSize(1200, 700)
             self.resize(1400, 900)
         
-        # 设置样式
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #1e1e1e;
-                color: #d4d4d4;
-            }
-            QSplitter::handle {
-                background-color: #3c3c3c;
-                width: 2px;
-                height: 2px;
-            }
-        """)
+        # 设置样式（使用当前主题）
+        self._apply_theme()
         
         # 主布局
         main_layout = QVBoxLayout(self)
@@ -110,23 +155,23 @@ class CoCreationDialog(QDialog):
         # 三面板分割器
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         
-        # 左侧：原文面板
+        # 左侧：原文面板（占30%）
         self.source_panel = SourcePanel()
-        self.source_panel.setMinimumWidth(300)
+        self.source_panel.setMinimumWidth(250)
         self.splitter.addWidget(self.source_panel)
         
-        # 中间：编辑大纲面板
+        # 中间：编辑大纲面板（占30%）
         self.outline_panel = OutlinePanel()
-        self.outline_panel.setMinimumWidth(350)
+        self.outline_panel.setMinimumWidth(300)
         self.splitter.addWidget(self.outline_panel)
         
-        # 右侧：预览面板
+        # 右侧：预览面板（占40%，优先显示）
         self.preview_panel = PreviewPanel()
         self.preview_panel.setMinimumWidth(400)
         self.splitter.addWidget(self.preview_panel)
         
-        # 设置分割比例
-        self.splitter.setSizes([400, 500, 500])
+        # 设置分割比例：原文30% : 大纲30% : 预览40%
+        self.splitter.setSizes([300, 300, 400])
         
         main_layout.addWidget(self.splitter, 1)
         
@@ -263,17 +308,126 @@ class CoCreationDialog(QDialog):
     
     def _setup_shortcuts(self):
         """设置快捷键"""
+        # === 文件操作 ===
         # Ctrl+S: 导出
         shortcut_save = QShortcut(QKeySequence("Ctrl+S"), self)
         shortcut_save.activated.connect(self._on_export)
+        
+        # Ctrl+Shift+S: 导出并下载
+        shortcut_save_as = QShortcut(QKeySequence("Ctrl+Shift+S"), self)
+        shortcut_save_as.activated.connect(self._on_export_and_download)
         
         # Escape: 取消
         shortcut_esc = QShortcut(QKeySequence("Escape"), self)
         shortcut_esc.activated.connect(self.reject)
         
+        # === 预览操作 ===
         # F5: 全屏预览
         shortcut_f5 = QShortcut(QKeySequence("F5"), self)
         shortcut_f5.activated.connect(self._on_fullscreen_preview)
+        
+        # F11: 切换全屏（替代F5）
+        shortcut_f11 = QShortcut(QKeySequence("F11"), self)
+        shortcut_f11.activated.connect(self._on_fullscreen_preview)
+        
+        # === 导航操作 ===
+        # Ctrl+Left: 上一页
+        shortcut_prev = QShortcut(QKeySequence("Ctrl+Left"), self)
+        shortcut_prev.activated.connect(self._on_prev_slide)
+        
+        # Ctrl+Right: 下一页
+        shortcut_next = QShortcut(QKeySequence("Ctrl+Right"), self)
+        shortcut_next.activated.connect(self._on_next_slide)
+        
+        # Ctrl+Home: 第一页
+        shortcut_home = QShortcut(QKeySequence("Ctrl+Home"), self)
+        shortcut_home.activated.connect(self._on_first_slide)
+        
+        # Ctrl+End: 最后一页
+        shortcut_end = QShortcut(QKeySequence("Ctrl+End"), self)
+        shortcut_end.activated.connect(self._on_last_slide)
+        
+        # === 编辑操作 ===
+        # Ctrl+Z: 撤销（大纲面板）
+        shortcut_undo = QShortcut(QKeySequence("Ctrl+Z"), self)
+        shortcut_undo.activated.connect(self._on_undo)
+        
+        # Ctrl+Shift+Z: 重做（大纲面板）
+        shortcut_redo = QShortcut(QKeySequence("Ctrl+Shift+Z"), self)
+        shortcut_redo.activated.connect(self._on_redo)
+        
+        # Delete: 删除选中幻灯片
+        shortcut_delete = QShortcut(QKeySequence("Delete"), self)
+        shortcut_delete.activated.connect(self._on_delete_slide)
+        
+        # Ctrl+D: 复制当前幻灯片
+        shortcut_duplicate = QShortcut(QKeySequence("Ctrl+D"), self)
+        shortcut_duplicate.activated.connect(self._on_duplicate_slide)
+        
+        # Ctrl+Shift+N: 添加新幻灯片
+        shortcut_add = QShortcut(QKeySequence("Ctrl+Shift+N"), self)
+        shortcut_add.activated.connect(self._on_add_slide)
+        
+        # === AI 操作 ===
+        # Ctrl+Enter: 发送AI消息
+        shortcut_send = QShortcut(QKeySequence("Ctrl+Return"), self)
+        shortcut_send.activated.connect(self._on_send_ai_message)
+        
+        # Ctrl+1: 快捷指令 - 换个标题
+        shortcut_cmd1 = QShortcut(QKeySequence("Ctrl+1"), self)
+        shortcut_cmd1.activated.connect(lambda: self._execute_shortcut("换个标题"))
+        
+        # Ctrl+2: 快捷指令 - 添加要点
+        shortcut_cmd2 = QShortcut(QKeySequence("Ctrl+2"), self)
+        shortcut_cmd2.activated.connect(lambda: self._execute_shortcut("添加要点"))
+        
+        # Ctrl+3: 快捷指令 - 换版式
+        shortcut_cmd3 = QShortcut(QKeySequence("Ctrl+3"), self)
+        shortcut_cmd3.activated.connect(lambda: self._execute_shortcut("换版式"))
+        
+        # Ctrl+4: 快捷指令 - 精简内容
+        shortcut_cmd4 = QShortcut(QKeySequence("Ctrl+4"), self)
+        shortcut_cmd4.activated.connect(lambda: self._execute_shortcut("精简内容"))
+        
+        # === 视图操作 ===
+        # Ctrl++: 放大预览
+        shortcut_zoom_in = QShortcut(QKeySequence("Ctrl++"), self)
+        shortcut_zoom_in.activated.connect(self._on_zoom_in)
+        
+        # Ctrl+-: 缩小预览
+        shortcut_zoom_out = QShortcut(QKeySequence("Ctrl+-"), self)
+        shortcut_zoom_out.activated.connect(self._on_zoom_out)
+        
+        # Ctrl+0: 重置缩放
+        shortcut_zoom_reset = QShortcut(QKeySequence("Ctrl+0"), self)
+        shortcut_zoom_reset.activated.connect(self._on_zoom_reset)
+        
+        # === 面板切换 ===
+        # Ctrl+1: 切换到原文面板
+        shortcut_panel1 = QShortcut(QKeySequence("Alt+1"), self)
+        shortcut_panel1.activated.connect(lambda: self._focus_panel("source"))
+        
+        # Ctrl+2: 切换到大纲面板
+        shortcut_panel2 = QShortcut(QKeySequence("Alt+2"), self)
+        shortcut_panel2.activated.connect(lambda: self._focus_panel("outline"))
+        
+        # Ctrl+3: 切换到预览面板
+        shortcut_panel3 = QShortcut(QKeySequence("Alt+3"), self)
+        shortcut_panel3.activated.connect(lambda: self._focus_panel("preview"))
+        
+        # Ctrl+4: 切换到AI对话
+        shortcut_panel4 = QShortcut(QKeySequence("Alt+4"), self)
+        shortcut_panel4.activated.connect(lambda: self._focus_panel("ai"))
+        
+        # === 主题切换 ===
+        # Ctrl+T: 切换主题
+        shortcut_theme = QShortcut(QKeySequence("Ctrl+T"), self)
+        shortcut_theme.activated.connect(self._on_toggle_theme)
+        
+        # === 帮助 ===
+        # F1: 显示快捷键帮助
+        shortcut_help = QShortcut(QKeySequence("F1"), self)
+        shortcut_help.activated.connect(self._on_show_shortcuts_help)
     
     def _connect_signals(self):
         """连接信号"""
@@ -348,8 +502,9 @@ class CoCreationDialog(QDialog):
             # 刷新大纲
             self.outline_panel._refresh_items()
             
-            # 更新预览
+            # 更新预览数据（set_slides_data 保留当前索引）
             self.preview_panel.set_slides_data(self.json_data)
+            self.preview_panel.set_current_slide(current_index)
             
             # 更新统计
             self._update_stats()
@@ -383,10 +538,11 @@ class CoCreationDialog(QDialog):
         insert_pos = current_index + 1 if current_index >= 0 else len(self.json_data)
         self.json_data.insert(insert_pos, new_slide)
         
-        # 刷新大纲和预览
+        # 刷新大纲和预览，跳转到新创建的幻灯片
         self.outline_panel.set_slides_data(self.json_data)
         self.outline_panel.slide_list.setCurrentRow(insert_pos)
         self.preview_panel.set_slides_data(self.json_data)
+        self.preview_panel.set_current_slide(insert_pos)
         self._update_stats()
         
         QMessageBox.information(
@@ -414,7 +570,9 @@ class CoCreationDialog(QDialog):
     def _on_slide_changed(self, index: int, slide_data: dict):
         """幻灯片内容变化"""
         self.json_data[index] = slide_data
+        # 更新预览数据但保持当前页不跳转
         self.preview_panel.set_slides_data(self.json_data)
+        self.preview_panel.set_current_slide(index)
         self._update_stats()
     
     def _on_slide_added(self, index: int, slide_data: dict):
@@ -428,6 +586,11 @@ class CoCreationDialog(QDialog):
         if 0 <= index < len(self.json_data):
             self.json_data.pop(index)
             self.preview_panel.set_slides_data(self.json_data)
+            # 删除后导航到最近的合法页
+            new_index = min(index, len(self.json_data) - 1)
+            if new_index >= 0:
+                self.preview_panel.set_current_slide(new_index)
+                self.outline_panel.slide_list.setCurrentRow(new_index)
             self._update_stats()
     
     def _on_preview_slide_changed(self, index: int):
@@ -527,10 +690,16 @@ class CoCreationDialog(QDialog):
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-⌨️ 快捷键
-• Ctrl+S: 导出 PPT
-• F5: 全屏预览
-• Escape: 取消
+⌨️ 快捷键（按 F1 查看完整列表）
+
+📁 文件：Ctrl+S 导出 | Ctrl+Shift+S 导出并下载
+🔄 预览：F5/F11 全屏 | Escape 退出
+📄 导航：Ctrl+← 上一页 | Ctrl+→ 下一页
+✏️ 编辑：Ctrl+D 复制 | Delete 删除 | Ctrl+Shift+N 新建
+🤖 AI：Ctrl+Enter 发送 | Ctrl+1~4 快捷指令
+🔍 视图：Ctrl++ 放大 | Ctrl+- 缩小 | Ctrl+0 重置
+📋 面板：Alt+1~4 切换面板
+🎨 主题：Ctrl+T 切换主题
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -549,3 +718,204 @@ class CoCreationDialog(QDialog):
     def get_final_slides(self) -> list:
         """获取最终幻灯片数据"""
         return self.json_data
+    
+    # === 快捷键对应的方法 ===
+    
+    def _on_export_and_download(self):
+        """导出并下载"""
+        self._on_export()
+    
+    def _on_prev_slide(self):
+        """上一页"""
+        current = self.preview_panel.current_index
+        if current > 0:
+            self.preview_panel.set_current_slide(current - 1)
+            self.outline_panel.slide_list.setCurrentRow(current - 1)
+    
+    def _on_next_slide(self):
+        """下一页"""
+        current = self.preview_panel.current_index
+        if current < len(self.json_data) - 1:
+            self.preview_panel.set_current_slide(current + 1)
+            self.outline_panel.slide_list.setCurrentRow(current + 1)
+    
+    def _on_first_slide(self):
+        """第一页"""
+        if self.json_data:
+            self.preview_panel.set_current_slide(0)
+            self.outline_panel.slide_list.setCurrentRow(0)
+    
+    def _on_last_slide(self):
+        """最后一页"""
+        if self.json_data:
+            last_index = len(self.json_data) - 1
+            self.preview_panel.set_current_slide(last_index)
+            self.outline_panel.slide_list.setCurrentRow(last_index)
+    
+    def _on_undo(self):
+        """撤销"""
+        # TODO: 实现撤销功能
+        pass
+    
+    def _on_redo(self):
+        """重做"""
+        # TODO: 实现重做功能
+        pass
+    
+    def _on_delete_slide(self):
+        """删除选中幻灯片"""
+        current = self.outline_panel.current_index
+        if 0 <= current < len(self.json_data):
+            self.outline_panel._on_delete_slide()
+    
+    def _on_duplicate_slide(self):
+        """复制当前幻灯片"""
+        current = self.outline_panel.current_index
+        if 0 <= current < len(self.json_data):
+            import copy
+            new_slide = copy.deepcopy(self.json_data[current])
+            new_slide['title'] = f"{new_slide.get('title', '')} (副本)"
+            self.json_data.insert(current + 1, new_slide)
+            self.outline_panel.set_slides_data(self.json_data)
+            self.outline_panel.slide_list.setCurrentRow(current + 1)
+            self.preview_panel.set_slides_data(self.json_data)
+            self.preview_panel.set_current_slide(current + 1)
+            self._update_stats()
+    
+    def _on_add_slide(self):
+        """添加新幻灯片"""
+        self.outline_panel._on_add_slide()
+    
+    def _on_send_ai_message(self):
+        """发送AI消息"""
+        self.ai_chat._on_send()
+    
+    def _execute_shortcut(self, command: str):
+        """执行快捷指令"""
+        self.ai_chat._execute_shortcut(command)
+    
+    def _on_zoom_in(self):
+        """放大预览"""
+        # TODO: 实现缩放功能
+        pass
+    
+    def _on_zoom_out(self):
+        """缩小预览"""
+        # TODO: 实现缩放功能
+        pass
+    
+    def _on_zoom_reset(self):
+        """重置缩放"""
+        # TODO: 实现缩放功能
+        pass
+    
+    def _focus_panel(self, panel_name: str):
+        """聚焦到指定面板"""
+        if panel_name == "source":
+            self.source_panel.setFocus()
+        elif panel_name == "outline":
+            self.outline_panel.setFocus()
+        elif panel_name == "preview":
+            self.preview_panel.setFocus()
+        elif panel_name == "ai":
+            self.ai_chat.input_edit.setFocus()
+    
+    def _on_toggle_theme(self):
+        """切换主题"""
+        themes = list(self.THEMES.keys())
+        current_index = themes.index(self.current_theme)
+        next_index = (current_index + 1) % len(themes)
+        self.current_theme = themes[next_index]
+        self._apply_theme()
+        
+        # 显示主题切换提示
+        theme_name = self.THEMES[self.current_theme]["name"]
+        QMessageBox.information(self, "主题切换", f"已切换到「{theme_name}」主题")
+    
+    def _apply_theme(self):
+        """应用当前主题"""
+        theme = self.THEMES[self.current_theme]
+        
+        # 主对话框样式
+        self.setStyleSheet(f"""
+            QDialog {{
+                background-color: {theme['dialog_bg']};
+                color: {theme['dialog_color']};
+            }}
+            QSplitter::handle {{
+                background-color: {theme['splitter_handle']};
+                width: 2px;
+                height: 2px;
+            }}
+            QToolTip {{
+                background-color: {theme['toolbar_bg']};
+                color: {theme['dialog_color']};
+                border: 1px solid {theme['border_color']};
+                padding: 4px;
+            }}
+        """)
+        
+        # 更新子面板样式（如果支持主题）
+        if hasattr(self, 'source_panel') and hasattr(self.source_panel, 'apply_theme'):
+            self.source_panel.apply_theme(theme)
+        if hasattr(self, 'outline_panel') and hasattr(self.outline_panel, 'apply_theme'):
+            self.outline_panel.apply_theme(theme)
+        if hasattr(self, 'preview_panel') and hasattr(self.preview_panel, 'apply_theme'):
+            self.preview_panel.apply_theme(theme)
+        if hasattr(self, 'ai_chat') and hasattr(self.ai_chat, 'apply_theme'):
+            self.ai_chat.apply_theme(theme)
+    
+    def _on_show_shortcuts_help(self):
+        """显示快捷键帮助"""
+        help_text = """⌨️ 快捷键列表
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📁 文件操作
+• Ctrl+S: 导出 PPT
+• Ctrl+Shift+S: 导出并下载
+
+🔄 预览操作
+• F5 / F11: 全屏预览
+• Escape: 退出全屏/取消
+
+📄 导航操作
+• Ctrl+←: 上一页
+• Ctrl+→: 下一页
+• Ctrl+Home: 第一页
+• Ctrl+End: 最后一页
+
+✏️ 编辑操作
+• Ctrl+Z: 撤销
+• Ctrl+Shift+Z: 重做
+• Delete: 删除选中幻灯片
+• Ctrl+D: 复制当前幻灯片
+• Ctrl+Shift+N: 添加新幻灯片
+
+🤖 AI 操作
+• Ctrl+Enter: 发送AI消息
+• Ctrl+1: 换个标题
+• Ctrl+2: 添加要点
+• Ctrl+3: 换版式
+• Ctrl+4: 精简内容
+
+🔍 视图操作
+• Ctrl++: 放大预览
+• Ctrl+-: 缩小预览
+• Ctrl+0: 重置缩放
+
+📋 面板切换
+• Alt+1: 原文面板
+• Alt+2: 大纲面板
+• Alt+3: 预览面板
+• Alt+4: AI对话
+
+🎨 主题
+• Ctrl+T: 切换主题
+
+❓ 帮助
+• F1: 显示此帮助
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+        QMessageBox.information(self, "快捷键帮助", help_text)

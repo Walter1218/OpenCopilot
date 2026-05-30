@@ -1,7 +1,7 @@
 # OpenCopilot OS级常驻化与生命周期解耦方案 (Daemon Deployment Plan)
 
-> **文档状态**: V2.0（已更新）  
-> **更新日期**: 2026-05-28
+> **文档状态**: V2.1（已更新）  
+> **更新日期**: 2026-05-30
 > **状态**: UI组件阶段1-4已完成  
 > **目标**: 指导 ASU 从"捆绑启动的单体应用"向"OS 级后台守护进程 (Daemon) + 轻量级无状态 UI"平滑演进。
 
@@ -95,3 +95,251 @@
 | 卸载 Broker 守护进程 | `bash scripts/uninstall_broker_daemon.sh` |
 | 检查 Agent 是否在线 | `curl http://127.0.0.1:18888/health` |
 | 检查 Broker 是否在线 | `curl -H "Authorization: Bearer $(cat ~/.asu_broker_token)" http://127.0.0.1:18889/health` |
+
+---
+
+## 6. 故障排查指南
+
+### 6.1 Agent 无法启动
+
+**症状**: `curl http://127.0.0.1:18888/health` 无响应
+
+**排查步骤**:
+```bash
+# 1. 检查进程是否存在
+ps aux | grep asu_custom_agent
+
+# 2. 查看日志
+tail -50 ~/Library/Logs/ASU/agent_err.log
+
+# 3. 检查端口是否被占用
+lsof -i :18888
+
+# 4. 手动启动测试
+python asu_custom_agent.py
+```
+
+**常见原因**:
+- Python 虚拟环境未激活
+- 依赖包缺失：`pip install -r requirements.txt`
+- 端口被其他进程占用
+
+### 6.2 Broker 无法启动
+
+**症状**: `curl -H "Authorization: Bearer $(cat ~/.asu_broker_token)" http://127.0.0.1:18889/health` 无响应
+
+**排查步骤**:
+```bash
+# 1. 检查进程是否存在
+ps aux | grep asu_broker
+
+# 2. 查看日志
+tail -50 ~/Library/Logs/ASU/broker_err.log
+
+# 3. 检查端口是否被占用
+lsof -i :18889
+
+# 4. 手动启动测试
+cd asu_broker && python run.py
+```
+
+### 6.3 UI 显示红灯
+
+**症状**: 启动 UI 后标题栏显示红色状态点
+
+**排查步骤**:
+1. 确认 Agent 是否运行：`curl http://127.0.0.1:18888/health`
+2. 如果未运行，启动 Agent：`bash scripts/install_daemon.sh` 或 `python asu_custom_agent.py`
+3. 如果已运行但 UI 仍显示红灯，重启 UI：`bash scripts/start_ui.sh`
+
+### 6.4 守护进程崩溃重启
+
+**症状**: 服务频繁重启
+
+**排查步骤**:
+```bash
+# 1. 查看崩溃日志
+tail -100 ~/Library/Logs/ASU/agent_err.log
+
+# 2. 检查系统日志
+log show --predicate 'process == "Python"' --last 1h
+
+# 3. 检查资源使用
+top -l 1 | head -20
+```
+
+---
+
+## 7. 日志分析指南
+
+### 7.1 日志位置
+
+| 服务 | 标准输出 | 错误输出 |
+|------|----------|----------|
+| Agent | `~/Library/Logs/ASU/agent_out.log` | `~/Library/Logs/ASU/agent_err.log` |
+| Broker | `~/Library/Logs/ASU/broker_out.log` | `~/Library/Logs/ASU/broker_err.log` |
+
+### 7.2 日志级别
+
+- **INFO**: 正常运行信息
+- **WARNING**: 警告信息，不影响运行
+- **ERROR**: 错误信息，可能影响功能
+- **DEBUG**: 调试信息（仅开发模式）
+
+### 7.3 常用日志分析命令
+
+```bash
+# 查看最近 100 行日志
+tail -100 ~/Library/Logs/ASU/agent_out.log
+
+# 实时查看日志
+tail -f ~/Library/Logs/ASU/agent_out.log
+
+# 搜索错误信息
+grep -i "error" ~/Library/Logs/ASU/agent_err.log
+
+# 搜索特定时间的日志
+grep "2026-05-30" ~/Library/Logs/ASU/agent_out.log
+
+# 统计错误数量
+grep -c "ERROR" ~/Library/Logs/ASU/agent_err.log
+```
+
+---
+
+## 8. 跨平台说明
+
+### 8.1 macOS（当前支持）
+
+- 使用 `launchctl` 管理守护进程
+- 配置文件：`deploy/com.asu.agent.plist`、`deploy/com.asu.broker.plist`
+- 管理脚本：`scripts/install_daemon.sh` 等
+
+### 8.2 Linux（未来支持）
+
+**systemd 服务示例**:
+```ini
+[Unit]
+Description=OpenCopilot Agent
+After=network.target
+
+[Service]
+Type=simple
+User=your_username
+WorkingDirectory=/path/to/OpenCopilot
+ExecStart=/path/to/python asu_custom_agent.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**管理命令**:
+```bash
+# 启用服务
+sudo systemctl enable opencopilot-agent
+
+# 启动服务
+sudo systemctl start opencopilot-agent
+
+# 查看状态
+sudo systemctl status opencopilot-agent
+
+# 查看日志
+journalctl -u opencopilot-agent -f
+```
+
+### 8.3 Windows（未来支持）
+
+**Windows 服务示例**:
+- 使用 `pywin32` 创建 Windows 服务
+- 或使用 `nssm` 将 Python 脚本注册为服务
+
+---
+
+## 9. 性能优化建议
+
+### 9.1 资源限制
+
+```bash
+# 限制 Agent 内存使用（macOS）
+# 在 plist 中添加
+<key>SoftResourceLimits</key>
+<dict>
+    <key>Stack</key>
+    <integer>8388608</integer>
+</dict>
+```
+
+### 9.2 日志轮转
+
+```bash
+# 使用 logrotate 管理日志（Linux）
+cat > /etc/logrotate.d/opencopilot << EOF
+~/Library/Logs/ASU/*.log {
+    daily
+    missingok
+    rotate 7
+    compress
+    delaycompress
+    notifempty
+}
+EOF
+```
+
+### 9.3 监控脚本
+
+```bash
+#!/bin/bash
+# monitor.sh - 监控 OpenCopilot 服务状态
+
+check_service() {
+    local name=$1
+    local url=$2
+    
+    if curl -s -f "$url" > /dev/null; then
+        echo "✅ $name is running"
+    else
+        echo "❌ $name is not running"
+        # 自动重启
+        if [ "$name" = "Agent" ]; then
+            bash scripts/install_daemon.sh
+        elif [ "$name" = "Broker" ]; then
+            bash scripts/install_broker_daemon.sh
+        fi
+    fi
+}
+
+check_service "Agent" "http://127.0.0.1:18888/health"
+check_service "Broker" "http://127.0.0.1:18889/health"
+```
+
+---
+
+## 10. 安全注意事项
+
+### 10.1 端口安全
+
+- Agent (18888) 和 Broker (18889) 仅监听 `127.0.0.1`
+- 不要暴露到公网
+- 如需远程访问，使用 SSH 隧道
+
+### 10.2 文件权限
+
+```bash
+# 确保配置文件权限正确
+chmod 600 deploy/com.asu.agent.plist
+chmod 600 deploy/com.asu.broker.plist
+chmod 700 scripts/*.sh
+```
+
+### 10.3 Token 安全
+
+```bash
+# Broker Token 存储在用户主目录
+ls -la ~/.asu_broker_token
+
+# 确保只有当前用户可读
+chmod 600 ~/.asu_broker_token
+```

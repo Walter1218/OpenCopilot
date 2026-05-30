@@ -8,13 +8,14 @@ Smart Copilot API 测试脚本
     2. 运行测试: python test_api.py
 """
 
+import os
 import sys
 import json
 import httpx
 import asyncio
 from datetime import datetime
 
-BASE_URL = "http://localhost:8000"
+BASE_URL = f"http://localhost:{os.environ.get('API_PORT', 8088)}"
 
 def print_header(title):
     """打印测试标题"""

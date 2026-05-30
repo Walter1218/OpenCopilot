@@ -81,10 +81,15 @@
 
 ## 五、 演进路线图 (Roadmap)
 
-- **Phase 1: 核心链路闭环 (当前目标)**
+- **Phase 1: 核心链路闭环 (已完成)**
   - 实现 JSON 协议的全面接管。
   - 在前端实现「PPT大纲预览卡片」以及对话式修改 JSON 状态的能力。
-- **Phase 2: 视觉资产增强 (Visual Asset)**
+- **Phase 2: 内容转换能力增强 (已完成 ✅)**
+  - 实现 `content_converter.py`：智能识别文本结构，推荐转换方式
+  - 支持转换类型：表格、柱状图、折线图、饼图、流程图
+  - 在 `preview_panel.py` 中实现表格和图表渲染
+  - 测试验证：107/107 全部通过
+- **Phase 3: 视觉资产增强 (Visual Asset)**
   - 解析 JSON 中的 `visual_hint`，在渲染时自动调用在线无版权图库 API，或通过本地模型生成配图填入版式。
-- **Phase 3: 逆向解析 (Reverse Engineering)**
+- **Phase 4: 逆向解析 (Reverse Engineering)**
   - 允许用户不仅能生成 PPT，还能把现有的丑陋 PPT 拖进去，系统逆向提取内容为 JSON，然后应用新主题重新渲染，实现“一键美化”。

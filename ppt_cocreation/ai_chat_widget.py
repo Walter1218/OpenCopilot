@@ -266,28 +266,35 @@ class AIWorker(QThread):
     
     def _build_system_prompt(self) -> str:
         """构建系统提示"""
-        return """你是一个 PPT 编辑助手。用户会给你当前的幻灯片数据和修改指令，你需要返回修改后的幻灯片数据。
+        return """你是一个 PPT 编辑助手。优先进行局部修改，而不是重新生成整个PPT。
 
-返回格式要求：
-1. 返回完整的 JSON 数据，格式为 {"slides": [...]}
-2. 保持原有的数据结构
-3. 只修改用户要求修改的部分
-4. 如果指令不明确，保持原有数据不变
+修改模式（按优先级排序）：
 
-内容类型说明：
-- text: 纯文本
-- image: 图片（需要指定 image_source）
-- flowchart: 流程图（需要指定 flowchart_data）
-- icon: 图标（需要指定 icon_name）
+1. **局部修改**（推荐）：只修改用户指定的部分
+   - 修改标题：{"action": "update", "slide_index": 1, "field": "title", "value": "新标题"}
+   - 修改副标题：{"action": "update", "slide_index": 0, "field": "subtitle", "value": "新副标题"}
+   - 修改版式：{"action": "update", "slide_index": 0, "field": "layout", "value": "image_right"}
+   
+2. **修改要点**：
+   - 更新要点：{"action": "update_item", "slide_index": 1, "item_index": 0, "field": "text", "value": "新内容"}
+   - 添加要点：{"action": "add_item", "slide_index": 1, "item": {"text": "新要点", "level": 0, "content_type": "text"}}
+   - 删除要点：{"action": "remove_item", "slide_index": 1, "item_index": 0}
+   
+3. **幻灯片操作**：
+   - 添加幻灯片：{"action": "add_slide", "index": 2, "slide": {"title": "新页面", "type": "content", "layout": "text_only", "items": []}}
+   - 删除幻灯片：{"action": "remove_slide", "index": 2}
 
-版式说明：
-- center: 居中封面
-- text_only: 纯文本
-- image_right: 图右文左
-- image_left: 图左文右
-- three_columns: 三栏对比
-- two_columns: 两栏布局
-- full_image: 全图背景"""
+4. **内容转换**（当用户要求转换为图表/表格时）：
+   - 转为表格：{"action": "add_item", "slide_index": 0, "item": {"content_type": "table", "table_data": {"title": "标题", "columns": ["列1", "列2"], "rows": [["值1", "值2"]]}}}
+   - 转为柱状图：{"action": "add_item", "slide_index": 0, "item": {"content_type": "chart", "chart_type": "bar", "chart_data": {"title": "标题", "labels": ["标签1", "标签2"], "datasets": [{"label": "系列", "data": [10, 20], "color": "#007bff"}]}}}
+   - 转为折线图：同上，chart_type 改为 "line"
+   - 转为饼图：同上，chart_type 改为 "pie"
+
+5. **全局修改**（仅当用户明确要求"重新生成"时使用）：
+   - 返回 {"slides": [...]}
+
+内容类型：text / image / flowchart / icon / table / chart
+版式类型：center / text_only / image_right / image_left / three_columns / two_columns / full_image"""
     
     def _build_user_message(self) -> str:
         """构建用户消息"""
@@ -300,7 +307,7 @@ class AIWorker(QThread):
 
 用户指令：{self.instruction}
 
-请返回修改后的完整幻灯片 JSON 数据（只返回 JSON，不要其他内容）："""
+请优先使用局部修改模式，只返回修改指令 JSON（不要返回完整数据）："""
 
 
 class AICopilotChatWidget(QWidget):
@@ -392,6 +399,41 @@ class AICopilotChatWidget(QWidget):
         self.scroll_area.setWidget(self.messages_container)
         chat_layout.addWidget(self.scroll_area, 1)
         
+        # 快捷指令区域
+        shortcuts_layout = QHBoxLayout()
+        shortcuts_layout.setSpacing(8)
+        
+        shortcut_commands = [
+            ("换个标题", "请为当前幻灯片建议一个新标题"),
+            ("添加要点", "在当前幻灯片添加一个新的要点"),
+            ("换版式", "将当前幻灯片改为更合适的版式"),
+            ("精简内容", "精简当前幻灯片的内容，保留核心信息"),
+            ("转图表", "分析当前幻灯片的内容，将适合的数据转换为图表或表格"),
+        ]
+        
+        for label, command in shortcut_commands:
+            btn = QPushButton(label)
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #2d2d2d;
+                    color: #888;
+                    border: 1px solid #3c3c3c;
+                    border-radius: 12px;
+                    padding: 4px 12px;
+                    font-size: 11px;
+                }
+                QPushButton:hover {
+                    background-color: #3c3c3c;
+                    color: #d4d4d4;
+                    border-color: #555;
+                }
+            """)
+            btn.clicked.connect(lambda checked, cmd=command: self._execute_shortcut(cmd))
+            shortcuts_layout.addWidget(btn)
+        
+        shortcuts_layout.addStretch()
+        chat_layout.addLayout(shortcuts_layout)
+        
         # 输入区域
         input_layout = QHBoxLayout()
         input_layout.setSpacing(8)
@@ -480,6 +522,11 @@ class AICopilotChatWidget(QWidget):
         scrollbar = self.scroll_area.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
     
+    def _execute_shortcut(self, command: str):
+        """执行快捷指令"""
+        self.input_edit.setText(command)
+        self._on_send()
+    
     def _on_send(self):
         """发送消息"""
         instruction = self.input_edit.text().strip()
@@ -506,62 +553,17 @@ class AICopilotChatWidget(QWidget):
         # 尝试解析 JSON
         try:
             # 提取 JSON（支持嵌套花括号）
-            json_str = None
-            # 先尝试从 ```json ... ``` 代码块中提取
-            code_block = re.search(r'```(?:json)?\s*(.*?)\s*```', response, re.DOTALL)
-            if code_block:
-                block_content = code_block.group(1).strip()
-                if block_content.startswith('{') or block_content.startswith('['):
-                    brace_start = block_content.find('{')
-                    bracket_start = block_content.find('[')
-                    if brace_start != -1 and (bracket_start == -1 or brace_start < bracket_start):
-                        # 用括号计数找到匹配的闭合花括号
-                        depth = 0
-                        for idx in range(brace_start, len(block_content)):
-                            if block_content[idx] == '{':
-                                depth += 1
-                            elif block_content[idx] == '}':
-                                depth -= 1
-                                if depth == 0:
-                                    json_str = block_content[brace_start:idx + 1]
-                                    break
-                    elif bracket_start != -1:
-                        depth = 0
-                        for idx in range(bracket_start, len(block_content)):
-                            if block_content[idx] == '[':
-                                depth += 1
-                            elif block_content[idx] == ']':
-                                depth -= 1
-                                if depth == 0:
-                                    json_str = block_content[bracket_start:idx + 1]
-                                    break
+            json_str = self._extract_json(response)
             if json_str is None:
-                # 尝试直接从全文中用括号计数提取
-                start = response.find('{')
-                if start != -1:
-                    depth = 0
-                    for idx in range(start, len(response)):
-                        if response[idx] == '{':
-                            depth += 1
-                        elif response[idx] == '}':
-                            depth -= 1
-                            if depth == 0:
-                                json_str = response[start:idx + 1]
-                                break
-                if json_str is None:
-                    raise ValueError("无法找到 JSON 数据")
+                raise ValueError("无法找到 JSON 数据")
             
             data = json.loads(json_str)
             
-            if 'slides' in data:
-                # 更新幻灯片数据
-                self.slides_data = data['slides']
-                self.slides_updated.emit(self.slides_data)
-                
-                # 显示成功消息
-                self._add_message("✅ 已更新幻灯片数据！", is_user=False)
-            else:
-                self._add_message("⚠️ 返回的数据格式不正确，缺少 slides 字段", is_user=False)
+            # 应用更新（支持局部更新和全量更新）
+            success_msg = self._apply_update(data)
+            
+            # 显示成功消息
+            self._add_message(f"✅ {success_msg}", is_user=False)
         
         except json.JSONDecodeError as e:
             # JSON 解析失败，显示原始响应
@@ -574,6 +576,145 @@ class AICopilotChatWidget(QWidget):
         self.input_edit.setEnabled(True)
         self.send_btn.setEnabled(True)
     
+    def _extract_json(self, text: str) -> str:
+        """从文本中提取 JSON"""
+        # 先尝试从 ```json ... ``` 代码块中提取
+        code_block = re.search(r'```(?:json)?\s*(.*?)\s*```', text, re.DOTALL)
+        if code_block:
+            block_content = code_block.group(1).strip()
+            if block_content.startswith('{') or block_content.startswith('['):
+                return self._find_json_object(block_content)
+        
+        # 尝试直接从全文中提取
+        return self._find_json_object(text)
+    
+    def _find_json_object(self, text: str) -> str:
+        """用括号计数找到匹配的 JSON 对象"""
+        start = text.find('{')
+        if start == -1:
+            return None
+        
+        depth = 0
+        for idx in range(start, len(text)):
+            if text[idx] == '{':
+                depth += 1
+            elif text[idx] == '}':
+                depth -= 1
+                if depth == 0:
+                    return text[start:idx + 1]
+        return None
+    
+    def _apply_update(self, data: dict) -> str:
+        """应用更新（支持局部更新和全量更新）"""
+        action = data.get("action")
+        
+        # 局部更新模式
+        if action == "update":
+            return self._apply_field_update(data)
+        elif action == "update_item":
+            return self._apply_item_update(data)
+        elif action == "add_item":
+            return self._apply_add_item(data)
+        elif action == "remove_item":
+            return self._apply_remove_item(data)
+        elif action == "add_slide":
+            return self._apply_add_slide(data)
+        elif action == "remove_slide":
+            return self._apply_remove_slide(data)
+        
+        # 全量更新模式（兼容旧模式）
+        if "slides" in data:
+            self.slides_data = data["slides"]
+            self.slides_updated.emit(self.slides_data)
+            return "已全量更新幻灯片数据"
+        
+        raise ValueError("无法识别的更新格式")
+    
+    def _apply_field_update(self, data: dict) -> str:
+        """应用字段更新"""
+        slide_idx = data.get("slide_index")
+        field = data.get("field")
+        value = data.get("value")
+        
+        if slide_idx is None or field is None:
+            raise ValueError("缺少 slide_index 或 field")
+        
+        if not (0 <= slide_idx < len(self.slides_data)):
+            raise ValueError(f"幻灯片索引 {slide_idx} 超出范围")
+        
+        self.slides_data[slide_idx][field] = value
+        self.slides_updated.emit(self.slides_data)
+        return f"已更新第 {slide_idx + 1} 页的 {field}"
+    
+    def _apply_item_update(self, data: dict) -> str:
+        """应用要点更新"""
+        slide_idx = data.get("slide_index")
+        item_idx = data.get("item_index")
+        field = data.get("field")
+        value = data.get("value")
+        
+        if not (0 <= slide_idx < len(self.slides_data)):
+            raise ValueError(f"幻灯片索引 {slide_idx} 超出范围")
+        
+        items = self.slides_data[slide_idx].get("items", [])
+        if not (0 <= item_idx < len(items)):
+            raise ValueError(f"要点索引 {item_idx} 超出范围")
+        
+        items[item_idx][field] = value
+        self.slides_updated.emit(self.slides_data)
+        return f"已更新第 {slide_idx + 1} 页第 {item_idx + 1} 个要点"
+    
+    def _apply_add_item(self, data: dict) -> str:
+        """添加要点"""
+        slide_idx = data.get("slide_index")
+        item = data.get("item")
+        
+        if not (0 <= slide_idx < len(self.slides_data)):
+            raise ValueError(f"幻灯片索引 {slide_idx} 超出范围")
+        
+        self.slides_data[slide_idx].setdefault("items", []).append(item)
+        self.slides_updated.emit(self.slides_data)
+        return f"已在第 {slide_idx + 1} 页添加新要点"
+    
+    def _apply_remove_item(self, data: dict) -> str:
+        """删除要点"""
+        slide_idx = data.get("slide_index")
+        item_idx = data.get("item_index")
+        
+        if not (0 <= slide_idx < len(self.slides_data)):
+            raise ValueError(f"幻灯片索引 {slide_idx} 超出范围")
+        
+        items = self.slides_data[slide_idx].get("items", [])
+        if not (0 <= item_idx < len(items)):
+            raise ValueError(f"要点索引 {item_idx} 超出范围")
+        
+        items.pop(item_idx)
+        self.slides_updated.emit(self.slides_data)
+        return f"已删除第 {slide_idx + 1} 页第 {item_idx + 1} 个要点"
+    
+    def _apply_add_slide(self, data: dict) -> str:
+        """添加幻灯片"""
+        index = data.get("index", len(self.slides_data))
+        slide = data.get("slide")
+        
+        if not (0 <= index <= len(self.slides_data)):
+            raise ValueError(f"插入位置 {index} 超出范围")
+        
+        self.slides_data.insert(index, slide)
+        self.slides_updated.emit(self.slides_data)
+        return f"已在第 {index + 1} 页位置插入新幻灯片"
+    
+    def _apply_remove_slide(self, data: dict) -> str:
+        """删除幻灯片"""
+        index = data.get("index")
+        
+        if not (0 <= index < len(self.slides_data)):
+            raise ValueError(f"幻灯片索引 {index} 超出范围")
+        
+        self.slides_data.pop(index)
+        self.slides_updated.emit(self.slides_data)
+        return f"已删除第 {index + 1} 页幻灯片"
+    
     def _on_ai_error(self, error: str):
         """AI 错误"""
         self._add_message(f"❌ {error}", is_user=False)
@@ -581,3 +722,85 @@ class AICopilotChatWidget(QWidget):
         # 恢复输入
         self.input_edit.setEnabled(True)
         self.send_btn.setEnabled(True)
+    
+    def apply_theme(self, theme: dict):
+        """应用主题样式"""
+        # 更新滚动区域样式（聊天显示区域）
+        self.scroll_area.setStyleSheet(f"""
+            QScrollArea {{
+                background-color: {theme['dialog_bg']};
+                color: {theme['dialog_color']};
+                border: 1px solid {theme['border_color']};
+                border-radius: 6px;
+            }}
+        """)
+        
+        # 更新输入框样式
+        self.input_edit.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {theme['button_bg']};
+                color: {theme['dialog_color']};
+                border: 1px solid {theme['border_color']};
+                border-radius: 6px;
+                padding: 8px;
+                font-size: 13px;
+            }}
+            QLineEdit:focus {{
+                border-color: {theme['accent_color']};
+            }}
+        """)
+        
+        # 更新发送按钮样式
+        self.send_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {theme['accent_color']};
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-size: 13px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {theme['button_hover']};
+            }}
+            QPushButton:pressed {{
+                background-color: {theme['button_pressed']};
+            }}
+            QPushButton:disabled {{
+                background-color: {theme['button_bg']};
+                color: {theme['dialog_color']};
+                opacity: 0.5;
+            }}
+        """)
+        
+        # 更新快捷指令按钮样式
+        for button in self.findChildren(QPushButton):
+            if button != self.send_btn:
+                button.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: {theme['button_bg']};
+                        color: {theme['dialog_color']};
+                        border: 1px solid {theme['border_color']};
+                        border-radius: 4px;
+                        padding: 4px 12px;
+                        font-size: 11px;
+                    }}
+                    QPushButton:hover {{
+                        background-color: {theme['button_hover']};
+                        border-color: {theme['accent_color']};
+                    }}
+                    QPushButton:pressed {{
+                        background-color: {theme['button_pressed']};
+                    }}
+                """)
+        
+        # 更新标签样式
+        for label in self.findChildren(QLabel):
+            label.setStyleSheet(f"""
+                QLabel {{
+                    color: {theme['dialog_color']};
+                    font-size: 12px;
+                    padding: 2px;
+                }}
+            """)

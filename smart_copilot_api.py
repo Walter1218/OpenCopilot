@@ -399,7 +399,15 @@ async def ppt_cocreation(request: PPTCoCreationRequest):
     """
     PPT 共创接口
     
-    根据用户指令修改 PPT 内容。
+    根据用户指令修改 PPT 内容，支持局部修改和全量修改两种模式。
+    
+    局部修改返回格式示例：
+    - {"action": "update", "slide_index": 0, "field": "title", "value": "新标题"}
+    - {"action": "update_item", "slide_index": 0, "item_index": 0, "field": "text", "value": "新内容"}
+    - {"action": "add_item", "slide_index": 0, "item": {"text": "新要点", "level": 0}}
+    - {"action": "remove_item", "slide_index": 0, "item_index": 0}
+    - {"action": "add_slide", "index": 1, "slide": {...}}
+    - {"action": "remove_slide", "index": 1}
     """
     global provider
     
@@ -409,28 +417,76 @@ async def ppt_cocreation(request: PPTCoCreationRequest):
     try:
         session_id = session_manager.get_or_create(request.session_id)
         
-        # 构建提示词
+        # 构建提示词（支持局部修改）
         current_slides_json = json.dumps(request.slides, ensure_ascii=False, indent=2)
         
-        prompt = f"""你是一个专业的 PPT 设计师。用户想要修改 PPT 内容。
+        system_prompt = """你是一个 PPT 编辑助手。优先进行局部修改，而不是重新生成整个PPT。
 
-当前 PPT 结构：
+**重要**：不要输出思考过程、推理步骤或解释。只输出修改指令JSON，用 ```json 代码块包裹。如果需要多个操作，用多个代码块分别输出。
+
+修改模式（按优先级排序）：
+
+1. **局部修改**（推荐）：只修改用户指定的部分
+   - 修改标题：{"action": "update", "slide_index": 1, "field": "title", "value": "新标题"}
+   - 修改副标题：{"action": "update", "slide_index": 0, "field": "subtitle", "value": "新副标题"}
+   - 修改版式：{"action": "update", "slide_index": 0, "field": "layout", "value": "image_right"}
+   
+2. **修改要点**：
+   - 更新要点：{"action": "update_item", "slide_index": 1, "item_index": 0, "field": "text", "value": "新内容"}
+   - 添加要点：{"action": "add_item", "slide_index": 1, "item": {"text": "新要点", "level": 0, "content_type": "text"}}
+   - 删除要点：{"action": "remove_item", "slide_index": 1, "item_index": 0}
+   
+3. **幻灯片操作**：
+   - 添加幻灯片：{"action": "add_slide", "index": 2, "slide": {"title": "新页面", "type": "content", "layout": "text_only", "items": []}}
+   - 删除幻灯片：{"action": "remove_slide", "index": 2}
+
+4. **内容转换**（当用户要求转换为图表/表格时）：
+   - 转为表格：{"action": "add_item", "slide_index": 0, "item": {"content_type": "table", "table_data": {"title": "标题", "columns": ["列1", "列2"], "rows": [["值1", "值2"]]}}}
+   - 转为柱状图：{"action": "add_item", "slide_index": 0, "item": {"content_type": "chart", "chart_type": "bar", "chart_data": {"title": "标题", "labels": ["标签1", "标签2"], "datasets": [{"label": "系列", "data": [10, 20], "color": "#007bff"}]}}}
+   - 转为折线图：同上，chart_type 改为 "line"
+   - 转为饼图：同上，chart_type 改为 "pie"
+
+5. **全局修改**（仅当用户明确要求"重新生成"时使用）：
+   - 返回 {"slides": [...]}
+
+内容类型：text / image / flowchart / icon / table / chart
+版式类型：center / text_only / image_right / image_left / three_columns / two_columns / full_image"""
+
+        user_message = f"""当前幻灯片数据：
+```json
 {current_slides_json}
+```
 
 用户指令：{request.instruction}
 
-请根据用户指令修改 PPT 结构，输出完整的 JSON 数组格式。
-注意：
-1. 保持原有的结构规范
-2. 只修改用户要求的部分
-3. 确保输出是有效的 JSON"""
+请优先使用局部修改模式，只返回修改指令 JSON（不要返回完整数据）："""
+
+        prompt = f"{system_prompt}\n\n{user_message}"
         
         response = ""
         for chunk in provider.stream_chat(prompt):
             response += chunk
         
-        # 提取修改后的幻灯片
-        updated_slides = extract_json_from_text(response)
+        # 解析 AI 响应，支持局部更新和全量更新
+        update_data = _parse_cocreation_response(response)
+        
+        # 判断更新类型
+        if "slides" in update_data:
+            # 全量更新模式
+            update_type = "full"
+            action = None
+            result = {}
+            updated_slides = update_data["slides"]
+        elif "action" in update_data or "actions" in update_data:
+            # 局部更新模式（支持单个或多个操作）
+            update_type = "partial"
+            action, result, updated_slides = _execute_cocreation_actions(update_data, request.slides)
+        else:
+            # 尝试从 response 中提取
+            update_type = "full"
+            action = None
+            result = {}
+            updated_slides = extract_json_from_text(response)
         
         # 更新会话上下文
         session_manager.update_context(session_id, {
@@ -440,12 +496,267 @@ async def ppt_cocreation(request: PPTCoCreationRequest):
         
         return {
             "session_id": session_id,
-            "original_slides": request.slides,
+            "update_type": update_type,
+            "original_slides": request.slides if update_type == "full" else None,
             "updated_slides": updated_slides,
+            "action": action,
+            "action_result": result,
+            "raw_response": response,
             "instruction": request.instruction
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PPT 共创失败: {str(e)}")
+
+
+def _parse_cocreation_response(response: str) -> dict:
+    """解析 PPT 共创 AI 响应，支持局部更新和全量更新格式
+    
+    返回格式：
+    - 单个操作: {"action": "update", ...}
+    - 多个操作: {"actions": [{"action": "update", ...}, {"action": "add_item", ...}]}
+    - 全量更新: {"slides": [...]}
+    """
+    import re
+    
+    # 移除思考过程（<think>...</think> 或 <think>...</think>）
+    response = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)
+    response = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)
+    
+    # 提取所有 ```json ... ``` 代码块
+    code_blocks = re.findall(r'```(?:json)?\s*(.*?)\s*```', response, re.DOTALL)
+    
+    # 如果有多个代码块，尝试解析每个代码块
+    if len(code_blocks) > 1:
+        actions = []
+        for block in code_blocks:
+            block = block.strip()
+            try:
+                parsed = json.loads(block)
+                if isinstance(parsed, dict) and "action" in parsed:
+                    actions.append(parsed)
+            except json.JSONDecodeError:
+                continue
+        
+        if len(actions) > 1:
+            return {"actions": actions}
+        elif len(actions) == 1:
+            return actions[0]
+    
+    # 单个代码块或无代码块的情况
+    text = code_blocks[0].strip() if code_blocks else response
+    
+    # 优先检查数组格式（以 [ 开头）
+    start_arr = text.find('[')
+    start_obj = text.find('{')
+    
+    # 如果 [ 出现在 { 之前，先尝试数组格式
+    if start_arr != -1 and (start_obj == -1 or start_arr < start_obj):
+        depth = 0
+        for idx in range(start_arr, len(text)):
+            if text[idx] == '[':
+                depth += 1
+            elif text[idx] == ']':
+                depth -= 1
+                if depth == 0:
+                    try:
+                        return {"slides": json.loads(text[start_arr:idx + 1])}
+                    except json.JSONDecodeError:
+                        pass
+    
+    # 尝试对象格式
+    if start_obj != -1:
+        depth = 0
+        for idx in range(start_obj, len(text)):
+            if text[idx] == '{':
+                depth += 1
+            elif text[idx] == '}':
+                depth -= 1
+                if depth == 0:
+                    try:
+                        return json.loads(text[start_obj:idx + 1])
+                    except json.JSONDecodeError:
+                        return {}
+    return {}
+
+
+def _execute_cocreation_actions(update_data: dict, slides: list) -> tuple:
+    """执行PPT共创操作，支持单个或多个操作
+    
+    Returns:
+        (action, result, updated_slides)
+    """
+    # 检查是否是多操作模式
+    if "actions" in update_data:
+        actions = update_data["actions"]
+        results = []
+        last_action = None
+        
+        for action_data in actions:
+            action = action_data.get("action")
+            result = {}
+            
+            if action == "update":
+                slide_idx = action_data.get("slide_index")
+                field = action_data.get("field")
+                value = action_data.get("value")
+                if 0 <= slide_idx < len(slides) and field:
+                    slides[slide_idx][field] = value
+                    result = {"updated_field": field, "slide_index": slide_idx}
+            
+            elif action == "update_item":
+                slide_idx = action_data.get("slide_index")
+                item_idx = action_data.get("item_index")
+                field = action_data.get("field")
+                value = action_data.get("value")
+                if 0 <= slide_idx < len(slides):
+                    items = slides[slide_idx].get("items", [])
+                    if 0 <= item_idx < len(items) and field:
+                        items[item_idx][field] = value
+                        result = {"updated_field": field, "slide_index": slide_idx, "item_index": item_idx}
+            
+            elif action == "add_item":
+                slide_idx = action_data.get("slide_index")
+                item = action_data.get("item", {})
+                if 0 <= slide_idx < len(slides):
+                    slides[slide_idx].setdefault("items", []).append(item)
+                    result = {"added_item": item, "slide_index": slide_idx}
+            
+            elif action == "remove_item":
+                slide_idx = action_data.get("slide_index")
+                item_idx = action_data.get("item_index")
+                if 0 <= slide_idx < len(slides):
+                    items = slides[slide_idx].get("items", [])
+                    if 0 <= item_idx < len(items):
+                        removed = items.pop(item_idx)
+                        result = {"removed_item": removed, "slide_index": slide_idx, "item_index": item_idx}
+            
+            elif action == "add_slide":
+                index = action_data.get("index", len(slides))
+                slide = action_data.get("slide", {})
+                slides.insert(index, slide)
+                result = {"added_slide": slide, "index": index}
+            
+            elif action == "remove_slide":
+                index = action_data.get("index")
+                if 0 <= index < len(slides):
+                    removed = slides.pop(index)
+                    result = {"removed_slide": removed, "index": index}
+            
+            results.append({"action": action, "result": result})
+            last_action = action
+        
+        return last_action, {"multi_actions": results}, slides
+    
+    # 单个操作模式
+    action = update_data.get("action")
+    result = {}
+    
+    if action == "update":
+        slide_idx = update_data.get("slide_index")
+        field = update_data.get("field")
+        value = update_data.get("value")
+        if 0 <= slide_idx < len(slides) and field:
+            slides[slide_idx][field] = value
+            result = {"updated_field": field, "slide_index": slide_idx}
+    
+    elif action == "update_item":
+        slide_idx = update_data.get("slide_index")
+        item_idx = update_data.get("item_index")
+        field = update_data.get("field")
+        value = update_data.get("value")
+        if 0 <= slide_idx < len(slides):
+            items = slides[slide_idx].get("items", [])
+            if 0 <= item_idx < len(items) and field:
+                items[item_idx][field] = value
+                result = {"updated_field": field, "slide_index": slide_idx, "item_index": item_idx}
+    
+    elif action == "add_item":
+        slide_idx = update_data.get("slide_index")
+        item = update_data.get("item", {})
+        if 0 <= slide_idx < len(slides):
+            slides[slide_idx].setdefault("items", []).append(item)
+            result = {"added_item": item, "slide_index": slide_idx}
+    
+    elif action == "remove_item":
+        slide_idx = update_data.get("slide_index")
+        item_idx = update_data.get("item_index")
+        if 0 <= slide_idx < len(slides):
+            items = slides[slide_idx].get("items", [])
+            if 0 <= item_idx < len(items):
+                removed = items.pop(item_idx)
+                result = {"removed_item": removed, "slide_index": slide_idx, "item_index": item_idx}
+    
+    elif action == "add_slide":
+        index = update_data.get("index", len(slides))
+        slide = update_data.get("slide", {})
+        slides.insert(index, slide)
+        result = {"added_slide": slide, "index": index}
+    
+    elif action == "remove_slide":
+        index = update_data.get("index")
+        if 0 <= index < len(slides):
+            removed = slides.pop(index)
+            result = {"removed_slide": removed, "index": index}
+    
+    return action, result, slides
+
+# ------------------------------------------
+# 内容转换接口
+# ------------------------------------------
+
+class ContentAnalyzeRequest(BaseModel):
+    """内容分析请求"""
+    text: str = Field(..., description="待分析文本")
+
+class ContentConvertRequest(BaseModel):
+    """内容转换请求"""
+    text: str = Field(..., description="待转换文本")
+    target_type: str = Field(..., description="目标类型: table/bar/line/pie/flowchart")
+    title: Optional[str] = Field("", description="转换后的标题")
+
+@app.post("/api/content/analyze")
+async def analyze_content(request: ContentAnalyzeRequest):
+    """
+    分析文本结构，推荐转换方式
+    
+    检测文本中的表格、图表、流程图等结构，并返回转换建议。
+    """
+    try:
+        from ppt_cocreation.content_converter import get_conversion_suggestions
+        result = get_conversion_suggestions(request.text)
+        return {"success": True, "data": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"分析失败: {str(e)}")
+
+@app.post("/api/content/convert")
+async def convert_content(request: ContentConvertRequest):
+    """
+    将文本转换为图表/表格数据
+    
+    支持的转换类型：
+    - table: 表格
+    - bar: 柱状图
+    - line: 折线图
+    - pie: 饼图
+    - flowchart: 流程图
+    """
+    try:
+        from ppt_cocreation.content_converter import ContentConverter
+        
+        if request.target_type == "table":
+            result = ContentConverter.convert_to_table(request.text, request.title)
+        elif request.target_type in ("bar", "line", "pie"):
+            result = ContentConverter.convert_to_chart(request.text, request.target_type, request.title)
+        elif request.target_type == "flowchart":
+            result = ContentConverter.convert_to_flowchart(request.text, request.title)
+        else:
+            raise HTTPException(status_code=400, detail=f"不支持的转换类型: {request.target_type}")
+        
+        return {"success": True, "data": result}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"转换失败: {str(e)}")
 
 # ------------------------------------------
 # 文本处理接口

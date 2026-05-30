@@ -169,7 +169,11 @@ class ItemEditor(QWidget):
         layout.addWidget(self.remove_btn)
     
     def _load_data(self):
-        """加载数据到 UI"""
+        """加载数据到 UI（必须 blockSignals 防止中间状态覆盖数据）"""
+        self.level_spin.blockSignals(True)
+        self.type_combo.blockSignals(True)
+        self.content_edit.blockSignals(True)
+        
         self.level_spin.setValue(self.item_data.get("level", 0))
         
         content_type = self.item_data.get("content_type", "text")
@@ -179,6 +183,10 @@ class ItemEditor(QWidget):
                 break
         
         self.content_edit.setText(self.item_data.get("text", ""))
+        
+        self.level_spin.blockSignals(False)
+        self.type_combo.blockSignals(False)
+        self.content_edit.blockSignals(False)
     
     def _on_type_changed(self, index):
         """内容类型变化"""
@@ -316,19 +324,26 @@ class OutlinePanel(QWidget):
         self.subtitle_edit.textChanged.connect(self._on_form_changed)
         form_layout.addRow("副标题:", self.subtitle_edit)
         
-        # 幻灯片类型
+        # 幻灯片类型（用户友好显示）
         self.type_combo = QComboBox()
-        self.type_combo.addItems(["title", "content"])
+        self.type_combo.addItems(["🎯 封面页", "📄 内容页"])
         self.type_combo.setStyleSheet(self._combo_style())
         self.type_combo.currentTextChanged.connect(self._on_form_changed)
         form_layout.addRow("类型:", self.type_combo)
         
-        # 版式
+        # 版式（用户友好显示）
         self.layout_combo = QComboBox()
-        self.layout_combo.addItems([
-            "center", "text_only", "image_right", "image_left",
-            "three_columns", "two_columns", "full_image"
-        ])
+        self.LAYOUT_OPTIONS = [
+            ("center", "🎯 居中封面"),
+            ("text_only", "📄 纯文本"),
+            ("image_right", "🖼️ 图右文左"),
+            ("image_left", "🖼️ 图左文右"),
+            ("three_columns", "📊 三栏对比"),
+            ("two_columns", "📊 两栏布局"),
+            ("full_image", "🖼️ 全图背景"),
+        ]
+        for _, label in self.LAYOUT_OPTIONS:
+            self.layout_combo.addItem(label)
         self.layout_combo.setStyleSheet(self._combo_style())
         self.layout_combo.currentTextChanged.connect(self._on_form_changed)
         form_layout.addRow("版式:", self.layout_combo)
@@ -458,13 +473,19 @@ class OutlinePanel(QWidget):
         self.title_edit.setText(slide.get('title', ''))
         self.subtitle_edit.setText(slide.get('subtitle', ''))
         
-        type_idx = self.type_combo.findText(slide.get('type', 'content'))
+        # 类型映射：技术名称 -> 用户友好显示
+        slide_type = slide.get('type', 'content')
+        type_label = "🎯 封面页" if slide_type == "title" else "📄 内容页"
+        type_idx = self.type_combo.findText(type_label)
         if type_idx >= 0:
             self.type_combo.setCurrentIndex(type_idx)
         
-        layout_idx = self.layout_combo.findText(slide.get('layout', 'text_only'))
-        if layout_idx >= 0:
-            self.layout_combo.setCurrentIndex(layout_idx)
+        # 版式映射：技术名称 -> 用户友好显示
+        layout_value = slide.get('layout', 'text_only')
+        for i, (value, label) in enumerate(self.LAYOUT_OPTIONS):
+            if value == layout_value:
+                self.layout_combo.setCurrentIndex(i)
+                break
         
         self.title_edit.blockSignals(False)
         self.subtitle_edit.blockSignals(False)
@@ -506,8 +527,15 @@ class OutlinePanel(QWidget):
         slide = self.slides_data[self.current_index]
         slide['title'] = self.title_edit.text()
         slide['subtitle'] = self.subtitle_edit.text()
-        slide['type'] = self.type_combo.currentText()
-        slide['layout'] = self.layout_combo.currentText()
+        
+        # 类型映射：用户友好显示 -> 技术名称
+        type_label = self.type_combo.currentText()
+        slide['type'] = "title" if "封面" in type_label else "content"
+        
+        # 版式映射：用户友好显示 -> 技术名称
+        layout_idx = self.layout_combo.currentIndex()
+        if 0 <= layout_idx < len(self.LAYOUT_OPTIONS):
+            slide['layout'] = self.LAYOUT_OPTIONS[layout_idx][0]
         
         # 优化：只更新当前选中项，避免重建整个列表
         self._update_current_list_item()
@@ -597,6 +625,9 @@ class OutlinePanel(QWidget):
             slide = self.slides_data.pop(from_idx)
             self.slides_data.insert(to_idx, slide)
             self.current_index = to_idx
+            # 刷新列表以更新序号和标题
+            self._refresh_list()
+            self.slide_list.setCurrentRow(to_idx)
             self.slide_moved.emit(from_idx, to_idx)
     
     def _show_context_menu(self, pos):
@@ -640,6 +671,7 @@ class OutlinePanel(QWidget):
             import copy
             new_slide = copy.deepcopy(self.slides_data[row])
             new_slide['id'] = str(uuid.uuid4())[:8]
+            new_slide['title'] = f"{new_slide.get('title', '')} (副本)"
             
             self.slides_data.insert(row + 1, new_slide)
             self._refresh_list()
@@ -665,3 +697,119 @@ class OutlinePanel(QWidget):
                     self.slide_list.setCurrentRow(self.current_index)
                 
                 self.slide_deleted.emit(row)
+    
+    def apply_theme(self, theme: dict):
+        """应用主题样式"""
+        # 更新幻灯片列表样式
+        self.slide_list.setStyleSheet(f"""
+            QListWidget {{
+                background-color: {theme['dialog_bg']};
+                border: 1px solid {theme['border_color']};
+                border-radius: 6px;
+                padding: 4px;
+            }}
+            QListWidget::item {{
+                background-color: {theme['button_bg']};
+                border: 1px solid {theme['border_color']};
+                border-radius: 4px;
+                padding: 8px;
+                margin: 2px 0;
+                color: {theme['dialog_color']};
+            }}
+            QListWidget::item:selected {{
+                background-color: {theme['accent_color']};
+                border-color: {theme['accent_color']};
+            }}
+            QListWidget::item:hover {{
+                background-color: {theme['button_hover']};
+            }}
+        """)
+        
+        # 更新表单样式
+        for line_edit in self.findChildren(QLineEdit):
+            line_edit.setStyleSheet(f"""
+                QLineEdit {{
+                    background-color: {theme['button_bg']};
+                    color: {theme['dialog_color']};
+                    border: 1px solid {theme['border_color']};
+                    border-radius: 4px;
+                    padding: 6px;
+                }}
+                QLineEdit:focus {{
+                    border-color: {theme['accent_color']};
+                }}
+            """)
+        
+        for combo_box in self.findChildren(QComboBox):
+            combo_box.setStyleSheet(f"""
+                QComboBox {{
+                    background-color: {theme['button_bg']};
+                    color: {theme['dialog_color']};
+                    border: 1px solid {theme['border_color']};
+                    border-radius: 4px;
+                    padding: 6px;
+                }}
+                QComboBox:hover {{
+                    border-color: {theme['accent_color']};
+                }}
+                QComboBox::drop-down {{
+                    border: none;
+                }}
+                QComboBox::down-arrow {{
+                    image: none;
+                    border-left: 5px solid transparent;
+                    border-right: 5px solid transparent;
+                    border-top: 5px solid {theme['dialog_color']};
+                    width: 0;
+                    height: 0;
+                }}
+                QComboBox QAbstractItemView {{
+                    background-color: {theme['button_bg']};
+                    color: {theme['dialog_color']};
+                    border: 1px solid {theme['border_color']};
+                    selection-background-color: {theme['accent_color']};
+                }}
+            """)
+        
+        for spin_box in self.findChildren(QSpinBox):
+            spin_box.setStyleSheet(f"""
+                QSpinBox {{
+                    background-color: {theme['button_bg']};
+                    color: {theme['dialog_color']};
+                    border: 1px solid {theme['border_color']};
+                    border-radius: 4px;
+                    padding: 4px;
+                }}
+                QSpinBox:hover {{
+                    border-color: {theme['accent_color']};
+                }}
+            """)
+        
+        # 更新按钮样式
+        for button in self.findChildren(QPushButton):
+            button.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {theme['button_bg']};
+                    color: {theme['dialog_color']};
+                    border: 1px solid {theme['border_color']};
+                    border-radius: 4px;
+                    padding: 6px 12px;
+                }}
+                QPushButton:hover {{
+                    background-color: {theme['button_hover']};
+                    border-color: {theme['accent_color']};
+                }}
+                QPushButton:pressed {{
+                    background-color: {theme['button_pressed']};
+                }}
+            """)
+        
+        # 更新标签样式
+        for label in self.findChildren(QLabel):
+            label.setStyleSheet(f"""
+                QLabel {{
+                    color: {theme['dialog_color']};
+                    font-size: 12px;
+                    padding: 2px;
+                }}
+            """)

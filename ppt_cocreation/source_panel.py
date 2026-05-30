@@ -14,10 +14,10 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton,
     QLabel, QToolBar, QSizePolicy
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QMimeData, QPoint
 from PyQt6.QtGui import (
     QTextCharFormat, QColor, QBrush, QFont, QTextCursor,
-    QAction, QKeySequence, QPainter, QPen
+    QAction, QKeySequence, QPainter, QPen, QDrag
 )
 
 from .source_matcher import SourceMatcher, TextRange
@@ -40,6 +40,9 @@ class SourceTextEdit(QTextEdit):
     HIGHLIGHT_FORMAT = QTextCharFormat()
     HIGHLIGHT_FORMAT.setBackground(QColor(255, 255, 0, 100))  # 半透明黄
     
+    # 拖拽相关信号
+    drag_started = pyqtSignal(str)  # 拖拽开始，携带文本
+    
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setReadOnly(True)
@@ -47,6 +50,11 @@ class SourceTextEdit(QTextEdit):
         self.select_mode = False
         self.selection_start = -1
         self.current_highlight_range = None
+        self._drag_start_pos = None
+        self._drag_text = None
+        
+        # 启用拖拽
+        self.setAcceptDrops(False)  # 不接受拖入
         
         # 设置字体
         font = QFont("Helvetica Neue", 13)
@@ -144,6 +152,60 @@ class SourceTextEdit(QTextEdit):
         cursor = self.cursorForPosition(event.position().toPoint())
         pos = cursor.position()
         self.position_clicked.emit(pos)
+        
+        # 记录拖拽起始位置
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_start_pos = event.position().toPoint()
+            # 获取选中文本或当前位置的文本
+            cursor = self.textCursor()
+            if cursor.hasSelection():
+                self._drag_text = cursor.selectedText()
+            else:
+                # 获取当前行文本
+                cursor.select(QTextCursor.SelectionType.LineUnderCursor)
+                self._drag_text = cursor.selectedText()
+    
+    def mouseMoveEvent(self, event):
+        """鼠标移动事件 - 处理拖拽"""
+        if self._drag_start_pos is not None and self._drag_text:
+            # 检查是否超过拖拽阈值
+            distance = (event.position().toPoint() - self._drag_start_pos).manhattanLength()
+            if distance >= 10:  # 拖拽阈值
+                self._start_drag()
+                return
+        super().mouseMoveEvent(event)
+    
+    def _start_drag(self):
+        """开始拖拽操作"""
+        if not self._drag_text:
+            return
+        
+        drag = QDrag(self)
+        mime_data = QMimeData()
+        mime_data.setText(self._drag_text)
+        mime_data.setData("application/x-sourcetext", self._drag_text.encode('utf-8'))
+        drag.setMimeData(mime_data)
+        
+        # 创建拖拽图标
+        from PyQt6.QtGui import QPixmap
+        pixmap = QPixmap(200, 30)
+        pixmap.fill(QColor(255, 153, 51, 180))
+        from PyQt6.QtGui import QPainter as QP
+        painter = QP(pixmap)
+        painter.setPen(Qt.GlobalColor.white)
+        painter.setFont(QFont("Helvetica Neue", 11))
+        painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, 
+                        self._drag_text[:20] + "..." if len(self._drag_text) > 20 else self._drag_text)
+        painter.end()
+        drag.setPixmap(pixmap)
+        
+        # 发送信号
+        self.drag_started.emit(self._drag_text)
+        
+        # 执行拖拽
+        self._drag_start_pos = None
+        self._drag_text = None
+        drag.exec(Qt.DropAction.CopyAction)
     
     def mouseReleaseEvent(self, event):
         """鼠标释放事件"""
@@ -385,6 +447,65 @@ class SourcePanel(QWidget):
             # 发送信号，由主对话框处理创建新幻灯片
             self.new_slide_requested.emit(text, last_range.start, last_range.end)
             self.text_selected.emit(text, last_range.start, last_range.end)
+    
+    def apply_theme(self, theme: dict):
+        """应用主题样式"""
+        # 更新标题样式
+        title = self.findChild(QLabel, "")
+        if title:
+            title.setStyleSheet(f"""
+                QLabel {{
+                    color: {theme['dialog_color']};
+                    font-size: 14px;
+                    font-weight: bold;
+                    padding: 4px 0;
+                }}
+            """)
+        
+        # 更新按钮样式
+        self.select_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {theme['button_bg']};
+                color: {theme['dialog_color']};
+                border: 1px solid {theme['border_color']};
+                border-radius: 4px;
+                padding: 4px 12px;
+                font-size: 12px;
+            }}
+            QPushButton:checked {{
+                background-color: {theme['accent_color']};
+                color: white;
+                border-color: {theme['accent_color']};
+            }}
+            QPushButton:hover {{
+                background-color: {theme['button_hover']};
+            }}
+            QPushButton:checked:hover {{
+                background-color: {theme['button_pressed']};
+            }}
+        """)
+        
+        # 更新图例标签颜色
+        for label in self.findChildren(QLabel):
+            text = label.text()
+            if "已提炼" in text:
+                label.setStyleSheet(f"color: rgba(77, 166, 255, 0.8); font-size: 11px;")
+            elif "已选中" in text:
+                label.setStyleSheet(f"color: rgba(255, 153, 51, 0.8); font-size: 11px;")
+            elif "总长" in text:
+                label.setStyleSheet(f"color: {theme['dialog_color']}; opacity: 0.7; font-size: 11px;")
+        
+        # 更新文本编辑器样式
+        self.text_edit.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {theme['dialog_bg']};
+                color: {theme['dialog_color']};
+                border: 1px solid {theme['border_color']};
+                border-radius: 6px;
+                padding: 12px;
+                selection-background-color: rgba(255, 153, 51, 120);
+            }}
+        """)
     
     def _on_cancel_selection(self):
         """取消所有选中"""

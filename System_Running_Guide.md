@@ -254,7 +254,7 @@ OLLAMA_MODEL=llama3
 目前 OpenCopilot 已跨越传统的“对话机器人”形态，进化为 **多模态感知与上下文感知智能体 (Context-Aware & Multi-modal Agent)**，兼具工具增强特性。
 
 ### 8.1 全局环境感知 (Context-Aware)
-- **行为感知**：无论是否呼出 UI，底层探针都在静默感知你的应用切换轨迹。
+- **行为感知**：无论是否呼出 UI，底层探针都在静默感知你的应用切换轨迹。（详细扩展设计与实现路径请参考 [全局环境感知设计文档](OpenCopilot_Global_Context_Awareness_Design.md)）
 - **无感划词**：不需要 `Cmd+C`，选中文本后直接唤起卡片，底层通过 Accessibility API 自动提取选区。
 
 ### 8.2 深度工程感知 (IDE Extension v2)

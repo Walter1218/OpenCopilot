@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
     QSplitter, QListWidget, QListWidgetItem, QFormLayout
 )
 from ppt_generator import generate_ppt_from_json, extract_json_from_text
+from ppt_cocreation import CoCreationDialog
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QTimer
 from PyQt6.QtGui import QCursor, QColor, QAction, QIcon
 
@@ -2416,26 +2417,44 @@ class AICardWindow(QWidget):
             QMessageBox.warning(self, "解析失败", "大模型输出的内容不符合预期的 JSON 大纲格式。")
             return
             
-        # 唤起人机共创编辑器
-        dialog = PPTPreviewDialog(json_data, self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            final_json = dialog.get_final_json()
-            try:
-                save_path, _ = QFileDialog.getSaveFileName(
-                    self, "导出为 PPT",
-                    os.path.expanduser("~/Desktop/generated_presentation.pptx"),
-                    "PowerPoint Files (*.pptx)"
-                )
-                if save_path:
-                    # 调用底层排版引擎生成 PPT
-                    generate_ppt_from_json(final_json, save_path)
-                    QMessageBox.information(self, "导出成功", f"PPT 已保存至:\n{save_path}")
-                    # macOS 自动打开文件
-                    subprocess.run(["open", save_path])
-            except Exception as e:
-                import traceback
-                print(traceback.format_exc())
-                QMessageBox.critical(self, "导出错误", f"导出失败: {e}")
+        # 唤起三面板人机共创编辑器
+        try:
+            from ppt_cocreation import CoCreationDialog
+            dialog = CoCreationDialog(
+                original_text=text,
+                json_data=json_data,
+                agent_url="http://127.0.0.1:18888",
+                parent=self
+            )
+            
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                output_path = dialog.get_output_path()
+                if output_path:
+                    QMessageBox.information(self, "导出成功", f"PPT 已成功导出至：\n{output_path}")
+        except ImportError as e:
+            # 降级到旧版编辑器
+            print(f"[WARN] 无法加载新共创编辑器，降级到旧版: {e}")
+            dialog = PPTPreviewDialog(json_data, self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                final_json = dialog.get_final_json()
+                try:
+                    save_path, _ = QFileDialog.getSaveFileName(
+                        self, "导出为 PPT",
+                        os.path.expanduser("~/Desktop/generated_presentation.pptx"),
+                        "PowerPoint Files (*.pptx)"
+                    )
+                    if save_path:
+                        generate_ppt_from_json(final_json, save_path)
+                        QMessageBox.information(self, "导出成功", f"PPT 已保存至:\n{save_path}")
+                        subprocess.run(["open", save_path])
+                except Exception as e:
+                    import traceback
+                    print(traceback.format_exc())
+                    QMessageBox.critical(self, "导出错误", f"导出失败: {e}")
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
+            QMessageBox.critical(self, "导出错误", f"启动编辑器失败: {e}")
 
     def hide_card(self):
         self._pending_hide = False

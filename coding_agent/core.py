@@ -4,10 +4,13 @@ Coding Agent 核心
 实现 Coding Agent 的核心逻辑，包括 Bug 修复、API 结果增强、代码分析等功能。
 """
 
+import logging
 from typing import Dict, Any, Optional, List
 from .intent_detector import IntentDetector, CodingIntent
 from .prompt_generator import PromptGenerator
 from .tool_executor import ToolExecutor
+
+logger = logging.getLogger(__name__)
 
 
 class CodingAgent:
@@ -53,6 +56,8 @@ class CodingAgent:
         Returns:
             Dict[str, Any]: 修复结果
         """
+        logger.info(f"开始 Bug 修复流程: file={file_path}, line={line_number}")
+        
         # 1. 收集上下文
         context = await self.tool_executor.get_full_context(file_path, line_number)
         
@@ -327,14 +332,18 @@ class CodingAgent:
         """
         if self.llm_provider is None:
             # 如果没有 LLM 提供者，返回模拟响应
+            logger.debug("无 LLM 提供者，使用模拟响应")
             return self._generate_mock_response(prompt, context)
         
         try:
             # 调用 LLM
+            logger.info("调用 LLM 生成响应")
             response = await self.llm_provider.generate(prompt)
+            logger.debug(f"LLM 响应长度: {len(response)}")
             return response
         except Exception as e:
             # 如果调用失败，返回错误信息
+            logger.error(f"调用 LLM 失败: {e}")
             return f"调用 LLM 失败: {str(e)}"
     
     def _generate_mock_response(self, prompt: str, context: Dict[str, Any]) -> str:
@@ -557,7 +566,7 @@ def improved_function():
                     try:
                         score_str = line.split("/")[0].strip()
                         result["score"] = int(score_str)
-                    except:
+                    except (ValueError, IndexError):
                         pass
                 elif current_section in ["issues", "suggestions"]:
                     # 提取列表项

@@ -7,6 +7,7 @@
 import asyncio
 import os
 import subprocess
+import tempfile
 from typing import Dict, Any, Optional, List
 import aiohttp
 
@@ -41,7 +42,7 @@ class IDEToolExecutor:
             return self._port_cache
         
         # 从临时文件读取端口
-        port_file = os.path.join(os.tmpdir(), 'asu_ide_port.txt')
+        port_file = os.path.join(tempfile.gettempdir(), 'asu_ide_port.txt')
         if os.path.exists(port_file):
             with open(port_file, 'r') as f:
                 self._port_cache = int(f.read().strip())

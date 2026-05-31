@@ -1425,14 +1425,9 @@ class AICardWindow(QWidget):
             loading_msg.close()
             
             if not json_data:
-                # AI 生成失败，使用默认模板
-                json_data = {
-                    "title": "新建演示文稿",
-                    "slides": [
-                        {"type": "title", "layout": "center", "title": "演示文稿", "subtitle": "AI 生成"},
-                        {"type": "content", "layout": "text_only", "title": "内容", "items": [{"level": 0, "text": text[:200]}]}
-                    ]
-                }
+                # AI 生成失败，使用智能兜底模板
+                print("[PPT] AI 生成失败，使用兜底模板")
+                json_data = self._generate_fallback_outline(text)
             
             dialog = CoCreationDialog(
                 original_text=text,
@@ -1451,7 +1446,11 @@ class AICardWindow(QWidget):
             QMessageBox.warning(self, "错误", f"启动 PPT 助手时出错：{e}")
     
     def _generate_ppt_outline_with_ai(self, text: str) -> dict:
-        """使用 AI 生成 PPT 大纲"""
+        """使用 AI 生成 PPT 大纲
+        
+        Returns:
+            dict: {"title": "PPT标题", "slides": [...]} 或 None（生成失败）
+        """
         try:
             import requests
             
@@ -1556,6 +1555,9 @@ class AICardWindow(QWidget):
 
 {text[:3000]}"""
             
+            print(f"[PPT] 开始生成大纲，内容长度: {len(text)} 字符")
+            print(f"[PPT] 内容前100字: {text[:100]}")
+            
             response = requests.post(
                 "http://127.0.0.1:18888/v1/agent/chat",
                 json={
@@ -1567,8 +1569,10 @@ class AICardWindow(QWidget):
                 timeout=60
             )
             
+            print(f"[PPT] API 响应状态: {response.status_code}")
+            
             if response.status_code == 200:
-                # 解析响应
+                # 解析流式响应
                 full_text = ""
                 for line in response.text.split('\n'):
                     if line.startswith('data: ') and line.strip() != 'data: [DONE]':
@@ -1578,16 +1582,143 @@ class AICardWindow(QWidget):
                         except:
                             pass
                 
+                print(f"[PPT] AI 返回内容长度: {len(full_text)} 字符")
+                print(f"[PPT] AI 返回前200字: {full_text[:200]}")
+                
                 # 提取 JSON
                 from ppt_generator import extract_json_from_text
                 json_data = extract_json_from_text(full_text)
+                
                 if json_data:
-                    return json_data
+                    # 兼容两种返回格式：数组或字典
+                    if isinstance(json_data, list):
+                        # extract_json_from_text 返回了数组，包装成字典
+                        result = {"title": "演示文稿", "slides": json_data}
+                    elif isinstance(json_data, dict) and "slides" in json_data:
+                        result = json_data
+                    else:
+                        print(f"[PPT] JSON 格式不符合预期: {type(json_data)}")
+                        return None
+                    
+                    print(f"[PPT] 解析成功，共 {len(result.get('slides', []))} 页幻灯片")
+                    return result
+                else:
+                    print("[PPT] extract_json_from_text 返回空，AI输出可能不含有效JSON")
+                    print(f"[PPT] AI完整输出: {full_text[:500]}")
+            else:
+                print(f"[PPT] API 调用失败: {response.status_code}")
             
+            return None
+        except requests.Timeout:
+            print("[PPT] API 调用超时（60秒）")
             return None
         except Exception as e:
             print(f"[PPT] AI 生成大纲失败: {e}")
+            import traceback
+            traceback.print_exc()
             return None
+    
+    def _generate_fallback_outline(self, text: str) -> dict:
+        """AI生成失败时的智能兜底模板
+        
+        根据文本内容自动提取要点，生成合理的PPT大纲
+        """
+        import re
+        
+        # 提取文本中的要点
+        lines = text.split('\n')
+        sections = []  # (标题, 要点列表)
+        current_title = ""
+        current_items = []
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            
+            # 检测标题行（#、##、数字编号、中文序号）
+            is_header = False
+            title_text = ""
+            
+            if line.startswith('#'):
+                # Markdown 标题
+                title_text = re.sub(r'^#+\s*', '', line).strip()
+                is_header = True
+            elif re.match(r'^[一二三四五六七八九十]+[、.]', line):
+                # 中文序号
+                title_text = line
+                is_header = True
+            elif re.match(r'^\d+[、.\s]', line):
+                # 数字序号
+                title_text = line
+                is_header = True
+            elif re.match(r'^【.+】', line):
+                # 中文括号标题
+                title_text = line
+                is_header = True
+            
+            if is_header and title_text:
+                if current_title and current_items:
+                    sections.append((current_title, current_items[:5]))  # 最多5个要点
+                current_title = title_text
+                current_items = []
+            elif line.startswith('- ') or line.startswith('* ') or line.startswith('• '):
+                # 列表项
+                item_text = line[2:].strip()
+                if item_text:
+                    current_items.append(item_text)
+            elif len(line) > 10 and len(line) < 100:
+                # 普通文本行（长度适中）
+                current_items.append(line)
+        
+        # 添加最后一个section
+        if current_title and current_items:
+            sections.append((current_title, current_items[:5]))
+        
+        # 如果没有提取到section，用简单分割
+        if not sections:
+            chunk_size = 200
+            chunks = [text[i:i+chunk_size] for i in range(0, min(len(text), 1000), chunk_size)]
+            for i, chunk in enumerate(chunks[:4]):
+                sections.append((f"内容要点 {i+1}", [chunk[:80]]))
+        
+        # 构建幻灯片
+        slides = []
+        
+        # 封面页
+        title_text = sections[0][0] if sections else "演示文稿"
+        slides.append({
+            "type": "title",
+            "layout": "center",
+            "title": title_text,
+            "subtitle": "内容概览"
+        })
+        
+        # 内容页（最多8页）
+        for section_title, items in sections[:8]:
+            if not items:
+                continue
+            slide_items = [{"level": 0, "text": item[:60]} for item in items[:5]]
+            slides.append({
+                "type": "content",
+                "layout": "text_only",
+                "title": section_title[:30],
+                "items": slide_items
+            })
+        
+        # 总结页
+        slides.append({
+            "type": "content",
+            "layout": "center",
+            "title": "总结",
+            "items": [
+                {"level": 0, "text": "以上为主要内容概览"},
+                {"level": 0, "text": "可在编辑器中进一步调整"}
+            ]
+        })
+        
+        print(f"[PPT] 兜底模板生成完成，共 {len(slides)} 页")
+        return {"title": title_text, "slides": slides}
     
     def _launch_ppt_template(self):
         """从模板创建 PPT"""

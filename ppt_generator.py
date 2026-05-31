@@ -201,9 +201,12 @@ def extract_json_from_text(text):
                 clean_str = json_str[start_idx:end_idx]
                 parsed = json.loads(clean_str)
                 
-                # 兼容设计文档中的 {"slides": [...]} 格式
+                # 兼容两种格式：
+                # 1. {"title": "...", "slides": [...]} - 完整格式，直接返回
+                # 2. {"slides": [...]} - 部分格式，返回完整对象
+                # 3. [...] - 数组格式，直接返回
                 if isinstance(parsed, dict) and "slides" in parsed:
-                    return parsed["slides"]
+                    return parsed  # 返回完整字典，保留 title 等字段
                 elif isinstance(parsed, list):
                     return parsed
     except Exception:

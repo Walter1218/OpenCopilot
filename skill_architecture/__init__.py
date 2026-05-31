@@ -14,6 +14,7 @@ from .router import IntentRouter
 from .executor import SkillExecutor
 from .discovery import SkillDiscovery
 from .knowledge_skill import KnowledgeSkill
+from .coding_skill import CodingSkill
 
 __all__ = [
     'SkillStatus',
@@ -27,5 +28,6 @@ __all__ = [
     'IntentRouter',
     'SkillExecutor',
     'SkillDiscovery',
-    'KnowledgeSkill'
+    'KnowledgeSkill',
+    'CodingSkill'
 ]

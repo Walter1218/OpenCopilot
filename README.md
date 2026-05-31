@@ -160,7 +160,9 @@ python start_broker_with_kg.py
 bash scripts/start_ui.sh
 ```
 
-> *可选参数：`--kg-port 8091`、`--broker-port 18890`、`--no-kg`、`--no-cleanup`*
+> *可选参数：`--kg-port 8091`、`--broker-port 18890`、`--no-kg`、`--no-cleanup`、`--no-restart`*
+> 
+> *稳定性特性：自动端口清理、知识图谱 API 崩溃自动重启、健康检查、PID 文件管理*
 
 **方式三：分别启动（灵活控制）**
 

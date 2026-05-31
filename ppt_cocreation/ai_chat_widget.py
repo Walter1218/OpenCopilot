@@ -10,6 +10,7 @@ AI 对话共创组件
   - 添加/删除/修改要点
   - 修改内容类型（文本/图片/流程图等）
   - 插入新幻灯片
+- 集成智能建议气泡和内容分析面板
 """
 
 import json
@@ -81,10 +82,15 @@ except ImportError:
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLineEdit,
-    QPushButton, QLabel, QScrollArea, QFrame, QSizePolicy
+    QPushButton, QLabel, QScrollArea, QFrame, QSizePolicy,
+    QSplitter
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QTimer
 from PyQt6.QtGui import QColor, QFont, QTextCursor, QKeyEvent
+
+# 导入新的UI组件
+from .suggestion_bubble import SuggestionBubble, SuggestionBubbleManager
+from .content_analysis_panel import ContentAnalysisPanel, AnalysisPanelManager
 
 
 class ChatMessageWidget(QFrame):
@@ -284,11 +290,76 @@ class AIWorker(QThread):
    - 添加幻灯片：{"action": "add_slide", "index": 2, "slide": {"title": "新页面", "type": "content", "layout": "text_only", "items": []}}
    - 删除幻灯片：{"action": "remove_slide", "index": 2}
 
-4. **内容转换**（当用户要求转换为图表/表格时）：
-   - 转为表格：{"action": "add_item", "slide_index": 0, "item": {"content_type": "table", "table_data": {"title": "标题", "columns": ["列1", "列2"], "rows": [["值1", "值2"]]}}}
-   - 转为柱状图：{"action": "add_item", "slide_index": 0, "item": {"content_type": "chart", "chart_type": "bar", "chart_data": {"title": "标题", "labels": ["标签1", "标签2"], "datasets": [{"label": "系列", "data": [10, 20], "color": "#007bff"}]}}}
-   - 转为折线图：同上，chart_type 改为 "line"
-   - 转为饼图：同上，chart_type 改为 "pie"
+4. **内容转换**（当用户要求转换为图表/表格/图片时）：
+   
+   **重要：从非结构化内容中提取数据的技巧**
+   
+   当用户说"把这个内容做成表格"或"用图表展示"时，你需要：
+   1. 分析内容结构，识别出可提取的数据模式
+   2. 从自然语言中提取关键信息（人物、属性、数值等）
+   3. 将提取的数据组织成表格/图表格式
+   
+   **常见提取模式**：
+   - **人物属性**："张三25岁在北京" → 列：[姓名, 年龄, 城市]
+   - **产品对比**："产品A卖100万，产品B卖200万" → 列：[产品, 销量]
+   - **时间序列**："Q1增长10%，Q2增长15%" → 列：[季度, 增长率]
+   - **列表描述**："优点：便宜、快速、可靠" → 列：[优点]
+   
+   **转换指令格式**：
+   
+   a) 转为表格：
+   ```json
+   {"action": "add_item", "slide_index": 0, "item": {"content_type": "table", "table_data": {"title": "标题", "columns": ["列1", "列2"], "rows": [["值1", "值2"]]}}}
+   ```
+   
+   b) 转为柱状图（适合对比）：
+   ```json
+   {"action": "add_item", "slide_index": 0, "item": {"content_type": "chart", "chart_type": "bar", "chart_data": {"title": "标题", "labels": ["标签1", "标签2"], "datasets": [{"label": "系列", "data": [10, 20], "color": "#007bff"}]}}}
+   ```
+   
+   c) 转为折线图（适合趋势）：
+   ```json
+   {"action": "add_item", "slide_index": 0, "item": {"content_type": "chart", "chart_type": "line", "chart_data": {...}}}
+   ```
+   
+   d) 转为饼图（适合占比）：
+   ```json
+   {"action": "add_item", "slide_index": 0, "item": {"content_type": "chart", "chart_type": "pie", "chart_data": {...}}}
+   ```
+   
+   e) 转为流程图（适合步骤）：
+   ```json
+   {"action": "add_item", "slide_index": 0, "item": {"content_type": "flowchart", "flowchart_data": {"title": "标题", "steps": ["步骤1", "步骤2"]}}}
+   ```
+   
+   f) 添加图片（使用占位符或描述）：
+   ```json
+   {"action": "add_item", "slide_index": 0, "item": {"content_type": "image", "image_url": "描述或URL"}}
+   ```
+   
+   **示例转换**：
+   
+   用户输入：
+   ```
+   张三今年25岁，在北京工作，月薪1.5万
+   李四今年30岁，在上海工作，月薪2万
+   王五今年28岁，在深圳工作，月薪1.8万
+   ```
+   
+   你应该生成：
+   ```json
+   {"action": "add_item", "slide_index": 0, "item": {"content_type": "table", "table_data": {"title": "员工信息", "columns": ["姓名", "年龄", "城市", "月薪"], "rows": [["张三", "25", "北京", "1.5万"], ["李四", "30", "上海", "2万"], ["王五", "28", "深圳", "1.8万"]]}}}
+   ```
+   
+   用户输入：
+   ```
+   产品A销量100万，产品B销量200万，产品C销量150万
+   ```
+   
+   你应该生成：
+   ```json
+   {"action": "add_item", "slide_index": 0, "item": {"content_type": "chart", "chart_type": "bar", "chart_data": {"title": "产品销量对比", "labels": ["产品A", "产品B", "产品C"], "datasets": [{"label": "销量(万)", "data": [100, 200, 150], "color": "#007bff"}]}}}
+   ```
 
 5. **全局修改**（仅当用户明确要求"重新生成"时使用）：
    - 返回 {"slides": [...]}
@@ -322,6 +393,11 @@ class AICopilotChatWidget(QWidget):
         self.slides_data = []
         self.current_index = -1
         self.worker = None
+        
+        # 新增：智能建议和分析面板
+        self.suggestion_manager = None
+        self.analysis_manager = None
+        
         self._init_ui()
     
     def _init_ui(self):
@@ -350,6 +426,32 @@ class AICopilotChatWidget(QWidget):
         
         # 异步探活
         QTimer.singleShot(500, self._check_agent_health)
+        
+        # 内容分析面板切换按钮
+        self.analysis_toggle_btn = QPushButton("📊")
+        self.analysis_toggle_btn.setFixedSize(24, 24)
+        self.analysis_toggle_btn.setToolTip("显示/隐藏内容分析面板")
+        self.analysis_toggle_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3c3c3c;
+                color: #888;
+                border: none;
+                border-radius: 12px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #4a4a4a;
+                color: #e0e0e0;
+            }
+            QPushButton:checked {
+                background-color: #4a9eff;
+                color: white;
+            }
+        """)
+        self.analysis_toggle_btn.setCheckable(True)
+        self.analysis_toggle_btn.clicked.connect(self._toggle_analysis_panel)
+        header.addWidget(self.analysis_toggle_btn)
+        
         header.addStretch()
         
         # 折叠按钮
@@ -372,6 +474,10 @@ class AICopilotChatWidget(QWidget):
         header.addWidget(self.toggle_btn)
         
         layout.addLayout(header)
+        
+        # 主内容区域：聊天 + 分析面板
+        self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.main_splitter.setHandleWidth(2)
         
         # 聊天区域
         self.chat_area = QWidget()
@@ -479,16 +585,47 @@ class AICopilotChatWidget(QWidget):
         
         chat_layout.addLayout(input_layout)
         
-        layout.addWidget(self.chat_area)
+        # 将聊天区域添加到splitter
+        self.main_splitter.addWidget(self.chat_area)
+        
+        # 创建分析面板（初始隐藏）
+        self.analysis_panel = ContentAnalysisPanel()
+        self.analysis_panel.setMinimumWidth(200)
+        self.analysis_panel.setMaximumWidth(350)
+        self.main_splitter.addWidget(self.analysis_panel)
+        
+        # 设置splitter比例
+        self.main_splitter.setSizes([400, 250])
+        self.main_splitter.setStretchFactor(0, 1)  # 聊天区域可拉伸
+        self.main_splitter.setStretchFactor(1, 0)  # 分析面板固定
+        
+        # 默认隐藏分析面板
+        self.analysis_panel.setVisible(False)
+        
+        # 初始化分析面板管理器
+        self.analysis_manager = AnalysisPanelManager(self.analysis_panel)
+        
+        # 添加splitter到主布局
+        layout.addWidget(self.main_splitter)
         
         # 添加欢迎消息
-        self._add_message("你好！我是 PPT 编辑助手。你可以用自然语言告诉我如何修改幻灯片，例如：\n\n• 把第2页的标题改为'核心优势'\n• 在第3页添加一个流程图\n• 把第1页改为图文混排", is_user=False)
+        self._add_message("你好！我是 PPT 编辑助手。你可以用自然语言告诉我如何修改幻灯片，例如：\n\n• 把第2页的标题改为'核心优势'\n• 在第3页添加一个流程图\n• 把第1页改为图文混排\n\n💡 提示：点击标题栏的 📊 按钮可打开内容分析面板", is_user=False)
     
     def _toggle_chat(self):
         """折叠/展开聊天区域"""
         is_visible = self.chat_area.isVisible()
         self.chat_area.setVisible(not is_visible)
         self.toggle_btn.setText("▲" if not is_visible else "▼")
+    
+    def _toggle_analysis_panel(self):
+        """显示/隐藏内容分析面板"""
+        is_visible = self.analysis_panel.isVisible()
+        self.analysis_panel.setVisible(not is_visible)
+        self.analysis_toggle_btn.setChecked(not is_visible)
+        
+        # 如果显示面板，触发当前幻灯片的分析
+        if not is_visible:
+            self._analyze_current_slide()
     
     def _check_agent_health(self):
         """异步检测 Agent 服务状态"""
@@ -508,6 +645,43 @@ class AICopilotChatWidget(QWidget):
         """设置幻灯片数据"""
         self.slides_data = slides
         self.current_index = current_index
+        
+        # 如果分析面板可见，自动分析当前幻灯片
+        if self.analysis_panel.isVisible() and current_index >= 0:
+            self._analyze_current_slide()
+    
+    def _analyze_current_slide(self):
+        """分析当前幻灯片内容"""
+        if not self.slides_data or self.current_index < 0:
+            return
+        
+        if self.current_index >= len(self.slides_data):
+            return
+        
+        current_slide = self.slides_data[self.current_index]
+        content = current_slide.get("content", "")
+        title = current_slide.get("title", "")
+        
+        # 组合内容进行分析
+        full_content = f"{title}\n{content}".strip()
+        if not full_content:
+            return
+        
+        # 调用分析API
+        try:
+            import requests
+            response = requests.post(
+                f"{self.agent_url}/api/ppt/analyze",
+                json={"content": full_content},
+                timeout=5.0
+            )
+            
+            if response.status_code == 200:
+                analysis_data = response.json()
+                # 更新分析面板
+                self.analysis_manager.update_analysis_debounced(analysis_data)
+        except Exception as e:
+            print(f"分析失败: {e}")
     
     def _add_message(self, text: str, is_user: bool = True):
         """添加消息"""
@@ -564,6 +738,13 @@ class AICopilotChatWidget(QWidget):
             
             # 显示成功消息
             self._add_message(f"✅ {success_msg}", is_user=False)
+            
+            # 新增：触发建议气泡（如果当前幻灯片有优化空间）
+            self._trigger_suggestions_for_current_slide()
+            
+            # 新增：更新分析面板
+            if self.analysis_panel.isVisible():
+                self._analyze_current_slide()
         
         except json.JSONDecodeError as e:
             # JSON 解析失败，显示原始响应
@@ -603,6 +784,78 @@ class AICopilotChatWidget(QWidget):
                 if depth == 0:
                     return text[start:idx + 1]
         return None
+    
+    def _trigger_suggestions_for_current_slide(self):
+        """为当前幻灯片触发建议气泡"""
+        if not self.slides_data or self.current_index < 0:
+            return
+        
+        if self.current_index >= len(self.slides_data):
+            return
+        
+        current_slide = self.slides_data[self.current_index]
+        content = current_slide.get("content", "")
+        title = current_slide.get("title", "")
+        
+        # 组合内容进行分析
+        full_content = f"{title}\n{content}".strip()
+        if not full_content:
+            return
+        
+        # 调用建议API
+        try:
+            import requests
+            from PyQt6.QtCore import QPoint
+            
+            response = requests.post(
+                f"{self.agent_url}/api/ppt/suggest",
+                json={
+                    "context": {
+                        "title": "PPT编辑",
+                        "current_slide": self.current_index,
+                        "slides": self.slides_data
+                    },
+                    "max_suggestions": 2
+                },
+                timeout=5.0
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                suggestions = result.get("suggestions", [])
+                
+                # 显示第一个建议作为气泡
+                if suggestions:
+                    suggestion = suggestions[0]
+                    
+                    # 如果还没有管理器，创建一个
+                    if not self.suggestion_manager:
+                        self.suggestion_manager = SuggestionBubbleManager(self)
+                    
+                    # 计算显示位置（在聊天区域上方）
+                    pos = self.mapToGlobal(QPoint(
+                        self.width() // 2,
+                        50
+                    ))
+                    
+                    # 显示建议气泡
+                    self.suggestion_manager.show_suggestion(
+                        suggestion,
+                        pos,
+                        on_accept=self._on_suggestion_accepted,
+                        on_dismiss=self._on_suggestion_dismissed
+                    )
+        except Exception as e:
+            print(f"获取建议失败: {e}")
+    
+    def _on_suggestion_accepted(self, suggestion: dict):
+        """建议被接受"""
+        self._add_message(f"💡 已应用AI建议：{suggestion.get('title', '优化建议')}", is_user=False)
+        # 可以在这里触发实际的优化操作
+    
+    def _on_suggestion_dismissed(self):
+        """建议被忽略"""
+        pass  # 静默忽略
     
     def _apply_update(self, data: dict) -> str:
         """应用更新（支持局部更新和全量更新）"""

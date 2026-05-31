@@ -14,6 +14,8 @@ from .outline_panel import OutlinePanel
 from .preview_panel import PreviewPanel
 from .ai_chat_widget import AICopilotChatWidget
 from .source_matcher import SourceMatcher
+from .suggestion_bubble import SuggestionBubble, SuggestionBubbleManager
+from .content_analysis_panel import ContentAnalysisPanel, AnalysisPanelManager
 
 __all__ = [
     'CoCreationDialog',
@@ -22,4 +24,8 @@ __all__ = [
     'PreviewPanel',
     'AICopilotChatWidget',
     'SourceMatcher',
+    'SuggestionBubble',
+    'SuggestionBubbleManager',
+    'ContentAnalysisPanel',
+    'AnalysisPanelManager',
 ]

@@ -4544,6 +4544,20 @@
       ],
       "created_at": "2026-05-31T13:17:01.117954",
       "updated_at": "2026-05-31T13:17:01.117955"
+    },
+    "4bce8de5-75d5-45ad-8629-08555729efdf": {
+      "id": "4bce8de5-75d5-45ad-8629-08555729efdf",
+      "name": "TestComponent",
+      "entity_type": "component",
+      "description": "更新后的测试组件",
+      "properties": {
+        "test": true
+      },
+      "source_documents": [
+        "test.md"
+      ],
+      "created_at": "2026-05-31T13:26:51.894040",
+      "updated_at": "2026-05-31T13:26:51.898417"
     }
   },
   "relations": {
@@ -6704,8 +6718,19 @@
         "extracted_from_architecture"
       ],
       "created_at": "2026-05-31T13:17:01.118936"
+    },
+    "0d9e074c-30ab-41e8-96f2-0869e14e5b1a": {
+      "id": "0d9e074c-30ab-41e8-96f2-0869e14e5b1a",
+      "source_id": "4bce8de5-75d5-45ad-8629-08555729efdf",
+      "target_id": "928afc21-8f0b-4ab5-b887-aec29ed8ec6a",
+      "relation_type": "depends_on",
+      "description": "测试关系",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [],
+      "created_at": "2026-05-31T13:26:51.907648"
     }
   },
   "created_at": "2026-05-31T13:17:00.887721",
-  "updated_at": "2026-05-31T13:32:21.832153"
+  "updated_at": "2026-05-31T13:26:51.907653"
 }

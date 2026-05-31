@@ -154,10 +154,13 @@ bash scripts/start_ui.sh
 ```bash
 # 终端 1：启动 Broker + 知识图谱 API（需原生终端）
 python start_broker_with_kg.py
+# 会自动清理占用端口的旧进程，然后启动服务
 
 # 终端 2：启动 UI
 bash scripts/start_ui.sh
 ```
+
+> *可选参数：`--kg-port 8091`、`--broker-port 18890`、`--no-kg`、`--no-cleanup`*
 
 **方式三：分别启动（灵活控制）**
 

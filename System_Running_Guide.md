@@ -107,9 +107,14 @@ pip install -r requirements.txt
      source venv/bin/activate
      python start_broker_with_kg.py
      ```
-   - *此命令会同时启动：*
+   - *此命令会自动清理占用端口的旧进程，然后同时启动：*
      - *Broker 服务（端口 18889）：系统焦点监听、无感划词提取、视觉屏幕抓取等特权操作*
      - *知识图谱 API（端口 8090）：项目知识查询*
+   - *可选参数：*
+     - `--kg-port 8091` - 自定义知识图谱 API 端口
+     - `--broker-port 18890` - 自定义 Broker 端口
+     - `--no-kg` - 不启动知识图谱 API
+     - `--no-cleanup` - 不自动清理占用端口的进程
 
 2. **启动前端 UI 与智能中枢 (Smart Copilot)**
    - 可以在任何终端中运行（包括 Trae/VSCode 的内置终端）。

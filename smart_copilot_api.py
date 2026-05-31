@@ -44,7 +44,11 @@ from ppt_cocreation.suggestion_engine import SuggestionEngine
 from ppt_cocreation.conversation_manager import ConversationManager
 
 # 导入 Skill 架构模块
-from skill_architecture import FileSkill, FormatSkill, PersonaSkill, SkillContext
+from skill_architecture import (
+    FileSkill, FormatSkill, PersonaSkill, 
+    EvaluationSkill, KnowledgeSkill, CodingSkill,
+    SkillContext
+)
 
 # ==========================================
 # Pydantic 模型定义
@@ -2113,6 +2117,506 @@ async def persona_delete(request: PersonaDeleteRequest):
             raise HTTPException(status_code=400, detail=result.error)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"删除人设失败: {str(e)}")
+
+# ==========================================
+# Evaluation Skill API 端点
+# ==========================================
+
+class EvaluateRequest(BaseModel):
+    """评价请求"""
+    content: str = Field(..., description="要评价的内容")
+    scene: str = Field("auto", description="场景类型: auto/translate/code/polish/revision/custom")
+    input_text: Optional[str] = Field(None, description="输入文本（原文）")
+    reference: Optional[str] = Field(None, description="参考文本")
+    instruction: Optional[str] = Field(None, description="自定义指令")
+    full_document: Optional[str] = Field(None, description="完整文档")
+
+class GetScoreRequest(BaseModel):
+    """获取评分请求"""
+    content: str = Field(..., description="要评分的内容")
+    scene: str = Field("auto", description="场景类型")
+
+# 全局 EvaluationSkill 实例
+evaluation_skill = EvaluationSkill()
+
+@app.post("/api/evaluation/evaluate")
+async def evaluate_content(request: EvaluateRequest):
+    """
+    内容质量评价
+    
+    对文本、代码、翻译等内容进行质量评价，返回评分、等级和详细报告。
+    """
+    try:
+        context = SkillContext(
+            intent="evaluate",
+            input_data={
+                "action": "evaluate",
+                "content": request.content,
+                "scene": request.scene,
+                "input_text": request.input_text,
+                "reference": request.reference,
+                "instruction": request.instruction,
+                "full_document": request.full_document
+            }
+        )
+        result = await evaluation_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"内容评价失败: {str(e)}")
+
+@app.post("/api/evaluation/score")
+async def get_score(request: GetScoreRequest):
+    """
+    获取评分
+    
+    快速获取内容的评分（1-5分）。
+    """
+    try:
+        context = SkillContext(
+            intent="score",
+            input_data={
+                "action": "score",
+                "content": request.content,
+                "scene": request.scene
+            }
+        )
+        result = await evaluation_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取评分失败: {str(e)}")
+
+@app.post("/api/evaluation/quality-check")
+async def quality_check(request: GetScoreRequest):
+    """
+    质量检查
+    
+    对内容进行质量检查，返回是否通过及改进建议。
+    """
+    try:
+        context = SkillContext(
+            intent="quality_check",
+            input_data={
+                "action": "quality_check",
+                "content": request.content,
+                "scene": request.scene
+            }
+        )
+        result = await evaluation_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"质量检查失败: {str(e)}")
+
+# ==========================================
+# Knowledge Skill API 端点
+# ==========================================
+
+class KnowledgeQueryRequest(BaseModel):
+    """知识查询请求"""
+    query: str = Field(..., description="查询内容")
+    entity_type: Optional[str] = Field(None, description="实体类型过滤")
+
+class KnowledgeBuildRequest(BaseModel):
+    """知识构建请求"""
+    content: str = Field(..., description="要提取知识的内容")
+    source: Optional[str] = Field("api", description="来源标识")
+
+class KnowledgeExportRequest(BaseModel):
+    """知识导出请求"""
+    format: str = Field("json", description="导出格式: json/csv/md")
+    entity_type: Optional[str] = Field(None, description="实体类型过滤")
+
+class SearchEntityRequest(BaseModel):
+    """搜索实体请求"""
+    keyword: str = Field(..., description="搜索关键词")
+    entity_type: Optional[str] = Field(None, description="实体类型过滤")
+
+class FindRelatedRequest(BaseModel):
+    """查找关联请求"""
+    entity_name: str = Field(..., description="实体名称")
+    relation_type: Optional[str] = Field(None, description="关系类型过滤")
+
+class FindPathRequest(BaseModel):
+    """查找路径请求"""
+    source: str = Field(..., description="起始实体")
+    target: str = Field(..., description="目标实体")
+
+# 全局 KnowledgeSkill 实例
+knowledge_skill = KnowledgeSkill()
+
+@app.post("/api/knowledge/query")
+async def knowledge_query(request: KnowledgeQueryRequest):
+    """
+    知识查询
+    
+    查询知识图谱中的实体和关系。
+    """
+    try:
+        context = SkillContext(
+            intent="knowledge_query",
+            input_data={
+                "action": "query",
+                "query": request.query,
+                "entity_type": request.entity_type
+            }
+        )
+        result = await knowledge_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"知识查询失败: {str(e)}")
+
+@app.post("/api/knowledge/build")
+async def knowledge_build(request: KnowledgeBuildRequest):
+    """
+    知识构建
+    
+    从内容中提取实体和关系，构建知识图谱。
+    """
+    try:
+        context = SkillContext(
+            intent="knowledge_build",
+            input_data={
+                "action": "build",
+                "content": request.content,
+                "source": request.source
+            }
+        )
+        result = await knowledge_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"知识构建失败: {str(e)}")
+
+@app.post("/api/knowledge/export")
+async def knowledge_export(request: KnowledgeExportRequest):
+    """
+    知识导出
+    
+    导出知识图谱数据。
+    """
+    try:
+        context = SkillContext(
+            intent="knowledge_export",
+            input_data={
+                "action": "export",
+                "format": request.format,
+                "entity_type": request.entity_type
+            }
+        )
+        result = await knowledge_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"知识导出失败: {str(e)}")
+
+@app.post("/api/knowledge/search-entity")
+async def search_entity(request: SearchEntityRequest):
+    """
+    搜索实体
+    
+    在知识图谱中搜索实体。
+    """
+    try:
+        context = SkillContext(
+            intent="search_entity",
+            input_data={
+                "action": "search_entity",
+                "keyword": request.keyword,
+                "entity_type": request.entity_type
+            }
+        )
+        result = await knowledge_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"搜索实体失败: {str(e)}")
+
+@app.post("/api/knowledge/find-related")
+async def find_related(request: FindRelatedRequest):
+    """
+    查找关联
+    
+    查找与指定实体相关的实体和关系。
+    """
+    try:
+        context = SkillContext(
+            intent="find_related",
+            input_data={
+                "action": "find_related",
+                "entity_name": request.entity_name,
+                "relation_type": request.relation_type
+            }
+        )
+        result = await knowledge_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"查找关联失败: {str(e)}")
+
+@app.post("/api/knowledge/find-path")
+async def find_path(request: FindPathRequest):
+    """
+    查找路径
+    
+    查找两个实体之间的路径。
+    """
+    try:
+        context = SkillContext(
+            intent="find_path",
+            input_data={
+                "action": "find_path",
+                "source": request.source,
+                "target": request.target
+            }
+        )
+        result = await knowledge_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"查找路径失败: {str(e)}")
+
+@app.get("/api/knowledge/statistics")
+async def get_statistics():
+    """
+    获取统计信息
+    
+    获取知识图谱的统计信息。
+    """
+    try:
+        context = SkillContext(
+            intent="get_statistics",
+            input_data={"action": "get_statistics"}
+        )
+        result = await knowledge_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取统计信息失败: {str(e)}")
+
+# ==========================================
+# Coding Skill API 端点
+# ==========================================
+
+class CodeReviewRequest(BaseModel):
+    """代码审查请求"""
+    code: str = Field(..., description="要审查的代码")
+    language: Optional[str] = Field("python", description="编程语言")
+    context: Optional[str] = Field(None, description="上下文信息")
+
+class BugFixRequest(BaseModel):
+    """Bug修复请求"""
+    code: str = Field(..., description="有问题的代码")
+    error_message: Optional[str] = Field(None, description="错误信息")
+    language: Optional[str] = Field("python", description="编程语言")
+
+class CodeExplainRequest(BaseModel):
+    """代码解释请求"""
+    code: str = Field(..., description="要解释的代码")
+    language: Optional[str] = Field("python", description="编程语言")
+    detail_level: Optional[str] = Field("normal", description="详细程度: brief/normal/detailed")
+
+class RefactorRequest(BaseModel):
+    """重构请求"""
+    code: str = Field(..., description="要重构的代码")
+    language: Optional[str] = Field("python", description="编程语言")
+    goal: Optional[str] = Field(None, description="重构目标")
+
+class EnhanceApiRequest(BaseModel):
+    """API增强请求"""
+    code: str = Field(..., description="现有API代码")
+    enhancement: str = Field(..., description="增强需求")
+    language: Optional[str] = Field("python", description="编程语言")
+
+# 全局 CodingSkill 实例
+coding_skill = CodingSkill()
+
+@app.post("/api/coding/review")
+async def code_review(request: CodeReviewRequest):
+    """
+    代码审查
+    
+    对代码进行审查，返回问题和改进建议。
+    """
+    try:
+        context = SkillContext(
+            intent="code_review",
+            input_data={
+                "action": "code_review",
+                "code": request.code,
+                "language": request.language,
+                "context": request.context
+            }
+        )
+        result = await coding_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"代码审查失败: {str(e)}")
+
+@app.post("/api/coding/bug-fix")
+async def bug_fix(request: BugFixRequest):
+    """
+    Bug修复
+    
+    分析并修复代码中的Bug。
+    """
+    try:
+        context = SkillContext(
+            intent="bug_fix",
+            input_data={
+                "action": "bug_fix",
+                "code": request.code,
+                "error_message": request.error_message,
+                "language": request.language
+            }
+        )
+        result = await coding_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Bug修复失败: {str(e)}")
+
+@app.post("/api/coding/explain")
+async def code_explain(request: CodeExplainRequest):
+    """
+    代码解释
+    
+    解释代码的功能和逻辑。
+    """
+    try:
+        context = SkillContext(
+            intent="explain",
+            input_data={
+                "action": "explain",
+                "code": request.code,
+                "language": request.language,
+                "detail_level": request.detail_level
+            }
+        )
+        result = await coding_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"代码解释失败: {str(e)}")
+
+@app.post("/api/coding/refactor")
+async def code_refactor(request: RefactorRequest):
+    """
+    代码重构
+    
+    对代码进行重构优化。
+    """
+    try:
+        context = SkillContext(
+            intent="refactor",
+            input_data={
+                "action": "refactor",
+                "code": request.code,
+                "language": request.language,
+                "goal": request.goal
+            }
+        )
+        result = await coding_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"代码重构失败: {str(e)}")
+
+@app.post("/api/coding/enhance-api")
+async def enhance_api(request: EnhanceApiRequest):
+    """
+    API增强
+    
+    增强现有API的功能。
+    """
+    try:
+        context = SkillContext(
+            intent="enhance_api",
+            input_data={
+                "action": "enhance_api",
+                "code": request.code,
+                "enhancement": request.enhancement,
+                "language": request.language
+            }
+        )
+        result = await coding_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"API增强失败: {str(e)}")
+
+@app.post("/api/coding/analyze")
+async def code_analyze(request: CodeExplainRequest):
+    """
+    代码分析
+    
+    分析代码的结构、复杂度和质量。
+    """
+    try:
+        context = SkillContext(
+            intent="analyze",
+            input_data={
+                "action": "analyze",
+                "code": request.code,
+                "language": request.language
+            }
+        )
+        result = await coding_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"代码分析失败: {str(e)}")
 
 # ==========================================
 # 启动入口

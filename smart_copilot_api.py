@@ -44,7 +44,7 @@ from ppt_cocreation.suggestion_engine import SuggestionEngine
 from ppt_cocreation.conversation_manager import ConversationManager
 
 # 导入 Skill 架构模块
-from skill_architecture import FileSkill, FormatSkill, SkillContext
+from skill_architecture import FileSkill, FormatSkill, PersonaSkill, SkillContext
 
 # ==========================================
 # Pydantic 模型定义
@@ -1995,6 +1995,124 @@ async def text_to_table(request: TextToTableRequest):
             raise HTTPException(status_code=400, detail=result.error)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"文本转表格失败: {str(e)}")
+
+# ==========================================
+# Persona Skill API 端点
+# ==========================================
+
+class PersonaListRequest(BaseModel):
+    """人设列表请求"""
+    pass
+
+class PersonaGetRequest(BaseModel):
+    """获取人设请求"""
+    name: str = Field(..., description="人设名称")
+
+class PersonaSaveRequest(BaseModel):
+    """保存人设请求"""
+    name: str = Field(..., description="人设名称")
+    content: str = Field(..., description="人设内容（Markdown格式）")
+
+class PersonaDeleteRequest(BaseModel):
+    """删除人设请求"""
+    name: str = Field(..., description="人设名称")
+
+# 全局 PersonaSkill 实例
+persona_skill = PersonaSkill()
+
+@app.post("/api/persona/list")
+async def persona_list(request: PersonaListRequest = None):
+    """
+    列出所有人设
+    
+    返回所有人设的列表，包括内置人设和自定义人设。
+    """
+    try:
+        context = SkillContext(
+            intent="persona_list",
+            input_data={"action": "list"}
+        )
+        result = await persona_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"列出人设失败: {str(e)}")
+
+@app.post("/api/persona/get")
+async def persona_get(request: PersonaGetRequest):
+    """
+    获取指定人设
+    
+    获取指定人设的详细内容。
+    """
+    try:
+        context = SkillContext(
+            intent="persona_get",
+            input_data={
+                "action": "get",
+                "name": request.name
+            }
+        )
+        result = await persona_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取人设失败: {str(e)}")
+
+@app.post("/api/persona/save")
+async def persona_save(request: PersonaSaveRequest):
+    """
+    保存人设
+    
+    保存人设内容（新建或覆盖）。
+    """
+    try:
+        context = SkillContext(
+            intent="persona_save",
+            input_data={
+                "action": "save",
+                "name": request.name,
+                "content": request.content
+            }
+        )
+        result = await persona_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"保存人设失败: {str(e)}")
+
+@app.post("/api/persona/delete")
+async def persona_delete(request: PersonaDeleteRequest):
+    """
+    删除人设
+    
+    删除指定的人设（内置人设无法删除）。
+    """
+    try:
+        context = SkillContext(
+            intent="persona_delete",
+            input_data={
+                "action": "delete",
+                "name": request.name
+            }
+        )
+        result = await persona_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"删除人设失败: {str(e)}")
 
 # ==========================================
 # 启动入口

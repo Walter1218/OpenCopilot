@@ -19,6 +19,7 @@ from .ppt_skill import PPTSkill
 from .evaluation_skill import EvaluationSkill
 from .file_skill import FileSkill
 from .format_skill import FormatSkill
+from .persona_skill import PersonaSkill
 
 __all__ = [
     'SkillStatus',
@@ -37,5 +38,6 @@ __all__ = [
     'PPTSkill',
     'EvaluationSkill',
     'FileSkill',
-    'FormatSkill'
+    'FormatSkill',
+    'PersonaSkill'
 ]

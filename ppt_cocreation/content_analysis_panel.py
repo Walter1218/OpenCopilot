@@ -189,12 +189,34 @@ class ContentAnalysisPanel(QWidget):
     
     # 内容类型配置（与 context_analyzer.py 的 ContentType 枚举保持一致）
     CONTENT_TYPE_CONFIG = {
+        # 基础类型
         "text": {"icon": "📝", "label": "纯文本", "color": "#4a9eff"},
+        "table": {"icon": "📋", "label": "表格", "color": "#607d8b"},
+        "chart": {"icon": "📊", "label": "图表", "color": "#4caf50"},
+        "flowchart": {"icon": "🔄", "label": "流程图", "color": "#9c27b0"},
+        "image": {"icon": "🖼️", "label": "图片", "color": "#e91e63"},
+        "list": {"icon": "📋", "label": "列表", "color": "#607d8b"},
+        
+        # 语义类型
         "data_comparison": {"icon": "📊", "label": "数据对比", "color": "#4caf50"},
         "time_series": {"icon": "📅", "label": "时间序列", "color": "#ff9800"},
         "process": {"icon": "🔄", "label": "流程步骤", "color": "#9c27b0"},
         "person_attributes": {"icon": "👤", "label": "人物属性", "color": "#f44336"},
-        "list_items": {"icon": "📋", "label": "列表项", "color": "#607d8b"},
+        
+        # 新增泛化类型
+        "problem_solution": {"icon": "❓", "label": "问题-解决方案", "color": "#ff5722"},
+        "pros_cons": {"icon": "⚖️", "label": "优缺点对比", "color": "#795548"},
+        "feature_list": {"icon": "⭐", "label": "功能特点", "color": "#ffc107"},
+        "case_study": {"icon": "📚", "label": "案例分析", "color": "#3f51b5"},
+        "definition": {"icon": "📖", "label": "定义/概念", "color": "#00bcd4"},
+        "summary": {"icon": "📝", "label": "总结/结论", "color": "#8bc34a"},
+        "quote": {"icon": "💬", "label": "引用/名言", "color": "#9e9e9e"},
+        "statistics": {"icon": "📈", "label": "统计数据", "color": "#ff9800"},
+        "comparison": {"icon": "🔄", "label": "通用对比", "color": "#673ab7"},
+        "organization": {"icon": "🏢", "label": "组织架构", "color": "#607d8b"},
+        "timeline": {"icon": "⏰", "label": "时间线", "color": "#2196f3"},
+        "argument": {"icon": "💡", "label": "论点/论据", "color": "#f44336"},
+        
         "unknown": {"icon": "❓", "label": "未知类型", "color": "#888"}
     }
     

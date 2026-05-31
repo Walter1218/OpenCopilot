@@ -2,26 +2,50 @@
 智能上下文感知模块
 
 分析 PPT 的整体结构、内容类型、风格一致性等，为 AI 提供全局视野。
+支持两种检测模式：
+1. 正则模式（快速，无依赖）
+2. LLM 辅助模式（更准确，需要 API）
 """
 
 import re
-from typing import Dict, List, Any, Optional, Tuple
-from dataclasses import dataclass
+import json
+import logging
+from typing import Dict, List, Any, Optional, Tuple, Callable
+from dataclasses import dataclass, field
 from enum import Enum
+
+logger = logging.getLogger(__name__)
 
 
 class ContentType(str, Enum):
     """内容类型"""
+    # 基础类型
     TEXT = "text"
     TABLE = "table"
     CHART = "chart"
     FLOWCHART = "flowchart"
     IMAGE = "image"
     LIST = "list"
-    DATA_COMPARISON = "data_comparison"
-    TIME_SERIES = "time_series"
-    PROCESS = "process"
-    PERSON_ATTRIBUTES = "person_attributes"
+    
+    # 语义类型
+    DATA_COMPARISON = "data_comparison"      # 数据对比
+    TIME_SERIES = "time_series"              # 时间序列
+    PROCESS = "process"                      # 流程步骤
+    PERSON_ATTRIBUTES = "person_attributes"  # 人物属性
+    
+    # 新增泛化类型
+    PROBLEM_SOLUTION = "problem_solution"    # 问题-解决方案
+    PROS_CONS = "pros_cons"                  # 优缺点对比
+    FEATURE_LIST = "feature_list"            # 功能特点
+    CASE_STUDY = "case_study"                # 案例分析
+    DEFINITION = "definition"                # 定义/概念
+    SUMMARY = "summary"                      # 总结/结论
+    QUOTE = "quote"                          # 引用/名言
+    STATISTICS = "statistics"                # 统计数据
+    COMPARISON = "comparison"                # 通用对比
+    ORGANIZATION = "organization"            # 组织架构
+    TIMELINE = "timeline"                    # 时间线
+    ARGUMENT = "argument"                    # 论点/论据
 
 
 class SuggestionType(str, Enum):
@@ -72,23 +96,34 @@ class ContextAnalyzer:
     """上下文分析器
     
     分析 PPT 的整体结构、内容类型、风格一致性等。
+    支持正则模式和 LLM 辅助模式。
     """
     
-    def __init__(self):
-        """初始化分析器"""
+    def __init__(self, llm_classify_func: Optional[Callable] = None):
+        """初始化分析器
+        
+        Args:
+            llm_classify_func: LLM 分类函数，可选。
+                如果提供，签名应为 (content: str) -> Dict[str, Any]
+                返回格式：{"content_type": str, "confidence": float, "reason": str}
+        """
+        self.llm_classify_func = llm_classify_func
+        
         # 内容类型检测模式（按优先级排序）
         self.patterns = {
-            ContentType.TIME_SERIES: [
-                r'(?:Q[1-4]|[1-4]季度)',
-                r'(?:第[一二三四]季度)',
-                r'(?:\d{4}年\d{1,2}月|\d{4}年(?:营收|收入|利润|增长|销量|产出))',
-                r'(?:\d{1,2}月\s*(?:至|到)\s*\d{1,2}月)',
-            ],
+            # === 基础类型 ===
             ContentType.DATA_COMPARISON: [
                 r'(\w+)\s*(?:销量|收入|利润|占比|份额)\s*(\d+)',
                 r'(\w+)\s*(?:比|vs|对比)\s*(\w+)',
                 r'(\d+%)\s*(?:增长|下降|提升|同比)',
                 r'(?:最多|最少|最高|最低|领先|落后)',
+                r'(?:Q[1-4]|[1-4]季度)\s*(?:增长|下降|提升)',
+            ],
+            ContentType.TIME_SERIES: [
+                r'(?:第[一二三四]季度)',
+                r'(?:\d{4}年\d{1,2}月|\d{4}年(?:营收|收入|利润|销量|产出))',
+                r'(?:\d{1,2}月\s*(?:至|到)\s*\d{1,2}月)',
+                r'(?:Q[1-4]|[1-4]季度)(?!.*(?:增长|下降|提升))',
             ],
             ContentType.PROCESS: [
                 r'(?:第[一二三四五]步|步骤\s*\d+)',
@@ -96,31 +131,18 @@ class ContextAnalyzer:
                 r'(?:第[1-5]阶段|阶段\s*\d+)',
             ],
             ContentType.PERSON_ATTRIBUTES: [
-                # 标准格式：姓名：张三
                 r'(?:姓名|名字)[：:]\s*(\w+)',
-                # 姓名，男/女，年龄岁
                 r'(\w{2,4})[，,]\s*(?:男|女)[，,]\s*(\d+)\s*岁',
-                # 姓名，年龄岁，职位（无性别）
                 r'(\w{2,4})[，,]\s*(\d+)\s*岁[，,]\s*(\w+)',
-                # 姓名，职位，年龄（无岁字）
                 r'(\w{2,4})[，,]\s*(\w{2,6})[，,]\s*(\d+)(?:岁|$)',
-                # 姓名  年龄岁  职位（空格分隔）
                 r'(\w{2,4})\s+(\d+)\s*岁\s+(\w+)',
-                # 自然语言：姓名今年/年龄岁
                 r'(\w{2,4})(?:今年|年龄)\s*(\d+)\s*岁',
-                # 自然语言描述：是张三，他今年30岁
                 r'(?:是|叫)\s*(\w{2,4})[，,]?\s*(?:他|她)?(?:今年|年龄)\s*(\d+)\s*岁',
-                # 括号格式：姓名（职位，年龄岁）
                 r'(\w{2,4})（(\w+)[，,]\s*(\d+)岁）',
-                # 年龄：30
                 r'(?:年龄|岁数)[：:]\s*(\d+)',
-                # 职位：工程师
                 r'(?:职位|职务|角色)[：:]\s*(\w+)',
-                # 称谓+姓名+年龄：王女士今年45岁
                 r'(?:客户|经理|女士|先生|老师|同学|同事|leader|负责人)\s*(\w{2,4})(?:今年|年龄)\s*(\d+)\s*岁',
-                # 描述性：项目经理李四今年35岁
                 r'(?:\w{2,4})\s*(\w{2,4})(?:今年|年龄)\s*(\d+)\s*岁',
-                # 擅长技能
                 r'(?:擅长|专长|技能)[：:]\s*(.+?)(?:[，,。]|$)',
             ],
             ContentType.LIST: [
@@ -128,6 +150,132 @@ class ContextAnalyzer:
                 r'(?:^|\n)\s*\d+[.、]\s+',
                 r'(?:优点|特点|优势|功能)[：:]\s*\n',
             ],
+            
+            # === 新增泛化类型 ===
+            
+            # 问题-解决方案
+            ContentType.PROBLEM_SOLUTION: [
+                r'(?:问题|痛点|挑战|困难)[：:]',
+                r'(?:解决方案|解决办法|应对策略|方案)[：:]',
+                r'(?:问题\d|[一二三四五]、.*问题)',
+                r'(?:如何解决|怎么解决|怎样解决)',
+                r'(?:针对.*问题.*采取)',
+            ],
+            
+            # 优缺点对比
+            ContentType.PROS_CONS: [
+                r'(?:优点|优势|好处|长处)[：:]',
+                r'(?:缺点|劣势|不足|短处)[：:]',
+                r'(?:利弊|得失|优劣)',
+                r'(?:好处是|坏处是|优势在于|劣势在于)',
+                r'(?:正面|反面|积极|消极)影响',
+            ],
+            
+            # 功能特点
+            ContentType.FEATURE_LIST: [
+                r'(?:核心功能|主要功能|功能特点|产品特点)[：:]',
+                r'(?:特点\d|[一二三四五]、.*特点)',
+                r'(?:支持|具备|拥有|提供).*(?:功能|能力|特性)',
+                r'(?:亮点|卖点|特色)[：:]',
+                r'(?:功能[：:].*\n.*功能)',
+            ],
+            
+            # 案例分析
+            ContentType.CASE_STUDY: [
+                r'(?:案例|实例|示例)[：:]',
+                r'(?:例如|比如|譬如)',
+                r'(?:某公司|某企业|某客户|某用户)',
+                r'(?:案例\d|案例[一二三四五])',
+                r'(?:成功案例|典型案例)',
+            ],
+            
+            # 定义/概念
+            ContentType.DEFINITION: [
+                r'(?:是指|指的是|定义为|定义是)',
+                r'(?:概念|含义|意思)[：:]',
+                r'(?:什么是|何为|何谓)',
+                r'(?:\w+是\w+的一种)',
+            ],
+            
+            # 总结/结论
+            ContentType.SUMMARY: [
+                r'(?:总结|综上所述|总而言之|总的来说)',
+                r'(?:结论|结语|小结)[：:]',
+                r'(?:最后|最终|末尾)',
+                r'(?:概括|归纳|提炼)',
+            ],
+            
+            # 引用/名言
+            ContentType.QUOTE: [
+                r'(?:正如.*所说|据.*所言)',
+                r'(?:名言|格言|警句)',
+                r'["""].*["""]',
+                r'(?:引用|摘录|出自)',
+                r'(?:说过|曾说|曾言|曾说过)',
+                r'(?:\w+\s*(?:说过|曾说)[：:])',
+            ],
+            
+            # 统计数据
+            ContentType.STATISTICS: [
+                r'(?:据统计|数据显示|调查表明)',
+                r'(?:\d+\.?\d*%|百分之)',
+                r'(?:平均|总计|合计|总共)',
+                r'(?:样本|调查对象|受访者)',
+            ],
+            
+            # 通用对比
+            ContentType.COMPARISON: [
+                r'(?:对比|比较|对照)(?!.*(?:数据|销量|收入))',
+                r'(?:不同于|区别于|相比)',
+                r'(?:前者|后者)',
+                r'(?:方案[AB]|选项[AB])',
+            ],
+            
+            # 组织架构
+            ContentType.ORGANIZATION: [
+                r'(?:组织架构|部门设置|团队结构)',
+                r'(?:CEO|CTO|VP|总监|经理)',
+                r'(?:向.*汇报|负责.*管理)',
+                r'(?:部门|团队|小组)',
+            ],
+            
+            # 时间线
+            ContentType.TIMELINE: [
+                r'(?:\d{4}年\d{1,2}月\d{1,2}日)',
+                r'(?:时间线|里程碑|节点)',
+                r'(?:计划.*完成|预计.*上线)',
+                r'(?:阶段\d|第\d阶段)',
+                r'(?:\d{4}年\d{1,2}月[：:]\s*.*)',
+            ],
+            
+            # 论点/论据
+            ContentType.ARGUMENT: [
+                r'(?:论点|论据|论证)',
+                r'(?:因此|所以|故|由此可见)',
+                r'(?:证明|表明|说明|显示)',
+                r'(?:基于.*得出)',
+            ],
+        }
+        
+        # 可视化推荐映射
+        self.visual_recommendations = {
+            ContentType.DATA_COMPARISON: ContentType.CHART,
+            ContentType.TIME_SERIES: ContentType.CHART,
+            ContentType.PERSON_ATTRIBUTES: ContentType.TABLE,
+            ContentType.PROCESS: ContentType.FLOWCHART,
+            ContentType.LIST: ContentType.LIST,
+            ContentType.PROBLEM_SOLUTION: ContentType.FLOWCHART,
+            ContentType.PROS_CONS: ContentType.TABLE,
+            ContentType.FEATURE_LIST: ContentType.LIST,
+            ContentType.CASE_STUDY: ContentType.TEXT,
+            ContentType.DEFINITION: ContentType.TEXT,
+            ContentType.SUMMARY: ContentType.TEXT,
+            ContentType.QUOTE: ContentType.TEXT,
+            ContentType.STATISTICS: ContentType.CHART,
+            ContentType.COMPARISON: ContentType.TABLE,
+            ContentType.ORGANIZATION: ContentType.FLOWCHART,
+            ContentType.TIMELINE: ContentType.FLOWCHART,
+            ContentType.ARGUMENT: ContentType.TEXT,
         }
         
         # 常见章节
@@ -137,11 +285,12 @@ class ContextAnalyzer:
             "数据", "市场", "竞争", "团队", "时间线", "总结", "致谢"
         ]
     
-    def analyze_content(self, content: str) -> ContentAnalysis:
+    def analyze_content(self, content: str, use_llm: bool = False) -> ContentAnalysis:
         """分析单个内容的内容类型
         
         Args:
             content: 要分析的文本内容
+            use_llm: 是否使用 LLM 辅助分类（需要在初始化时提供 llm_classify_func）
             
         Returns:
             ContentAnalysis: 内容分析结果
@@ -156,7 +305,10 @@ class ContextAnalyzer:
             )
         
         # 检测内容类型
-        content_type, confidence = self._detect_content_type(content)
+        if use_llm and self.llm_classify_func:
+            content_type, confidence = self._detect_content_type_with_llm(content)
+        else:
+            content_type, confidence = self._detect_content_type(content)
         
         # 提取关键点
         key_points = self._extract_key_points(content)
@@ -186,7 +338,7 @@ class ContextAnalyzer:
         )
     
     def _detect_content_type(self, content: str) -> Tuple[ContentType, float]:
-        """检测内容类型
+        """使用正则模式检测内容类型
         
         Args:
             content: 文本内容
@@ -216,6 +368,54 @@ class ContextAnalyzer:
         confidence = min(0.5 + max_score * 0.1, 0.95)
         
         return best_type, confidence
+    
+    def _detect_content_type_with_llm(self, content: str) -> Tuple[ContentType, float]:
+        """使用 LLM 辅助检测内容类型
+        
+        Args:
+            content: 文本内容
+            
+        Returns:
+            Tuple[ContentType, float]: (内容类型, 置信度)
+        """
+        if not self.llm_classify_func:
+            return self._detect_content_type(content)
+        
+        try:
+            # 构建提示词
+            content_types_str = ", ".join([t.value for t in ContentType])
+            prompt = f"""请分析以下文本的内容类型。
+
+可选类型：{content_types_str}
+
+文本内容：
+{content[:500]}  # 限制长度避免 token 过多
+
+请返回 JSON 格式：
+{{"content_type": "类型", "confidence": 0.0-1.0, "reason": "判断理由"}}
+"""
+            
+            # 调用 LLM
+            result = self.llm_classify_func(prompt)
+            
+            if isinstance(result, str):
+                result = json.loads(result)
+            
+            content_type_str = result.get("content_type", "text")
+            confidence = result.get("confidence", 0.7)
+            
+            # 转换为枚举
+            try:
+                content_type = ContentType(content_type_str)
+            except ValueError:
+                content_type = ContentType.TEXT
+                confidence = 0.5
+            
+            return content_type, confidence
+            
+        except Exception as e:
+            logger.warning(f"LLM 分类失败，回退到正则模式: {e}")
+            return self._detect_content_type(content)
     
     def _extract_key_points(self, content: str) -> List[str]:
         """提取关键点
@@ -278,6 +478,13 @@ class ContextAnalyzer:
             for name, value in matches:
                 entities.append({"name": name, "value": value})
         
+        elif content_type == ContentType.STATISTICS:
+            # 提取统计数据
+            pattern = r'(\d+\.?\d*)%'
+            matches = re.findall(pattern, content)
+            for value in matches:
+                entities.append({"type": "percentage", "value": value})
+        
         return entities
     
     def _recommend_visual(self, content_type: ContentType, content: str) -> Optional[ContentType]:
@@ -290,15 +497,7 @@ class ContextAnalyzer:
         Returns:
             Optional[ContentType]: 推荐的可视化类型
         """
-        recommendations = {
-            ContentType.DATA_COMPARISON: ContentType.CHART,
-            ContentType.TIME_SERIES: ContentType.CHART,
-            ContentType.PERSON_ATTRIBUTES: ContentType.TABLE,
-            ContentType.PROCESS: ContentType.FLOWCHART,
-            ContentType.LIST: ContentType.LIST,
-        }
-        
-        return recommendations.get(content_type, ContentType.TEXT)
+        return self.visual_recommendations.get(content_type, ContentType.TEXT)
     
     def _calculate_quality_score(self, content: str, key_points: List[str]) -> float:
         """计算质量分数
@@ -353,39 +552,53 @@ class ContextAnalyzer:
         suggestions = []
         
         # 基于内容类型的建议
-        if content_type == ContentType.DATA_COMPARISON:
-            suggestions.append({
+        type_suggestions = {
+            ContentType.DATA_COMPARISON: {
                 "type": SuggestionType.VISUAL_ENHANCE,
                 "title": "数据可视化建议",
                 "description": "检测到数据对比内容，建议使用柱状图或折线图展示",
                 "confidence": 0.9,
-                "action": {
-                    "type": "convert_to_chart",
-                    "chart_type": "bar"
-                }
-            })
-        
-        elif content_type == ContentType.PERSON_ATTRIBUTES:
-            suggestions.append({
+                "action": {"type": "convert_to_chart", "chart_type": "bar"}
+            },
+            ContentType.PERSON_ATTRIBUTES: {
                 "type": SuggestionType.VISUAL_ENHANCE,
                 "title": "表格展示建议",
                 "description": "检测到人物属性数据，建议转换为表格展示",
                 "confidence": 0.95,
-                "action": {
-                    "type": "convert_to_table"
-                }
-            })
-        
-        elif content_type == ContentType.PROCESS:
-            suggestions.append({
+                "action": {"type": "convert_to_table"}
+            },
+            ContentType.PROCESS: {
                 "type": SuggestionType.VISUAL_ENHANCE,
                 "title": "流程图建议",
                 "description": "检测到流程步骤，建议使用流程图展示",
                 "confidence": 0.85,
-                "action": {
-                    "type": "convert_to_flowchart"
-                }
-            })
+                "action": {"type": "convert_to_flowchart"}
+            },
+            ContentType.PROBLEM_SOLUTION: {
+                "type": SuggestionType.STRUCTURE_IMPROVE,
+                "title": "结构化建议",
+                "description": "检测到问题-解决方案结构，建议使用左右分栏展示",
+                "confidence": 0.8,
+                "action": {"type": "split_columns"}
+            },
+            ContentType.PROS_CONS: {
+                "type": SuggestionType.VISUAL_ENHANCE,
+                "title": "对比表格建议",
+                "description": "检测到优缺点对比，建议使用表格展示",
+                "confidence": 0.85,
+                "action": {"type": "convert_to_table"}
+            },
+            ContentType.STATISTICS: {
+                "type": SuggestionType.VISUAL_ENHANCE,
+                "title": "图表建议",
+                "description": "检测到统计数据，建议使用饼图或柱状图展示",
+                "confidence": 0.9,
+                "action": {"type": "convert_to_chart", "chart_type": "pie"}
+            },
+        }
+        
+        if content_type in type_suggestions:
+            suggestions.append(type_suggestions[content_type])
         
         # 基于质量分数的建议
         if quality_score < 0.6:
@@ -394,9 +607,7 @@ class ContextAnalyzer:
                 "title": "内容优化建议",
                 "description": "内容结构可以优化，建议添加更多关键点和数据支撑",
                 "confidence": 0.7,
-                "action": {
-                    "type": "optimize_content"
-                }
+                "action": {"type": "optimize_content"}
             })
         
         # 基于关键点数量的建议
@@ -406,13 +617,18 @@ class ContextAnalyzer:
                 "title": "内容精简建议",
                 "description": f"当前有{len(key_points)}个要点，建议精简到5个以内",
                 "confidence": 0.8,
-                "action": {
-                    "type": "simplify_content",
-                    "max_points": 5
-                }
+                "action": {"type": "simplify_content", "max_points": 5}
             })
         
         return suggestions
+    
+    def set_llm_classify_func(self, llm_classify_func: Callable):
+        """设置 LLM 分类函数
+        
+        Args:
+            llm_classify_func: LLM 分类函数
+        """
+        self.llm_classify_func = llm_classify_func
     
     def check_style_consistency(self, slides: List[Dict[str, Any]]) -> StyleCheckResult:
         """检查风格一致性
@@ -711,10 +927,10 @@ class ContextAnalyzer:
 
 
 # 便捷函数
-def analyze_content(content: str) -> ContentAnalysis:
+def analyze_content(content: str, use_llm: bool = False) -> ContentAnalysis:
     """分析内容（便捷函数）"""
     analyzer = ContextAnalyzer()
-    return analyzer.analyze_content(content)
+    return analyzer.analyze_content(content, use_llm)
 
 
 def check_style_consistency(slides: List[Dict[str, Any]]) -> StyleCheckResult:

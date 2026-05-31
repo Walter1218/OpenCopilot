@@ -139,8 +139,11 @@ pip install -r requirements.txt
 **方式一：守护进程模式（推荐，一次性安装，开机自启）**
 
 ```bash
-# 注册 macOS LaunchAgent，安装后 Agent 立即后台启动，并开机自动重启
-bash scripts/install_daemon.sh
+# 方案 A：统一守护进程（Broker + 知识图谱 API）
+bash scripts/install_unified_daemon.sh
+
+# 方案 B：仅 Broker 守护进程
+bash scripts/install_broker_daemon.sh
 
 # 启动 UI（自动处理 Qt 插件路径）
 bash scripts/start_ui.sh
@@ -247,12 +250,13 @@ OpenCopilot/
 ├── asu-ide-extension/            # IDE 伴生插件 (VSCode/Cursor/Trae)
 ├── scripts/                      # 管理脚本
 │   ├── start_ui.sh               #   启动 UI（自动设置 Qt 插件路径）
-│   ├── install_daemon.sh         #   安装 Agent 为 macOS LaunchAgent
-│   ├── uninstall_daemon.sh       #   卸载 Agent 守护进程
+│   ├── install_unified_daemon.sh #   安装统一守护进程（Broker + 知识图谱）
+│   ├── uninstall_unified_daemon.sh#  卸载统一守护进程
 │   ├── install_broker_daemon.sh  #   安装 Broker 为 macOS LaunchAgent
 │   ├── uninstall_broker_daemon.sh#   卸载 Broker 守护进程
 │   └── tail_logs.sh              #   实时查看 Agent 日志
 ├── deploy/                       # 部署配置
+│   ├── com.asu.unified.plist     #   统一守护进程配置模板（Broker + 知识图谱）
 │   ├── com.asu.agent.plist       #   Agent macOS LaunchAgent 配置模板
 │   └── com.asu.broker.plist      #   Broker macOS LaunchAgent 配置模板
 ├── requirements.txt              # Python 依赖

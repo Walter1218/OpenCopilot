@@ -149,7 +149,39 @@ pip install -r requirements.txt
 ### 方式二：生产使用期 (Production / Daily Use)
 作为日常工具使用时，不应每次开机都敲击命令，而是让底层的探测器静默常驻，让 UI 触手可及。
 
-1. **一次性注册底层探针为开机自启**
+#### 方案 A：统一守护进程（推荐）
+
+同时启动 Broker 和知识图谱 API：
+
+1. **一次性注册为开机自启**
+   - 只需执行**一次**：
+     ```bash
+     bash scripts/install_unified_daemon.sh
+     ```
+   - 系统会将 Broker + 知识图谱 API 注册到 `LaunchAgent`。以后每次开机都会在后台静默运行。
+   - *（如需查看日志：`tail -f ~/Library/Logs/ASU/unified_out.log`）*
+
+2. **日常启动主程序 UI**
+   - 当前可配置一个 Shell Alias 或 AppleScript 快速执行 `python smart_copilot.py`。
+   - *(注：在未来的 P3 阶段，该 UI 会被打包成标准的 `.app` 应用程序，双击图标即可运行)*。
+
+3. **管理命令**
+   ```bash
+   # 查看 Broker 状态
+   curl -H "Authorization: Bearer $(cat ~/.asu_broker_token)" http://127.0.0.1:18889/health
+   
+   # 查看知识图谱状态
+   curl http://127.0.0.1:8090/health
+   
+   # 卸载守护进程
+   bash scripts/uninstall_unified_daemon.sh
+   ```
+
+#### 方案 B：仅 Broker 守护进程
+
+如果不需要知识图谱 API，可以只启动 Broker：
+
+1. **一次性注册 Broker 为开机自启**
    - 只需执行**一次**：
      ```bash
      bash scripts/install_broker_daemon.sh
@@ -159,7 +191,6 @@ pip install -r requirements.txt
 
 2. **日常启动主程序 UI**
    - 当前可配置一个 Shell Alias 或 AppleScript 快速执行 `python smart_copilot.py`。
-   - *(注：在未来的 P3 阶段，该 UI 会被打包成标准的 `.app` 应用程序，双击图标即可运行)*。
 
 > **⚠️ 注意：关于 `install_daemon.sh`**
 > 早期旧架构曾使用 `install_daemon.sh` 将 Agent 也作为独立 HTTP 服务挂载。在 P1 阶段重构合并后，此脚本已**废弃不再使用**。日常只需挂载 Broker 即可。

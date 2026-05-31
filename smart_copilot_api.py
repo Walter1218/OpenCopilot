@@ -44,7 +44,7 @@ from ppt_cocreation.suggestion_engine import SuggestionEngine
 from ppt_cocreation.conversation_manager import ConversationManager
 
 # 导入 Skill 架构模块
-from skill_architecture import FileSkill, SkillContext
+from skill_architecture import FileSkill, FormatSkill, SkillContext
 
 # ==========================================
 # Pydantic 模型定义
@@ -1892,6 +1892,109 @@ async def file_delete(request: FileDeleteRequest):
             raise HTTPException(status_code=400, detail=result.error)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"文件删除失败: {str(e)}")
+
+# ==========================================
+# Format Skill API 端点
+# ==========================================
+
+class MarkdownToDocxRequest(BaseModel):
+    """Markdown转Word请求"""
+    content: str = Field(..., description="Markdown内容")
+    output_path: Optional[str] = Field(None, description="输出文件路径")
+    template: Optional[str] = Field(None, description="模板文件路径")
+
+class MarkdownToPptxRequest(BaseModel):
+    """Markdown转PPT请求"""
+    content: str = Field(..., description="Markdown内容")
+    output_path: Optional[str] = Field(None, description="输出文件路径")
+    template: Optional[str] = Field(None, description="模板文件路径")
+
+class TextToTableRequest(BaseModel):
+    """文本转表格请求"""
+    content: str = Field(..., description="文本内容")
+    format: Optional[str] = Field("markdown", description="输出格式: markdown/html/csv")
+    delimiter: Optional[str] = Field(",", description="分隔符")
+
+# 全局 FormatSkill 实例
+format_skill = FormatSkill()
+
+@app.post("/api/format/md-to-docx")
+async def markdown_to_docx(request: MarkdownToDocxRequest):
+    """
+    Markdown转Word文档
+    
+    将Markdown格式内容转换为Word文档。
+    """
+    try:
+        context = SkillContext(
+            intent="md_to_docx",
+            input_data={
+                "action": "md_to_docx",
+                "content": request.content,
+                "output_path": request.output_path,
+                "template": request.template
+            }
+        )
+        result = await format_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Markdown转Word失败: {str(e)}")
+
+@app.post("/api/format/md-to-pptx")
+async def markdown_to_pptx(request: MarkdownToPptxRequest):
+    """
+    Markdown转PPT演示文稿
+    
+    将Markdown格式内容转换为PPT演示文稿。
+    """
+    try:
+        context = SkillContext(
+            intent="md_to_pptx",
+            input_data={
+                "action": "md_to_pptx",
+                "content": request.content,
+                "output_path": request.output_path,
+                "template": request.template
+            }
+        )
+        result = await format_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Markdown转PPT失败: {str(e)}")
+
+@app.post("/api/format/text-to-table")
+async def text_to_table(request: TextToTableRequest):
+    """
+    文本转表格
+    
+    将结构化文本转换为表格格式（Markdown/HTML/CSV）。
+    """
+    try:
+        context = SkillContext(
+            intent="text_to_table",
+            input_data={
+                "action": "text_to_table",
+                "content": request.content,
+                "format": request.format,
+                "delimiter": request.delimiter
+            }
+        )
+        result = await format_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"文本转表格失败: {str(e)}")
 
 # ==========================================
 # 启动入口

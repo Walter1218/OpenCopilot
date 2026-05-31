@@ -1455,24 +1455,67 @@ class AICardWindow(QWidget):
         try:
             import requests
             
-            prompt = f"""请将以下内容整理成 PPT 大纲，返回 JSON 格式。
+            # 尝试加载 presentation persona 作为系统提示
+            persona_prompt = ""
+            persona_path = os.path.join(os.path.dirname(__file__), "personas", "office", "business", "presentation.md")
+            if os.path.exists(persona_path):
+                with open(persona_path, "r", encoding="utf-8") as f:
+                    persona_prompt = f.read().strip()
+            
+            prompt = f"""{persona_prompt}
 
-要求：
-1. 提取核心要点，每页3-5个要点
-2. 合理分页，通常5-10页
-3. 第一页是标题页
-4. 每页选择合适的布局：center, text_only, image_right, three_columns
+---
 
-返回格式（严格 JSON）：
+## 当前任务
+
+请将以下用户输入的内容分析并转化为一份高质量的 PPT 大纲。
+
+### 分析步骤
+
+**第一步：理解内容**
+- 识别核心主题和目标
+- 判断内容类型（商业汇报/产品介绍/技术分享/学术报告/工作总结等）
+- 提取关键信息、数据、论点
+
+**第二步：规划结构**
+- 根据内容类型选择合适的结构模板
+- 规划逻辑流程（如：背景→问题→方案→效果→总结）
+- 确定页数（内容丰富时8-12页，简洁时5-7页）
+
+**第三步：提炼要点**
+- 每页提炼 3-5 个核心要点
+- 标题要具体有力，避免泛泛而谈
+- 要点要精炼，每点一句话
+- 使用 level 区分层级：0=主要观点，1=支撑论据，2=补充说明
+
+**第四步：选择布局**
+- 封面/章节页 → center（居中布局，视觉聚焦）
+- 要点列举/流程说明 → text_only（纯文本，信息密度高）
+- 需要配图/数据图表 → image_right（右图布局，图文并茂）
+- 多维度对比/并列信息 → three_columns（三栏布局，对比清晰）
+
+### 输出要求
+
+1. **严格输出纯 JSON**，不要输出任何解释、代码块标记（```json）或多余文字
+2. 第一页必须是 title 类型（封面页），最后一页建议是总结/致谢
+3. items 中每个对象只有 level 和 text 两个字段
+4. title 要具体有吸引力，不要用"第一页""第二页"这种编号
+
+### 输出格式
+
 {{
-  "title": "PPT标题",
+  "title": "PPT总标题（具体有力，体现核心价值）",
   "slides": [
-    {{"type": "title", "layout": "center", "title": "标题", "subtitle": "副标题"}},
-    {{"type": "content", "layout": "text_only", "title": "页面标题", "items": [{{"level": 0, "text": "要点1"}}]}}
+    {{"type": "title", "layout": "center", "title": "封面标题", "subtitle": "副标题或主题说明"}},
+    {{"type": "content", "layout": "text_only", "title": "具体页面标题", "items": [{{"level": 0, "text": "核心要点"}}, {{"level": 1, "text": "支撑说明"}}, {{"level": 0, "text": "另一个要点"}}]}},
+    {{"type": "content", "layout": "three_columns", "title": "对比分析标题", "items": [{{"level": 0, "text": "维度一"}}, {{"level": 0, "text": "维度二"}}, {{"level": 0, "text": "维度三"}}]}}
   ]
 }}
 
-内容：
+---
+
+### 用户输入内容
+
 {text[:3000]}"""
             
             response = requests.post(
@@ -1483,7 +1526,7 @@ class AICardWindow(QWidget):
                     "session_id": f"ppt_gen_{int(time.time())}",
                     "context_source": "ppt_assistant"
                 },
-                timeout=30
+                timeout=60
             )
             
             if response.status_code == 200:

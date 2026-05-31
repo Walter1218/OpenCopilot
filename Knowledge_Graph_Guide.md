@@ -48,6 +48,25 @@ related = query_engine.find_related_entities("entity_id")
 
 ### 3. 启动 API 服务器
 
+#### 方式一：与 Broker 一起启动（推荐）
+
+知识图谱 API 可以与 Broker 服务一起启动，只需一个命令：
+
+```bash
+# 同时启动 Broker 和知识图谱 API
+python start_broker_with_kg.py
+
+# 自定义知识图谱 API 端口
+python start_broker_with_kg.py --kg-port 8091
+
+# 只启动 Broker，不启动知识图谱
+python start_broker_with_kg.py --no-kg
+```
+
+#### 方式二：单独启动
+
+如需单独启动知识图谱 API：
+
 ```bash
 # 启动知识图谱 API 服务器
 python start_knowledge_graph_api.py --port 8090

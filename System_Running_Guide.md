@@ -96,6 +96,33 @@ pip install -r requirements.txt
 ### 方式一：开发联调期 (Development)
 在开发期，为了查看实时的报错和异常栈，需要**手动开启两个终端窗口**：
 
+#### 方案 A：统一启动（推荐）
+
+使用统一启动脚本，同时启动 Broker 和知识图谱 API：
+
+1. **启动后端服务（Broker + 知识图谱）**
+   - **必须使用 macOS 原生的 Terminal.app 或 iTerm2**（不能用 IDE 终端）。
+   - **命令**：
+     ```bash
+     source venv/bin/activate
+     python start_broker_with_kg.py
+     ```
+   - *此命令会同时启动：*
+     - *Broker 服务（端口 18889）：系统焦点监听、无感划词提取、视觉屏幕抓取等特权操作*
+     - *知识图谱 API（端口 8090）：项目知识查询*
+
+2. **启动前端 UI 与智能中枢 (Smart Copilot)**
+   - 可以在任何终端中运行（包括 Trae/VSCode 的内置终端）。
+   - **命令**：
+     ```bash
+     source venv/bin/activate
+     python smart_copilot.py
+     ```
+
+#### 方案 B：分别启动
+
+如需单独控制各服务，可分别启动：
+
 1. **启动底层特权探针 (Privileged Broker)**
    - **必须使用 macOS 原生的 Terminal.app 或 iTerm2**（不能用 IDE 终端）。
    - **命令**：
@@ -105,7 +132,13 @@ pip install -r requirements.txt
      ```
    - *此进程负责系统焦点监听、无感划词提取、视觉屏幕抓取等特权操作。*
 
-2. **启动前端 UI 与智能中枢 (Smart Copilot)**
+2. **（可选）启动知识图谱 API**
+   - 如需查询项目知识，可单独启动：
+     ```bash
+     python start_knowledge_graph_api.py --port 8090
+     ```
+
+3. **启动前端 UI 与智能中枢 (Smart Copilot)**
    - 可以在任何终端中运行（包括 Trae/VSCode 的内置终端）。
    - **命令**：
      ```bash

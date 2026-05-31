@@ -17,6 +17,7 @@ from .knowledge_skill import KnowledgeSkill
 from .coding_skill import CodingSkill
 from .ppt_skill import PPTSkill
 from .evaluation_skill import EvaluationSkill
+from .file_skill import FileSkill
 
 __all__ = [
     'SkillStatus',
@@ -33,5 +34,6 @@ __all__ = [
     'KnowledgeSkill',
     'CodingSkill',
     'PPTSkill',
-    'EvaluationSkill'
+    'EvaluationSkill',
+    'FileSkill'
 ]

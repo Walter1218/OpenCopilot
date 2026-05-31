@@ -43,6 +43,9 @@ from ppt_cocreation.context_analyzer import ContextAnalyzer, ContentType, Sugges
 from ppt_cocreation.suggestion_engine import SuggestionEngine
 from ppt_cocreation.conversation_manager import ConversationManager
 
+# 导入 Skill 架构模块
+from skill_architecture import FileSkill, SkillContext
+
 # ==========================================
 # Pydantic 模型定义
 # ==========================================
@@ -1732,6 +1735,163 @@ async def internal_self_check():
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"自检失败: {str(e)}")
+
+# ==========================================
+# File Skill API 端点
+# ==========================================
+
+class FileReadRequest(BaseModel):
+    """文件读取请求"""
+    file_path: str = Field(..., description="文件路径")
+    format: Optional[str] = Field("text", description="文件格式: text/docx/pptx/pdf")
+
+class FileWriteRequest(BaseModel):
+    """文件写入请求"""
+    content: str = Field(..., description="文件内容")
+    file_path: str = Field(..., description="文件路径")
+    format: Optional[str] = Field("text", description="文件格式: text/docx/pptx")
+
+class FileConvertRequest(BaseModel):
+    """文件格式转换请求"""
+    input_path: str = Field(..., description="输入文件路径")
+    output_format: str = Field(..., description="输出格式: pdf/docx/pptx/txt/md")
+    output_path: Optional[str] = Field(None, description="输出文件路径")
+
+class FileListRequest(BaseModel):
+    """目录列表请求"""
+    dir_path: Optional[str] = Field(".", description="目录路径")
+
+class FileDeleteRequest(BaseModel):
+    """文件删除请求"""
+    file_path: str = Field(..., description="文件路径")
+
+# 全局 FileSkill 实例
+file_skill = FileSkill()
+
+@app.post("/api/file/read")
+async def file_read(request: FileReadRequest):
+    """
+    读取文件内容
+    
+    支持读取文本、docx、pptx、pdf等格式的文件。
+    """
+    try:
+        context = SkillContext(
+            intent="file_read",
+            input_data={
+                "action": "read",
+                "file_path": request.file_path,
+                "format": request.format
+            }
+        )
+        result = await file_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"文件读取失败: {str(e)}")
+
+@app.post("/api/file/write")
+async def file_write(request: FileWriteRequest):
+    """
+    写入文件内容
+    
+    支持写入文本、docx、pptx等格式的文件。
+    """
+    try:
+        context = SkillContext(
+            intent="file_write",
+            input_data={
+                "action": "write",
+                "content": request.content,
+                "file_path": request.file_path,
+                "format": request.format
+            }
+        )
+        result = await file_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"文件写入失败: {str(e)}")
+
+@app.post("/api/file/convert")
+async def file_convert(request: FileConvertRequest):
+    """
+    文件格式转换
+    
+    支持多种格式之间的转换：pdf/docx/pptx/txt/md。
+    """
+    try:
+        context = SkillContext(
+            intent="file_convert",
+            input_data={
+                "action": "convert",
+                "input_path": request.input_path,
+                "output_format": request.output_format,
+                "output_path": request.output_path
+            }
+        )
+        result = await file_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"文件格式转换失败: {str(e)}")
+
+@app.post("/api/file/list")
+async def file_list(request: FileListRequest):
+    """
+    列出目录内容
+    
+    返回指定目录下的文件和子目录列表。
+    """
+    try:
+        context = SkillContext(
+            intent="file_list",
+            input_data={
+                "action": "list",
+                "file_path": request.dir_path
+            }
+        )
+        result = await file_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"目录列表失败: {str(e)}")
+
+@app.post("/api/file/delete")
+async def file_delete(request: FileDeleteRequest):
+    """
+    删除文件
+    
+    删除指定路径的文件。
+    """
+    try:
+        context = SkillContext(
+            intent="file_delete",
+            input_data={
+                "action": "delete",
+                "file_path": request.file_path
+            }
+        )
+        result = await file_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"文件删除失败: {str(e)}")
 
 # ==========================================
 # 启动入口

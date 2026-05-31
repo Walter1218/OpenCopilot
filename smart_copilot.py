@@ -1448,123 +1448,28 @@ class AICardWindow(QWidget):
     def _generate_ppt_outline_with_ai(self, text: str) -> dict:
         """使用 AI 生成 PPT 大纲
         
+        使用API已有的 ppt_generator context_source，避免prompt冲突
+        
         Returns:
             dict: {"title": "PPT标题", "slides": [...]} 或 None（生成失败）
         """
         try:
             import requests
-            
-            # 尝试加载 presentation persona 作为系统提示
-            persona_prompt = ""
-            persona_path = os.path.join(os.path.dirname(__file__), "personas", "office", "business", "presentation.md")
-            if os.path.exists(persona_path):
-                with open(persona_path, "r", encoding="utf-8") as f:
-                    persona_prompt = f.read().strip()
-            
-            prompt = f"""{persona_prompt}
-
----
-
-## 当前任务：自适应 PPT 大纲生成
-
-请将以下用户输入的内容转化为一份高质量的 PPT 大纲。
-
-你需要先分析内容的专业领域和类型，然后采用最适合的结构模板来组织幻灯片。
-
-### 第一步：内容分析（在心中完成，不输出）
-
-请判断以下维度：
-- **专业领域**：计算机科学 / 人工智能 / 商业管理 / 市场营销 / 金融财务 / 产品设计 / 教育培训 / 医疗健康 / 其他
-- **内容类型**：技术文档 / 产品介绍 / 商业汇报 / 学术报告 / 工作总结 / 项目方案 / 培训课件 / 竞品分析 / 数据报告
-- **核心信息**：主要论点、关键数据、重要结论
-
-### 第二步：根据领域选择结构策略
-
-**计算机/软件/工程类**：
-- 结构：概述→架构设计→核心模块→技术实现→性能数据→部署方案→总结
-- 特点：多用 three_columns 展示模块对比，image_right 展示架构图
-- 标题风格：技术术语精准，如"微服务架构设计"、"分布式存储方案"
-
-**人工智能/机器学习类**：
-- 结构：背景→问题定义→数据集→模型架构→实验结果→性能对比→未来方向
-- 特点：多用 three_columns 展示模型对比，数据指标要具体
-- 标题风格：学术化，如"基于 Transformer 的特征提取"、"实验结果与消融分析"
-
-**商业/管理/市场类**：
-- 结构：市场背景→痛点分析→解决方案→商业模式→竞争优势→财务预测→行动计划
-- 特点：多用 three_columns 展示竞品对比，数据驱动决策
-- 标题风格：商业术语，如"市场规模与增长潜力"、"差异化竞争策略"
-
-**产品/设计类**：
-- 结构：用户需求→产品定位→核心功能→交互设计→技术架构→迭代计划→总结
-- 特点：多用 image_right 展示产品截图，three_columns 展示功能对比
-- 标题风格：用户导向，如"解决用户核心痛点"、"极简交互体验"
-
-**教育/培训类**：
-- 结构：课程目标→知识框架→核心概念→案例分析→实践练习→总结回顾
-- 特点：层级分明，要点循序渐进
-- 标题风格：教学化，如"学习目标与核心概念"、"案例实战演练"
-
-**数据分析/报告类**：
-- 结构：数据概览→关键指标→趋势分析→深度洞察→问题发现→建议措施
-- 特点：多用具体数字，three_columns 展示多维数据
-- 标题风格：数据驱动，如"Q3 核心指标概览"、"用户增长趋势分析"
-
-**通用结构**（无法归类时）：
-- 结构：背景→核心内容→详细分析→总结→展望
-- 保持逻辑清晰，每页一个主题
-
-### 第三步：生成幻灯片
-
-根据上述分析，生成幻灯片列表。
-
-**要点提炼规则**：
-- 每页 3-5 个要点，不要超过 6 个
-- 标题要具体有力，体现本页核心价值（禁止用"概述""介绍"等泛泛标题）
-- 要点精炼，每个要点一句话（15-30字为宜）
-- level 含义：0=主要观点，1=支撑论据，2=补充说明
-
-**布局选择规则**：
-- center：封面页、章节过渡页、总结页
-- text_only：要点列举、流程说明、详细分析
-- image_right：需要配图说明的内容（架构图、产品截图、数据图表）
-- three_columns：多维度对比、并列方案、阶段划分
-
-### 输出要求
-
-1. **严格输出纯 JSON**，不要输出任何解释、分析过程、代码块标记
-2. 第一页必须是 title 类型（封面页），最后一页建议是总结/致谢/下一步
-3. items 中每个对象只有 level 和 text 两个字段
-4. title 要具体有吸引力，体现专业性
-5. 总页数控制在 6-12 页
-
-### 输出格式
-
-{{
-  "title": "PPT总标题（体现核心价值和专业性）",
-  "slides": [
-    {{"type": "title", "layout": "center", "title": "封面标题", "subtitle": "副标题或日期"}},
-    {{"type": "content", "layout": "text_only", "title": "具体页面标题", "items": [{{"level": 0, "text": "核心观点"}}, {{"level": 1, "text": "支撑论据"}}]}},
-    {{"type": "content", "layout": "three_columns", "title": "对比分析标题", "items": [{{"level": 0, "text": "维度一"}}, {{"level": 0, "text": "维度二"}}, {{"level": 0, "text": "维度三"}}]}}
-  ]
-}}
-
----
-
-### 用户输入内容
-
-{text[:3000]}"""
+            import re
             
             print(f"[PPT] 开始生成大纲，内容长度: {len(text)} 字符")
             print(f"[PPT] 内容前100字: {text[:100]}")
             
+            # 使用API已有的 ppt_generator context_source
+            # 这样API会使用预定义的PPT生成指令，避免冲突
             response = requests.post(
                 "http://127.0.0.1:18888/v1/agent/chat",
                 json={
-                    "text": prompt,
+                    "text": text[:3000],  # 只传用户内容，不传指令
                     "action_type": "chat",
                     "session_id": f"ppt_gen_{int(time.time())}",
-                    "context_source": "ppt_assistant"
+                    "context_source": "ppt_generator",  # 使用已有的PPT生成上下文
+                    "is_new_task": True  # 新任务，清除历史
                 },
                 timeout=60
             )
@@ -1583,16 +1488,25 @@ class AICardWindow(QWidget):
                             pass
                 
                 print(f"[PPT] AI 返回内容长度: {len(full_text)} 字符")
-                print(f"[PPT] AI 返回前200字: {full_text[:200]}")
+                print(f"[PPT] AI 返回前300字: {full_text[:300]}")
+                
+                # 清理模型输出中的思考过程和代码块标记
+                # 移除 <think>...</think> 标签
+                cleaned = re.sub(r'<think>.*?</think>', '', full_text, flags=re.DOTALL)
+                # 移除未闭合的 <think> 标签
+                if '<think>' in cleaned:
+                    cleaned = cleaned.split('<think>')[0]
+                # 移除 ```json ... ``` 标记
+                cleaned = re.sub(r'```(?:json)?\s*', '', cleaned)
+                cleaned = cleaned.replace('```', '')
                 
                 # 提取 JSON
                 from ppt_generator import extract_json_from_text
-                json_data = extract_json_from_text(full_text)
+                json_data = extract_json_from_text(cleaned)
                 
                 if json_data:
                     # 兼容两种返回格式：数组或字典
                     if isinstance(json_data, list):
-                        # extract_json_from_text 返回了数组，包装成字典
                         result = {"title": "演示文稿", "slides": json_data}
                     elif isinstance(json_data, dict) and "slides" in json_data:
                         result = json_data
@@ -1603,8 +1517,8 @@ class AICardWindow(QWidget):
                     print(f"[PPT] 解析成功，共 {len(result.get('slides', []))} 页幻灯片")
                     return result
                 else:
-                    print("[PPT] extract_json_from_text 返回空，AI输出可能不含有效JSON")
-                    print(f"[PPT] AI完整输出: {full_text[:500]}")
+                    print("[PPT] extract_json_from_text 返回空")
+                    print(f"[PPT] 清理后输出: {cleaned[:500]}")
             else:
                 print(f"[PPT] API 调用失败: {response.status_code}")
             

@@ -1224,6 +1224,118 @@ class AICardWindow(QWidget):
 
         self.tabs.addTab(self.tab_quick, "⚡️ 快捷划词")
         self.tabs.addTab(self.tab_chat, "💬 连续对话")
+        
+        # ==========================
+        # Tab 3: PPT Assistant
+        # ==========================
+        self.tab_ppt_assistant = QWidget()
+        ppt_layout = QVBoxLayout(self.tab_ppt_assistant)
+        ppt_layout.setContentsMargins(0, 10, 0, 0)
+        
+        # PPT Assistant 标题
+        ppt_title = QLabel("🎯 PPT 智能助手", self.tab_ppt_assistant)
+        ppt_title.setStyleSheet("color: #4da6ff; font-weight: bold; font-size: 16px; background: transparent; border: none;")
+        ppt_layout.addWidget(ppt_title)
+        
+        # 描述
+        ppt_desc = QLabel("AI 驱动的 PPT 共创编辑器，支持智能内容生成、图表转换、风格优化", self.tab_ppt_assistant)
+        ppt_desc.setStyleSheet("color: #aaa; font-size: 12px; background: transparent; border: none;")
+        ppt_desc.setWordWrap(True)
+        ppt_layout.addWidget(ppt_desc)
+        
+        # 功能按钮区
+        ppt_buttons_layout = QVBoxLayout()
+        ppt_buttons_layout.setSpacing(10)
+        
+        # 从文本创建 PPT
+        self.btn_create_ppt = QPushButton("📝 从文本创建 PPT", self.tab_ppt_assistant)
+        self.btn_create_ppt.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(77, 166, 255, 180);
+                color: #fff;
+                border: 1px solid rgba(77, 166, 255, 255);
+                border-radius: 8px;
+                padding: 12px 20px;
+                font-weight: bold;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: rgba(77, 166, 255, 255);
+            }
+        """)
+        self.btn_create_ppt.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_create_ppt.clicked.connect(self._launch_ppt_cocreation)
+        ppt_buttons_layout.addWidget(self.btn_create_ppt)
+        
+        # 从模板创建
+        self.btn_template_ppt = QPushButton("🎨 从模板创建", self.tab_ppt_assistant)
+        self.btn_template_ppt.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(120, 80, 220, 180);
+                color: #fff;
+                border: 1px solid rgba(120, 80, 220, 255);
+                border-radius: 8px;
+                padding: 12px 20px;
+                font-weight: bold;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: rgba(120, 80, 220, 255);
+            }
+        """)
+        self.btn_template_ppt.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_template_ppt.clicked.connect(self._launch_ppt_template)
+        ppt_buttons_layout.addWidget(self.btn_template_ppt)
+        
+        # 打开现有 PPT
+        self.btn_open_ppt = QPushButton("📂 打开现有 PPT", self.tab_ppt_assistant)
+        self.btn_open_ppt.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(40, 167, 69, 180);
+                color: #fff;
+                border: 1px solid rgba(40, 167, 69, 255);
+                border-radius: 8px;
+                padding: 12px 20px;
+                font-weight: bold;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: rgba(40, 167, 69, 255);
+            }
+        """)
+        self.btn_open_ppt.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_open_ppt.clicked.connect(self._open_existing_ppt)
+        ppt_buttons_layout.addWidget(self.btn_open_ppt)
+        
+        ppt_layout.addLayout(ppt_buttons_layout)
+        
+        # 最近使用
+        recent_label = QLabel("📋 最近使用", self.tab_ppt_assistant)
+        recent_label.setStyleSheet("color: #aaa; font-size: 12px; background: transparent; border: none; margin-top: 10px;")
+        ppt_layout.addWidget(recent_label)
+        
+        self.recent_ppt_list = QListWidget(self.tab_ppt_assistant)
+        self.recent_ppt_list.setStyleSheet("""
+            QListWidget {
+                background-color: rgba(30, 30, 35, 200);
+                color: #eee;
+                border: 1px solid rgba(100, 100, 100, 150);
+                border-radius: 6px;
+                padding: 4px;
+            }
+            QListWidget::item {
+                padding: 6px;
+                border-radius: 4px;
+            }
+            QListWidget::item:hover {
+                background-color: rgba(77, 166, 255, 80);
+            }
+        """)
+        ppt_layout.addWidget(self.recent_ppt_list)
+        
+        ppt_layout.addStretch()
+        
+        self.tabs.addTab(self.tab_ppt_assistant, "🎯 PPT 助手")
         self.tabs.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
         # 确保切换 Tab 时重置焦点
@@ -1249,6 +1361,168 @@ class AICardWindow(QWidget):
             self.chat_input.setFocus()
         # 注意：非聊天 Tab 不调用 self.setFocus()，
         # 否则会与 WA_ShowWithoutActivating 冲突，导致 macOS 收回窗口
+    
+    def _launch_ppt_cocreation(self):
+        """启动 PPT 共创编辑器"""
+        try:
+            from ppt_cocreation import CoCreationDialog
+            from PyQt6.QtWidgets import QInputDialog, QTextEdit, QDialogButtonBox
+            
+            # 获取当前上下文文本
+            text = self.current_text or ""
+            
+            if not text:
+                # 弹出输入对话框让用户输入内容
+                dialog = QDialog(self)
+                dialog.setWindowTitle("📝 输入 PPT 内容")
+                dialog.setMinimumSize(500, 400)
+                
+                layout = QVBoxLayout(dialog)
+                
+                label = QLabel("请输入或粘贴 PPT 内容，AI 将自动生成大纲：")
+                label.setStyleSheet("color: #aaa; font-size: 13px;")
+                layout.addWidget(label)
+                
+                text_edit = QTextEdit()
+                text_edit.setPlaceholderText("例如：\n\n一、项目背景\n- 市场需求分析\n- 竞争格局\n\n二、技术方案\n- 架构设计\n- 核心技术\n\n三、实施计划\n- 时间节点\n- 里程碑")
+                text_edit.setStyleSheet("""
+                    QTextEdit {
+                        background-color: #2d2d2d;
+                        color: #eee;
+                        border: 1px solid #555;
+                        border-radius: 6px;
+                        padding: 8px;
+                        font-size: 13px;
+                    }
+                """)
+                layout.addWidget(text_edit)
+                
+                # 按钮
+                btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+                btn_box.accepted.connect(dialog.accept)
+                btn_box.rejected.connect(dialog.reject)
+                layout.addWidget(btn_box)
+                
+                if dialog.exec() != QDialog.DialogCode.Accepted:
+                    return
+                
+                text = text_edit.toPlainText().strip()
+                if not text:
+                    QMessageBox.warning(self, "提示", "请输入内容后再创建 PPT")
+                    return
+            
+            # 显示加载提示
+            loading_msg = QMessageBox(self)
+            loading_msg.setWindowTitle("AI 生成中")
+            loading_msg.setText("正在分析内容，生成 PPT 大纲...")
+            loading_msg.setStandardButtons(QMessageBox.StandardButton.NoButton)
+            loading_msg.show()
+            QApplication.processEvents()
+            
+            # 调用 AI 生成初始大纲
+            json_data = self._generate_ppt_outline_with_ai(text)
+            
+            loading_msg.close()
+            
+            if not json_data:
+                # AI 生成失败，使用默认模板
+                json_data = {
+                    "title": "新建演示文稿",
+                    "slides": [
+                        {"type": "title", "layout": "center", "title": "演示文稿", "subtitle": "AI 生成"},
+                        {"type": "content", "layout": "text_only", "title": "内容", "items": [{"level": 0, "text": text[:200]}]}
+                    ]
+                }
+            
+            dialog = CoCreationDialog(
+                original_text=text,
+                json_data=json_data,
+                agent_url="http://127.0.0.1:18888",
+                parent=self
+            )
+            
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                output_path = dialog.get_output_path()
+                if output_path:
+                    QMessageBox.information(self, "导出成功", f"PPT 已成功导出至：\n{output_path}")
+        except ImportError as e:
+            QMessageBox.warning(self, "加载失败", f"无法加载 PPT 共创编辑器：{e}")
+        except Exception as e:
+            QMessageBox.warning(self, "错误", f"启动 PPT 助手时出错：{e}")
+    
+    def _generate_ppt_outline_with_ai(self, text: str) -> dict:
+        """使用 AI 生成 PPT 大纲"""
+        try:
+            import requests
+            
+            prompt = f"""请将以下内容整理成 PPT 大纲，返回 JSON 格式。
+
+要求：
+1. 提取核心要点，每页3-5个要点
+2. 合理分页，通常5-10页
+3. 第一页是标题页
+4. 每页选择合适的布局：center, text_only, image_right, three_columns
+
+返回格式（严格 JSON）：
+{{
+  "title": "PPT标题",
+  "slides": [
+    {{"type": "title", "layout": "center", "title": "标题", "subtitle": "副标题"}},
+    {{"type": "content", "layout": "text_only", "title": "页面标题", "items": [{{"level": 0, "text": "要点1"}}]}}
+  ]
+}}
+
+内容：
+{text[:3000]}"""
+            
+            response = requests.post(
+                "http://127.0.0.1:18888/v1/agent/chat",
+                json={
+                    "text": prompt,
+                    "action_type": "chat",
+                    "session_id": f"ppt_gen_{int(time.time())}",
+                    "context_source": "ppt_assistant"
+                },
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                # 解析响应
+                full_text = ""
+                for line in response.text.split('\n'):
+                    if line.startswith('data: ') and line.strip() != 'data: [DONE]':
+                        try:
+                            chunk = json.loads(line[6:])
+                            full_text += chunk.get('chunk', '')
+                        except:
+                            pass
+                
+                # 提取 JSON
+                from ppt_generator import extract_json_from_text
+                json_data = extract_json_from_text(full_text)
+                if json_data:
+                    return json_data
+            
+            return None
+        except Exception as e:
+            print(f"[PPT] AI 生成大纲失败: {e}")
+            return None
+    
+    def _launch_ppt_template(self):
+        """从模板创建 PPT"""
+        # TODO: 实现模板选择功能
+        QMessageBox.information(self, "敬请期待", "模板功能正在开发中...")
+    
+    def _open_existing_ppt(self):
+        """打开现有 PPT 文件"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "打开 PPT 文件", 
+            os.path.expanduser("~/Desktop"),
+            "PowerPoint Files (*.pptx *.ppt)"
+        )
+        if file_path:
+            # TODO: 实现加载现有 PPT 的功能
+            QMessageBox.information(self, "功能开发中", "加载现有 PPT 功能正在开发中...")
 
     def _get_ide_port(self):
         """从临时文件读取当前激活的 IDE 插件端口"""

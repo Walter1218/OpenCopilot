@@ -106,6 +106,15 @@ async def get_statistics():
     return graph_manager.get_statistics()
 
 
+@app.get("/graph/statistics-by-type")
+async def get_statistics_by_type():
+    """按类型获取统计信息"""
+    if query_engine is None:
+        raise HTTPException(status_code=503, detail="知识图谱未初始化")
+    
+    return query_engine.get_statistics_by_type()
+
+
 @app.get("/entity/search")
 async def search_entities(
     query: str = Query(..., description="搜索关键词"),
@@ -127,6 +136,43 @@ async def search_entities(
     return {
         "query": query,
         "entity_type": entity_type,
+        "count": len(entities),
+        "entities": [entity.to_dict() for entity in entities]
+    }
+
+
+# 注意：/entity/by-name/{name} 和 /entity/by-property 必须在 /entity/{entity_id} 之前定义
+# 否则会被 /entity/{entity_id} 路由优先匹配
+@app.get("/entity/by-name/{name}")
+async def get_entity_by_name(name: str):
+    """根据名称获取实体"""
+    if graph_manager is None:
+        raise HTTPException(status_code=503, detail="知识图谱未初始化")
+    
+    entities = graph_manager.get_entity_by_name(name)
+    if not entities:
+        raise HTTPException(status_code=404, detail=f"实体不存在: {name}")
+    
+    return {
+        "name": name,
+        "count": len(entities),
+        "entities": [entity.to_dict() for entity in entities]
+    }
+
+
+@app.get("/entity/by-property")
+async def get_entity_by_property(
+    property_name: str = Query(..., description="属性名"),
+    property_value: str = Query(..., description="属性值")
+):
+    """根据属性获取实体"""
+    if query_engine is None:
+        raise HTTPException(status_code=503, detail="知识图谱未初始化")
+    
+    entities = query_engine.search_by_property(property_name, property_value)
+    return {
+        "property_name": property_name,
+        "property_value": property_value,
         "count": len(entities),
         "entities": [entity.to_dict() for entity in entities]
     }
@@ -363,6 +409,22 @@ async def query_documents(
     }
 
 
+@app.get("/query/entities-by-document")
+async def query_entities_by_document(
+    doc_path: str = Query(..., description="文档路径")
+):
+    """查询文档相关的实体"""
+    if query_engine is None:
+        raise HTTPException(status_code=503, detail="知识图谱未初始化")
+    
+    entities = query_engine.find_entities_by_document(doc_path)
+    return {
+        "doc_path": doc_path,
+        "count": len(entities),
+        "entities": [entity.to_dict() for entity in entities]
+    }
+
+
 @app.get("/query/critical")
 async def query_critical_components():
     """查询关键组件"""
@@ -387,6 +449,128 @@ async def query_isolated_entities():
         "count": len(isolated),
         "entities": [entity.to_dict() for entity in isolated]
     }
+
+
+@app.post("/entity")
+async def add_entity(entity_data: Dict[str, Any]):
+    """添加实体"""
+    if graph_manager is None:
+        raise HTTPException(status_code=503, detail="知识图谱未初始化")
+    
+    try:
+        from .models import Entity, EntityType
+        
+        # 验证必填字段
+        required_fields = ["name", "entity_type", "description"]
+        for field in required_fields:
+            if field not in entity_data:
+                raise HTTPException(status_code=400, detail=f"缺少必填字段: {field}")
+        
+        # 创建实体对象
+        entity = Entity(
+            name=entity_data["name"],
+            entity_type=EntityType(entity_data["entity_type"]),
+            description=entity_data["description"],
+            properties=entity_data.get("properties", {}),
+            source_documents=entity_data.get("source_documents", [])
+        )
+        
+        entity_id = graph_manager.add_entity(entity)
+        return {
+            "status": "success",
+            "entity_id": entity_id,
+            "message": "实体添加成功"
+        }
+    except HTTPException:
+        # 重新抛出HTTPException
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"无效的实体类型: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"添加实体失败: {str(e)}")
+
+
+@app.put("/entity/{entity_id}")
+async def update_entity(entity_id: str, updates: Dict[str, Any]):
+    """更新实体"""
+    if graph_manager is None:
+        raise HTTPException(status_code=503, detail="知识图谱未初始化")
+    
+    success = graph_manager.update_entity(entity_id, updates)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"实体不存在: {entity_id}")
+    
+    return {
+        "status": "success",
+        "entity_id": entity_id,
+        "message": "实体更新成功"
+    }
+
+
+@app.delete("/entity/{entity_id}")
+async def delete_entity(entity_id: str):
+    """删除实体"""
+    if graph_manager is None:
+        raise HTTPException(status_code=503, detail="知识图谱未初始化")
+    
+    success = graph_manager.remove_entity(entity_id)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"实体不存在: {entity_id}")
+    
+    return {
+        "status": "success",
+        "entity_id": entity_id,
+        "message": "实体删除成功"
+    }
+
+
+@app.post("/relation")
+async def add_relation(relation_data: Dict[str, Any]):
+    """添加关系"""
+    if graph_manager is None:
+        raise HTTPException(status_code=503, detail="知识图谱未初始化")
+    
+    try:
+        from .models import Relation, RelationType
+        
+        # 验证必填字段
+        required_fields = ["source_id", "target_id", "relation_type", "description"]
+        for field in required_fields:
+            if field not in relation_data:
+                raise HTTPException(status_code=400, detail=f"缺少必填字段: {field}")
+        
+        # 验证实体是否存在
+        source_entity = graph_manager.get_entity_by_id(relation_data["source_id"])
+        target_entity = graph_manager.get_entity_by_id(relation_data["target_id"])
+        
+        if not source_entity:
+            raise HTTPException(status_code=404, detail=f"源实体不存在: {relation_data['source_id']}")
+        if not target_entity:
+            raise HTTPException(status_code=404, detail=f"目标实体不存在: {relation_data['target_id']}")
+        
+        # 创建关系对象
+        relation = Relation(
+            source_id=relation_data["source_id"],
+            target_id=relation_data["target_id"],
+            relation_type=RelationType(relation_data["relation_type"]),
+            description=relation_data["description"],
+            properties=relation_data.get("properties", {}),
+            weight=relation_data.get("weight", 1.0)
+        )
+        
+        relation_id = graph_manager.add_relation(relation)
+        return {
+            "status": "success",
+            "relation_id": relation_id,
+            "message": "关系添加成功"
+        }
+    except HTTPException:
+        # 重新抛出HTTPException
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"无效的关系类型: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"添加关系失败: {str(e)}")
 
 
 @app.get("/export/json")
@@ -423,39 +607,20 @@ async def export_report():
         raise HTTPException(status_code=500, detail=f"生成报告失败: {str(e)}")
 
 
-@app.get("/entity/by-name/{name}")
-async def get_entity_by_name(name: str):
-    """根据名称获取实体"""
+@app.get("/export/csv")
+async def export_csv():
+    """导出为CSV"""
     if graph_manager is None:
         raise HTTPException(status_code=503, detail="知识图谱未初始化")
     
-    entities = graph_manager.get_entity_by_name(name)
-    if not entities:
-        raise HTTPException(status_code=404, detail=f"实体不存在: {name}")
-    
-    return {
-        "name": name,
-        "count": len(entities),
-        "entities": [entity.to_dict() for entity in entities]
-    }
-
-
-@app.get("/entity/by-property")
-async def get_entity_by_property(
-    property_name: str = Query(..., description="属性名"),
-    property_value: str = Query(..., description="属性值")
-):
-    """根据属性获取实体"""
-    if query_engine is None:
-        raise HTTPException(status_code=503, detail="知识图谱未初始化")
-    
-    entities = query_engine.search_by_property(property_name, property_value)
-    return {
-        "property_name": property_name,
-        "property_value": property_value,
-        "count": len(entities),
-        "entities": [entity.to_dict() for entity in entities]
-    }
+    try:
+        graph_manager.export_to_csv()
+        return {
+            "status": "success",
+            "message": "知识图谱已导出为CSV文件"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"导出失败: {str(e)}")
 
 
 def start_api_server(host: str = "0.0.0.0", port: int = 8090, project_root: str = None):

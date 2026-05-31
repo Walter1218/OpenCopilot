@@ -128,11 +128,29 @@ python start_knowledge_graph_api.py --port 8090
 | `/query/critical` | GET | 查询关键组件 |
 | `/query/isolated` | GET | 查询孤立实体 |
 
+### 实体管理
+
+| 端点 | 方法 | 描述 |
+|------|------|------|
+| `/entity` | POST | 添加实体 |
+| `/entity/{entity_id}` | PUT | 更新实体 |
+| `/entity/{entity_id}` | DELETE | 删除实体 |
+| `/relation` | POST | 添加关系 |
+
+### 统计查询
+
+| 端点 | 方法 | 描述 |
+|------|------|------|
+| `/graph/statistics` | GET | 获取统计信息 |
+| `/graph/statistics-by-type` | GET | 按类型获取统计信息 |
+| `/query/entities-by-document` | GET | 查询文档相关实体 |
+
 ### 导出功能
 
 | 端点 | 方法 | 描述 |
 |------|------|------|
 | `/export/json` | GET | 导出为 JSON |
+| `/export/csv` | GET | 导出为 CSV |
 | `/export/report` | GET | 生成报告 |
 
 ## 使用示例
@@ -294,3 +312,47 @@ uvicorn knowledge_graph.api:app --host 0.0.0.0 --port 8090 --workers 4
 | 日期 | 版本 | 更新内容 |
 |------|------|----------|
 | 2026-05-31 | v1.0 | 初始版本，实现知识图谱构建和查询功能 |
+| 2026-05-31 | v1.1 | 补充缺失API端点，实现100%功能覆盖 |
+
+## API 覆盖率测试
+
+### 测试结果
+
+- **总测试数**：37
+- **成功测试**：37
+- **失败测试**：0
+- **成功率**：100.0%
+
+### 覆盖的功能
+
+| 功能模块 | API 端点 | 测试状态 |
+|----------|----------|----------|
+| 健康检查 | `/health`, `/` | ✓ 通过 |
+| 统计信息 | `/graph/statistics`, `/graph/statistics-by-type` | ✓ 通过 |
+| 实体操作 | `/entity/search`, `/entity/{entity_id}`, `/entity/by-name/{name}`, `/entity/by-property` | ✓ 通过 |
+| 实体管理 | `/entity` (POST), `/entity/{entity_id}` (PUT/DELETE) | ✓ 通过 |
+| 关系操作 | `/relation/search`, `/relation` (POST) | ✓ 通过 |
+| 查询功能 | `/query/path`, `/query/components`, `/query/apis`, `/query/features`, `/query/documents`, `/query/entities-by-document`, `/query/critical`, `/query/isolated` | ✓ 通过 |
+| 导出功能 | `/export/json`, `/export/csv`, `/export/report` | ✓ 通过 |
+| 错误处理 | 无效参数、不存在实体、缺少必填字段 | ✓ 通过 |
+
+### 运行测试
+
+```bash
+# 启动 API 服务器
+python start_knowledge_graph_api.py --port 8090
+
+# 运行覆盖率测试
+python test_api_coverage.py
+
+# 运行覆盖率分析
+python analyze_api_coverage.py
+```
+
+### 测试文件
+
+| 文件 | 说明 |
+|------|------|
+| `test_api_coverage.py` | API 覆盖率测试脚本 |
+| `analyze_api_coverage.py` | API 覆盖率分析脚本 |
+| `knowledge_graph/test_results.json` | 测试结果数据 |

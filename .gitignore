@@ -58,6 +58,9 @@ config.json
 # CodeBuddy working memory and settings
 .codebuddy/
 
+# PID files
+*.pid
+
 # Test artifacts
 test_docs/_*
 test_docs/*_result*

@@ -1,0 +1,369 @@
+{
+  "test_name": "LLM深度能力验证测试",
+  "test_time": "2026-06-01 01:11:08",
+  "total_tests": 23,
+  "passed": 23,
+  "failed": 0,
+  "pass_rate": "100.0%",
+  "total_duration": "237.60s",
+  "categories": {
+    "Web开发案例": {
+      "total": 3,
+      "passed": 3,
+      "duration": 36.48409628868103
+    },
+    "算法与数据结构": {
+      "total": 3,
+      "passed": 3,
+      "duration": 28.722601890563965
+    },
+    "系统编程": {
+      "total": 3,
+      "passed": 3,
+      "duration": 43.377856969833374
+    },
+    "数据科学": {
+      "total": 3,
+      "passed": 3,
+      "duration": 28.076730251312256
+    },
+    "边际Case": {
+      "total": 5,
+      "passed": 5,
+      "duration": 43.7158944606781
+    },
+    "安全相关": {
+      "total": 3,
+      "passed": 3,
+      "duration": 35.33842921257019
+    },
+    "常用功能": {
+      "total": 3,
+      "passed": 3,
+      "duration": 21.87937617301941
+    }
+  },
+  "intents": {
+    "code_review": {
+      "total": 6,
+      "passed": 6
+    },
+    "refactor": {
+      "total": 4,
+      "passed": 4
+    },
+    "explain": {
+      "total": 6,
+      "passed": 6
+    },
+    "analyze": {
+      "total": 2,
+      "passed": 2
+    },
+    "bug_fix": {
+      "total": 5,
+      "passed": 5
+    }
+  },
+  "results": [
+    {
+      "name": "React组件-状态管理",
+      "category": "Web开发案例",
+      "intent": "code_review",
+      "passed": true,
+      "duration": 8.196924209594727,
+      "response_length": 0,
+      "issues_count": 0,
+      "suggestions_count": 0,
+      "has_issues": false,
+      "has_suggestions": false,
+      "error": ""
+    },
+    {
+      "name": "Express路由-安全漏洞",
+      "category": "Web开发案例",
+      "intent": "refactor",
+      "passed": true,
+      "duration": 21.951206922531128,
+      "response_length": 514,
+      "issues_count": 0,
+      "suggestions_count": 0,
+      "has_issues": false,
+      "has_suggestions": false,
+      "error": ""
+    },
+    {
+      "name": "Vue组件-性能优化",
+      "category": "Web开发案例",
+      "intent": "explain",
+      "passed": true,
+      "duration": 6.335965156555176,
+      "response_length": 370,
+      "issues_count": 0,
+      "suggestions_count": 0,
+      "has_issues": false,
+      "has_suggestions": false,
+      "error": ""
+    },
+    {
+      "name": "排序算法-性能分析",
+      "category": "算法与数据结构",
+      "intent": "analyze",
+      "passed": true,
+      "duration": 9.945195198059082,
+      "response_length": 215,
+      "issues_count": 6,
+      "suggestions_count": 0,
+      "has_issues": true,
+      "has_suggestions": false,
+      "error": ""
+    },
+    {
+      "name": "动态规划-代码解释",
+      "category": "算法与数据结构",
+      "intent": "explain",
+      "passed": true,
+      "duration": 10.832727909088135,
+      "response_length": 1565,
+      "issues_count": 0,
+      "suggestions_count": 0,
+      "has_issues": false,
+      "has_suggestions": false,
+      "error": ""
+    },
+    {
+      "name": "图算法-Bug修复",
+      "category": "算法与数据结构",
+      "intent": "bug_fix",
+      "passed": true,
+      "duration": 7.944678783416748,
+      "response_length": 0,
+      "issues_count": 0,
+      "suggestions_count": 0,
+      "has_issues": false,
+      "has_suggestions": false,
+      "error": ""
+    },
+    {
+      "name": "多线程-竞态条件",
+      "category": "系统编程",
+      "intent": "bug_fix",
+      "passed": true,
+      "duration": 15.655277013778687,
+      "response_length": 0,
+      "issues_count": 0,
+      "suggestions_count": 0,
+      "has_issues": false,
+      "has_suggestions": false,
+      "error": ""
+    },
+    {
+      "name": "内存泄漏-资源管理",
+      "category": "系统编程",
+      "intent": "code_review",
+      "passed": true,
+      "duration": 9.213589191436768,
+      "response_length": 0,
+      "issues_count": 5,
+      "suggestions_count": 0,
+      "has_issues": true,
+      "has_suggestions": false,
+      "error": ""
+    },
+    {
+      "name": "异步编程-错误处理",
+      "category": "系统编程",
+      "intent": "refactor",
+      "passed": true,
+      "duration": 18.50899076461792,
+      "response_length": 362,
+      "issues_count": 0,
+      "suggestions_count": 0,
+      "has_issues": false,
+      "has_suggestions": false,
+      "error": ""
+    },
+    {
+      "name": "Pandas数据处理",
+      "category": "数据科学",
+      "intent": "code_review",
+      "passed": true,
+      "duration": 13.847695112228394,
+      "response_length": 0,
+      "issues_count": 0,
+      "suggestions_count": 0,
+      "has_issues": false,
+      "has_suggestions": false,
+      "error": ""
+    },
+    {
+      "name": "机器学习-过拟合问题",
+      "category": "数据科学",
+      "intent": "explain",
+      "passed": true,
+      "duration": 3.9921159744262695,
+      "response_length": 362,
+      "issues_count": 0,
+      "suggestions_count": 0,
+      "has_issues": false,
+      "has_suggestions": false,
+      "error": ""
+    },
+    {
+      "name": "数据清洗-边界情况",
+      "category": "数据科学",
+      "intent": "bug_fix",
+      "passed": true,
+      "duration": 10.236919164657593,
+      "response_length": 0,
+      "issues_count": 0,
+      "suggestions_count": 0,
+      "has_issues": false,
+      "has_suggestions": false,
+      "error": ""
+    },
+    {
+      "name": "空输入处理",
+      "category": "边际Case",
+      "intent": "code_review",
+      "passed": true,
+      "duration": 6.7171950340271,
+      "response_length": 0,
+      "issues_count": 0,
+      "suggestions_count": 0,
+      "has_issues": false,
+      "has_suggestions": false,
+      "error": ""
+    },
+    {
+      "name": "极简代码",
+      "category": "边际Case",
+      "intent": "explain",
+      "passed": true,
+      "duration": 6.925127983093262,
+      "response_length": 167,
+      "issues_count": 0,
+      "suggestions_count": 0,
+      "has_issues": false,
+      "has_suggestions": false,
+      "error": ""
+    },
+    {
+      "name": "特殊字符",
+      "category": "边际Case",
+      "intent": "explain",
+      "passed": true,
+      "duration": 6.754987955093384,
+      "response_length": 158,
+      "issues_count": 0,
+      "suggestions_count": 0,
+      "has_issues": false,
+      "has_suggestions": false,
+      "error": ""
+    },
+    {
+      "name": "复杂嵌套结构",
+      "category": "边际Case",
+      "intent": "analyze",
+      "passed": true,
+      "duration": 15.492389678955078,
+      "response_length": 1079,
+      "issues_count": 0,
+      "suggestions_count": 0,
+      "has_issues": false,
+      "has_suggestions": false,
+      "error": ""
+    },
+    {
+      "name": "递归深度问题",
+      "category": "边际Case",
+      "intent": "bug_fix",
+      "passed": true,
+      "duration": 7.826193809509277,
+      "response_length": 0,
+      "issues_count": 0,
+      "suggestions_count": 0,
+      "has_issues": false,
+      "has_suggestions": false,
+      "error": ""
+    },
+    {
+      "name": "XSS漏洞",
+      "category": "安全相关",
+      "intent": "refactor",
+      "passed": true,
+      "duration": 7.985176086425781,
+      "response_length": 399,
+      "issues_count": 0,
+      "suggestions_count": 0,
+      "has_issues": false,
+      "has_suggestions": false,
+      "error": ""
+    },
+    {
+      "name": "命令注入",
+      "category": "安全相关",
+      "intent": "bug_fix",
+      "passed": true,
+      "duration": 8.244389057159424,
+      "response_length": 0,
+      "issues_count": 0,
+      "suggestions_count": 0,
+      "has_issues": false,
+      "has_suggestions": false,
+      "error": ""
+    },
+    {
+      "name": "硬编码密钥",
+      "category": "安全相关",
+      "intent": "code_review",
+      "passed": true,
+      "duration": 19.108864068984985,
+      "response_length": 0,
+      "issues_count": 3,
+      "suggestions_count": 0,
+      "has_issues": true,
+      "has_suggestions": false,
+      "error": ""
+    },
+    {
+      "name": "文件IO操作",
+      "category": "常用功能",
+      "intent": "code_review",
+      "passed": true,
+      "duration": 10.265482902526855,
+      "response_length": 0,
+      "issues_count": 0,
+      "suggestions_count": 0,
+      "has_issues": false,
+      "has_suggestions": false,
+      "error": ""
+    },
+    {
+      "name": "API客户端",
+      "category": "常用功能",
+      "intent": "refactor",
+      "passed": true,
+      "duration": 7.388176202774048,
+      "response_length": 354,
+      "issues_count": 0,
+      "suggestions_count": 0,
+      "has_issues": false,
+      "has_suggestions": false,
+      "error": ""
+    },
+    {
+      "name": "日志系统",
+      "category": "常用功能",
+      "intent": "explain",
+      "passed": true,
+      "duration": 4.225717067718506,
+      "response_length": 311,
+      "issues_count": 0,
+      "suggestions_count": 0,
+      "has_issues": false,
+      "has_suggestions": false,
+      "error": ""
+    }
+  ]
+}

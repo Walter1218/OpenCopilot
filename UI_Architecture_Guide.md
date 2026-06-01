@@ -1,7 +1,7 @@
 # OpenCopilot UI 架构说明
 
-> **版本**：v2.1 | **日期**：2026-05-28  
-> **状态**：P0-P2 阶段（主动感知、多模态、无感划词、Persona 工作坊等）已全面落地
+> **版本**：v2.2 | **日期**：2026-06-01  
+> **状态**：P0-P2 阶段已完成，Skill化架构已集成
 
 ---
 
@@ -14,16 +14,32 @@ smart_copilot.py (主程序)
 │   ├── ModelScannerWorker (模型扫描)
 │   └── AICardWindow (主卡片窗口)
 │
-└── 新组件 (新增)
-    ├── core/theme_manager.py (主题管理)
-    ├── core/shortcut_manager.py (快捷键管理)
-    ├── widgets/settings_dialog.py (个性化设置)
-    ├── widgets/file_drop_zone.py (文件拖拽区)
-    ├── widgets/progress_widget.py (进度条)
-    ├── widgets/context_menu.py (右键菜单)
-    ├── widgets/batch_dialog.py (批量处理)
-    ├── widgets/terminology_dialog.py (术语库)
-    └── widgets/translation_memory.py (翻译记忆)
+├── 新组件 (新增)
+│   ├── core/theme_manager.py (主题管理)
+│   ├── core/shortcut_manager.py (快捷键管理)
+│   ├── widgets/settings_dialog.py (个性化设置)
+│   ├── widgets/file_drop_zone.py (文件拖拽区)
+│   ├── widgets/progress_widget.py (进度条)
+│   ├── widgets/context_menu.py (右键菜单)
+│   ├── widgets/batch_dialog.py (批量处理)
+│   ├── widgets/terminology_dialog.py (术语库)
+│   └── widgets/translation_memory.py (翻译记忆)
+│
+└── Skill化架构组件 (2026-06-01 新增)
+    ├── skill_architecture/base.py (BaseSkill抽象基类)
+    ├── skill_architecture/registry.py (SkillRegistry注册表)
+    ├── skill_architecture/router.py (IntentRouter意图路由器)
+    ├── skill_architecture/executor.py (SkillExecutor执行引擎)
+    ├── skill_architecture/discovery.py (SkillDiscovery自动发现)
+    ├── skill_architecture/config_manager.py (ConfigManager配置管理)
+    ├── skill_architecture/performance.py (性能优化模块)
+    ├── skill_architecture/knowledge_skill.py (KnowledgeSkill)
+    ├── skill_architecture/coding_skill.py (CodingSkill)
+    ├── skill_architecture/ppt_skill.py (PPTSkill)
+    ├── skill_architecture/evaluation_skill.py (EvaluationSkill)
+    ├── skill_architecture/file_skill.py (FileSkill)
+    ├── skill_architecture/format_skill.py (FormatSkill)
+    └── skill_architecture/persona_skill.py (PersonaSkill)
 ```
 
 ---

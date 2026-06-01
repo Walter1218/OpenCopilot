@@ -50,6 +50,9 @@ from skill_architecture import (
     SkillContext
 )
 
+# 导入 LLM 适配器
+from llm_adapter import create_llm_adapter
+
 # ==========================================
 # Pydantic 模型定义
 # ==========================================
@@ -2252,8 +2255,8 @@ class FindPathRequest(BaseModel):
     source: str = Field(..., description="起始实体")
     target: str = Field(..., description="目标实体")
 
-# 全局 KnowledgeSkill 实例
-knowledge_skill = KnowledgeSkill()
+# 全局 KnowledgeSkill 实例（带项目根目录配置）
+knowledge_skill = KnowledgeSkill(config={"project_root": os.path.dirname(os.path.abspath(__file__))})
 
 @app.post("/api/knowledge/query")
 async def knowledge_query(request: KnowledgeQueryRequest):
@@ -2342,7 +2345,7 @@ async def search_entity(request: SearchEntityRequest):
             intent="search_entity",
             input_data={
                 "action": "search_entity",
-                "keyword": request.keyword,
+                "query": request.keyword,  # 将keyword映射到query
                 "entity_type": request.entity_type
             }
         )
@@ -2460,8 +2463,11 @@ class EnhanceApiRequest(BaseModel):
     enhancement: str = Field(..., description="增强需求")
     language: Optional[str] = Field("python", description="编程语言")
 
-# 全局 CodingSkill 实例
-coding_skill = CodingSkill()
+# 创建 LLM 适配器
+llm_adapter = create_llm_adapter()
+
+# 全局 CodingSkill 实例（带 LLM 适配器）
+coding_skill = CodingSkill(config={"llm_provider": llm_adapter})
 
 @app.post("/api/coding/review")
 async def code_review(request: CodeReviewRequest):
@@ -2471,6 +2477,10 @@ async def code_review(request: CodeReviewRequest):
     对代码进行审查，返回问题和改进建议。
     """
     try:
+        # 输入验证
+        if not request.code or not request.code.strip():
+            raise HTTPException(status_code=400, detail="代码内容不能为空")
+        
         context = SkillContext(
             intent="code_review",
             input_data={
@@ -2486,6 +2496,8 @@ async def code_review(request: CodeReviewRequest):
             return result.data
         else:
             raise HTTPException(status_code=400, detail=result.error)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"代码审查失败: {str(e)}")
 

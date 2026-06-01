@@ -287,11 +287,99 @@ class KnowledgeSkill(BaseSkill):
             SkillResult: 执行结果
         """
         input_data = context.input_data
+        content = input_data.get("content", "")
+        source = input_data.get("source", "unknown")
         force_rebuild = input_data.get("force_rebuild", False)
         
         try:
-            # 重新构建知识图谱
-            knowledge_graph = self._graph_manager.build_graph(force_rebuild=force_rebuild)
+            # 导入 QueryEngine
+            from knowledge_graph.query import QueryEngine
+            from knowledge_graph.models import Entity, Relation
+            
+            # 如果有内容，从内容中提取实体和关系
+            if content and content.strip():
+                # 导入EntityType和RelationType
+                from knowledge_graph.models import EntityType, RelationType
+                
+                # 简单的实体提取（基于关键词）
+                entities_extracted = []
+                relations_extracted = []
+                
+                # 提取概念实体
+                lines = content.split('\n')
+                for i, line in enumerate(lines):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    
+                    # 提取标题作为实体
+                    if line.startswith('#'):
+                        entity_name = line.lstrip('#').strip()
+                        if entity_name:
+                            entity = Entity(
+                                id=f"entity_{len(entities_extracted)}",
+                                name=entity_name,
+                                entity_type=EntityType.CONCEPT,
+                                properties={"source": source, "line": i},
+                                description=f"从{source}提取的概念"
+                            )
+                            entities_extracted.append(entity)
+                    
+                    # 提取列表项作为实体
+                    elif line.startswith('-') or line.startswith('*'):
+                        item_name = line.lstrip('-* ').strip()
+                        if item_name and len(item_name) > 2:
+                            entity = Entity(
+                                id=f"entity_{len(entities_extracted)}",
+                                name=item_name[:50],  # 限制长度
+                                entity_type=EntityType.FEATURE,
+                                properties={"source": source, "line": i},
+                                description=f"从{source}提取的条目"
+                            )
+                            entities_extracted.append(entity)
+                
+                # 提取关键概念（简单关键词提取）
+                keywords = ["Python", "编程", "语言", "特点", "功能", "API", "系统", "架构"]
+                for keyword in keywords:
+                    if keyword.lower() in content.lower():
+                        # 检查是否已存在
+                        exists = any(e.name.lower() == keyword.lower() for e in entities_extracted)
+                        if not exists:
+                            entity = Entity(
+                                id=f"entity_{len(entities_extracted)}",
+                                name=keyword,
+                                entity_type=EntityType.CONCEPT,
+                                properties={"source": source},
+                                description=f"关键词: {keyword}"
+                            )
+                            entities_extracted.append(entity)
+                
+                # 创建实体间的关系
+                for i in range(len(entities_extracted) - 1):
+                    relation = Relation(
+                        id=f"relation_{len(relations_extracted)}",
+                        source_id=entities_extracted[i].id,
+                        target_id=entities_extracted[i+1].id,
+                        relation_type=RelationType.USES,
+                        properties={"source": source}
+                    )
+                    relations_extracted.append(relation)
+                
+                # 添加到知识图谱
+                for entity in entities_extracted:
+                    self._graph_manager.knowledge_graph.add_entity(entity)
+                
+                for relation in relations_extracted:
+                    self._graph_manager.knowledge_graph.add_relation(relation)
+                
+                # 保存图谱
+                self._graph_manager.save_graph()
+            
+            # 如果强制重建或没有内容，执行完整构建
+            if force_rebuild or not content:
+                knowledge_graph = self._graph_manager.build_graph(force_rebuild=force_rebuild)
+            else:
+                knowledge_graph = self._graph_manager.knowledge_graph
             
             # 更新查询引擎
             self._query_engine = QueryEngine(knowledge_graph)
@@ -300,6 +388,8 @@ class KnowledgeSkill(BaseSkill):
                 success=True,
                 data={
                     "statistics": knowledge_graph.get_statistics(),
+                    "entities_extracted": len(entities_extracted) if content else 0,
+                    "relations_extracted": len(relations_extracted) if content else 0,
                     "force_rebuild": force_rebuild
                 },
                 status=SkillStatus.COMPLETED

@@ -11,8 +11,17 @@ from .models import (
 from .base import BaseSkill
 from .registry import SkillRegistry
 from .router import IntentRouter
-from .executor import SkillExecutor
+from .executor import SkillExecutor, RetryConfig, ExecutionStats
 from .discovery import SkillDiscovery
+from .config_manager import ConfigManager, EnvironmentConfig
+from .performance import (
+    ResultCache,
+    AsyncPool,
+    PerformanceMonitor,
+    PerformanceOptimizer,
+    cache_result,
+    monitor_performance
+)
 from .knowledge_skill import KnowledgeSkill
 from .coding_skill import CodingSkill
 from .ppt_skill import PPTSkill
@@ -32,7 +41,17 @@ __all__ = [
     'SkillRegistry',
     'IntentRouter',
     'SkillExecutor',
+    'RetryConfig',
+    'ExecutionStats',
     'SkillDiscovery',
+    'ConfigManager',
+    'EnvironmentConfig',
+    'ResultCache',
+    'AsyncPool',
+    'PerformanceMonitor',
+    'PerformanceOptimizer',
+    'cache_result',
+    'monitor_performance',
     'KnowledgeSkill',
     'CodingSkill',
     'PPTSkill',

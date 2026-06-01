@@ -324,11 +324,113 @@ curl http://localhost:8089/api/probe/clipboard
 LLM 处理 → 过滤 <think> 标签 → 返回结果
 ```
 
+## Skill化架构 API 端点（2026-06-01 新增）
+
+### 概述
+Skill化架构提供了61个API端点，100%功能覆盖率，支持7个Skill实现。
+
+### 核心API端点
+
+#### 1. KnowledgeSkill API
+```bash
+# 知识图谱查询
+curl -X POST http://localhost:8089/api/skill/knowledge/query \
+  -H "Content-Type: application/json" \
+  -d '{"intent": "knowledge_query", "parameters": {"query": "Agent架构"}}'
+
+# 知识图谱构建
+curl -X POST http://localhost:8089/api/skill/knowledge/build \
+  -H "Content-Type: application/json" \
+  -d '{"intent": "knowledge_build", "parameters": {"source": "docs/"}}'
+
+# 知识图谱导出
+curl -X POST http://localhost:8089/api/skill/knowledge/export \
+  -H "Content-Type: application/json" \
+  -d '{"intent": "knowledge_export", "parameters": {"format": "json"}}'
+```
+
+#### 2. CodingSkill API
+```bash
+# Bug修复
+curl -X POST http://localhost:8089/api/skill/coding/fix-bug \
+  -H "Content-Type: application/json" \
+  -d '{"intent": "bug_fix", "parameters": {"code": "def foo():\n  return bar()", "error": "NameError: bar is not defined"}}'
+
+# 代码审查
+curl -X POST http://localhost:8089/api/skill/coding/review \
+  -H "Content-Type: application/json" \
+  -d '{"intent": "code_review", "parameters": {"code": "def calculate_sum(a, b):\n  return a + b"}}'
+
+# 代码分析
+curl -X POST http://localhost:8089/api/skill/coding/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"intent": "analyze", "parameters": {"code": "import numpy as np\narr = np.array([1,2,3])"}}'
+```
+
+#### 3. PPTSkill API
+```bash
+# PPT生成
+curl -X POST http://localhost:8089/api/skill/ppt/generate \
+  -H "Content-Type: application/json" \
+  -d '{"intent": "generate_ppt", "parameters": {"content": "项目汇报", "slides": 10}}'
+
+# 内容分析
+curl -X POST http://localhost:8089/api/skill/ppt/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"intent": "analyze_content", "parameters": {"content": "本季度销售额增长20%"}}'
+
+# 优化建议
+curl -X POST http://localhost:8089/api/skill/ppt/suggest \
+  -H "Content-Type: application/json" \
+  -d '{"intent": "suggest_improvement", "parameters": {"content": "当前PPT内容"}}'
+```
+
+#### 4. 其他Skill API
+```bash
+# EvaluationSkill - 内容评价
+curl -X POST http://localhost:8089/api/skill/evaluation/evaluate \
+  -H "Content-Type: application/json" \
+  -d '{"intent": "evaluate_content", "parameters": {"content": "待评价内容"}}'
+
+# FileSkill - 文件操作
+curl -X POST http://localhost:8089/api/skill/file/operate \
+  -H "Content-Type: application/json" \
+  -d '{"intent": "file_read", "parameters": {"file_path": "README.md"}}'
+
+# FormatSkill - 格式转换
+curl -X POST http://localhost:8089/api/skill/format/convert \
+  -H "Content-Type: application/json" \
+  -d '{"intent": "format_convert", "parameters": {"content": "# 标题", "from": "markdown", "to": "html"}}'
+
+# PersonaSkill - 人设管理
+curl -X POST http://localhost:8089/api/skill/persona/manage \
+  -H "Content-Type: application/json" \
+  -d '{"intent": "persona_load", "parameters": {"persona_type": "code"}}'
+```
+
+### API统计信息
+- **总API端点**：61个
+- **Skill数量**：7个
+- **API覆盖率**：100%
+- **测试通过率**：100%（18/18）
+
+### 测试验证
+```bash
+# 运行API覆盖率检测
+python test_api_coverage_skill.py
+
+# 运行综合测试
+python test_comprehensive_skill.py
+```
+
 ## 相关文件
 
 - `smart_copilot_platform.py` - 能力平台 API 服务主文件
 - `Smart_Copilot_API_Redesign.md` - 详细设计方案文档
 - `test_platform.py` - 测试脚本
+- `skill_architecture/` - Skill化架构实现目录
+- `test_api_coverage_skill.py` - API覆盖率检测脚本
+- `test_comprehensive_skill.py` - 综合测试验证套件
 
 ## 相关链接
 

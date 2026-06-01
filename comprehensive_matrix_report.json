@@ -1,0 +1,618 @@
+{
+  "test_name": "OpenCopilot 全面测试矩阵",
+  "test_time": "2026-06-01T13:28:01.770608",
+  "duration_seconds": 380.62,
+  "summary": {
+    "total": 40,
+    "passed": 40,
+    "failed": 0,
+    "pass_rate": "100.0%"
+  },
+  "categories": {
+    "代码审查": {
+      "passed": 8,
+      "failed": 0,
+      "total": 8,
+      "duration_ms": 143979
+    },
+    "Bug修复": {
+      "passed": 5,
+      "failed": 0,
+      "total": 5,
+      "duration_ms": 31901
+    },
+    "代码解释": {
+      "passed": 5,
+      "failed": 0,
+      "total": 5,
+      "duration_ms": 34588
+    },
+    "代码重构": {
+      "passed": 5,
+      "failed": 0,
+      "total": 5,
+      "duration_ms": 52581
+    },
+    "边界条件": {
+      "passed": 5,
+      "failed": 0,
+      "total": 5,
+      "duration_ms": 59226
+    },
+    "集成工作流": {
+      "passed": 5,
+      "failed": 0,
+      "total": 5,
+      "duration_ms": 2351
+    },
+    "技能测试": {
+      "passed": 5,
+      "failed": 0,
+      "total": 5,
+      "duration_ms": 29669
+    },
+    "性能测试": {
+      "passed": 2,
+      "failed": 0,
+      "total": 2,
+      "duration_ms": 14255
+    }
+  },
+  "test_results": [
+    {
+      "test_id": "CR001",
+      "test_name": "Python数据处理代码审查",
+      "category": "代码审查",
+      "success": true,
+      "duration_ms": 7675,
+      "response_preview": "{\"review\": \"\", \"issues\": [\"**未使用的导入**：`numpy` 被导入但未使用\", \"**硬编码列名**：代码假设CSV包含 `price`、`quantity`、`date` 列，未做验证，若列名不匹配会抛出不明确的 `KeyError`\", \"**缺少参数验证**：没有检查文件是否存在、可读\", \"**日期解析不稳定**：`pd.to_datetime()` 未指定格式参数，依赖默认行为，可能对非标准日期格式产生意外结果\", \"**缺少文档字符串**：函数没有 docstring，不便于理解用途和参数\", \"**月分组语义不明确**：返回的字典键是整数月份（1-",
+      "error": "",
+      "matched_keywords": [
+        "review",
+        "建议",
+        "改进",
+        "代码"
+      ]
+    },
+    {
+      "test_id": "CR002",
+      "test_name": "React组件代码审查",
+      "category": "代码审查",
+      "success": true,
+      "duration_ms": 6649,
+      "response_preview": "{\"review\": \"\", \"issues\": [\"**缺少错误处理**\", \"**缺少空值检查**\", \"**img 标签缺少 alt 属性**\", \"**缺少依赖项检查**\"], \"suggestions\": [], \"score\": 0, \"context_used\": {\"diagnostics\": {\"errors\": [], \"warnings\": [], \"raw\": {}}, \"symbol\": {}, \"git_diff\": {\"diff\": \"\"}, \"file_content\": {}}, \"prompt_generated\": \"你是一个资深的代码审查专家，擅长发现代",
+      "error": "",
+      "matched_keywords": [
+        "review",
+        "建议",
+        "错误处理",
+        "error",
+        "React"
+      ]
+    },
+    {
+      "test_id": "CR003",
+      "test_name": "TypeScript API服务审查",
+      "category": "代码审查",
+      "success": true,
+      "duration_ms": 32688,
+      "response_preview": "{\"review\": \"\", \"issues\": [], \"suggestions\": [], \"score\": 0, \"context_used\": {\"diagnostics\": {\"errors\": [], \"warnings\": [], \"raw\": {}}, \"symbol\": {}, \"git_diff\": {\"diff\": \"\"}, \"file_content\": {}}, \"prompt_generated\": \"你是一个资深的代码审查专家，擅长发现代码中的问题和改进点。\\n\\n## 待审查代码\\n```typescript\\n\\ninterface User {\\n    i",
+      "error": "",
+      "matched_keywords": [
+        "review",
+        "建议",
+        "类型",
+        "TypeScript"
+      ]
+    },
+    {
+      "test_id": "CR004",
+      "test_name": "Java Spring Boot审查",
+      "category": "代码审查",
+      "success": true,
+      "duration_ms": 31052,
+      "response_preview": "{\"review\": \"\", \"issues\": [], \"suggestions\": [], \"score\": 0, \"context_used\": {\"diagnostics\": {\"errors\": [], \"warnings\": [], \"raw\": {}}, \"symbol\": {}, \"git_diff\": {\"diff\": \"\"}, \"file_content\": {}}, \"prompt_generated\": \"你是一个资深的代码审查专家，擅长发现代码中的问题和改进点。\\n\\n## 待审查代码\\n```java\\n\\n@RestController\\n@RequestMapp",
+      "error": "",
+      "matched_keywords": [
+        "review",
+        "建议",
+        "异常处理"
+      ]
+    },
+    {
+      "test_id": "CR005",
+      "test_name": "Go HTTP服务审查",
+      "category": "代码审查",
+      "success": true,
+      "duration_ms": 13769,
+      "response_preview": "{\"review\": \"\", \"issues\": [\"**并发安全问题**\", \"**缺少错误处理**\", \"**HTTP响应不完善**\", \"**API设计不完整**\", \"**代码结构问题**\", \"**安全问题**\"], \"suggestions\": [], \"score\": 0, \"context_used\": {\"diagnostics\": {\"errors\": [], \"warnings\": [], \"raw\": {}}, \"symbol\": {}, \"git_diff\": {\"diff\": \"\"}, \"file_content\": {}}, \"prompt_generated\":",
+      "error": "",
+      "matched_keywords": [
+        "review",
+        "建议",
+        "错误处理",
+        "Go",
+        "并发"
+      ]
+    },
+    {
+      "test_id": "CR006",
+      "test_name": "Rust系统编程审查",
+      "category": "代码审查",
+      "success": true,
+      "duration_ms": 9120,
+      "response_preview": "{\"review\": \"\", \"issues\": [\"**【严重】LRU 淘汰策略实现错误**\", \"**【中等】缺少常用查询方法**\", \"**【中等】get 方法不符合 LRU 语义**\", \"**【中等】克隆开销问题**\", \"**【轻微】边界条件处理**\", \"**【轻微】API 不完整**\"], \"suggestions\": [], \"score\": 0, \"context_used\": {\"diagnostics\": {\"errors\": [], \"warnings\": [], \"raw\": {}}, \"symbol\": {}, \"git_diff\": {\"diff\": \"\"}, ",
+      "error": "",
+      "matched_keywords": [
+        "review",
+        "建议",
+        "Rust"
+      ]
+    },
+    {
+      "test_id": "CR007",
+      "test_name": "SQL查询代码审查",
+      "category": "代码审查",
+      "success": true,
+      "duration_ms": 36573,
+      "response_preview": "{\"review\": \"\", \"issues\": [], \"suggestions\": [], \"score\": 0, \"context_used\": {\"diagnostics\": {\"errors\": [], \"warnings\": [], \"raw\": {}}, \"symbol\": {}, \"git_diff\": {\"diff\": \"\"}, \"file_content\": {}}, \"prompt_generated\": \"你是一个资深的代码审查专家，擅长发现代码中的问题和改进点。\\n\\n## 待审查代码\\n```sql\\n\\nSELECT \\n    u.name,\\n    u.em",
+      "error": "",
+      "matched_keywords": [
+        "review",
+        "建议",
+        "SQL"
+      ]
+    },
+    {
+      "test_id": "CR008",
+      "test_name": "C++算法实现审查",
+      "category": "代码审查",
+      "success": true,
+      "duration_ms": 6453,
+      "response_preview": "{\"review\": \"\", \"issues\": [], \"suggestions\": [], \"score\": 0, \"context_used\": {\"diagnostics\": {\"errors\": [], \"warnings\": [], \"raw\": {}}, \"symbol\": {}, \"git_diff\": {\"diff\": \"\"}, \"file_content\": {}}, \"prompt_generated\": \"你是一个资深的代码审查专家，擅长发现代码中的问题和改进点。\\n\\n## 待审查代码\\n```cpp\\n\\n#include <vector>\\n#include <a",
+      "error": "",
+      "matched_keywords": [
+        "review",
+        "建议"
+      ]
+    },
+    {
+      "test_id": "BF001",
+      "test_name": "Python空指针异常修复",
+      "category": "Bug修复",
+      "success": true,
+      "duration_ms": 4394,
+      "response_preview": "{\"analysis\": \"\", \"fix_suggestion\": \"\", \"explanation\": \"\", \"context_used\": {\"diagnostics\": {\"errors\": [], \"warnings\": [], \"raw\": {}}, \"symbol\": {}, \"git_diff\": {\"diff\": \"\"}, \"file_content\": {}}, \"prompt_generated\": \"你是一个专业的 Bug 修复专家，擅长快速定位和修复代码问题。\\n\\n## 当前诊断信息\\n- 无诊断信息\\n\\n## Python 特定提示\\n- 检查缩进（Pytho",
+      "error": "",
+      "matched_keywords": [
+        "fix",
+        "修复",
+        "检查"
+      ]
+    },
+    {
+      "test_id": "BF002",
+      "test_name": "JavaScript异步错误修复",
+      "category": "Bug修复",
+      "success": true,
+      "duration_ms": 4563,
+      "response_preview": "{\"analysis\": \"\", \"fix_suggestion\": \"\", \"explanation\": \"\", \"context_used\": {\"diagnostics\": {\"errors\": [], \"warnings\": [], \"raw\": {}}, \"symbol\": {}, \"git_diff\": {\"diff\": \"\"}, \"file_content\": {}}, \"prompt_generated\": \"你是一个专业的 Bug 修复专家，擅长快速定位和修复代码问题。\\n\\n## 当前诊断信息\\n- 无诊断信息\\n\\n## JavaScript 特定提示\\n- 检查分号\\n",
+      "error": "",
+      "matched_keywords": [
+        "fix",
+        "修复"
+      ]
+    },
+    {
+      "test_id": "BF003",
+      "test_name": "Java并发问题修复",
+      "category": "Bug修复",
+      "success": true,
+      "duration_ms": 5200,
+      "response_preview": "{\"analysis\": \"\", \"fix_suggestion\": \"\", \"explanation\": \"\", \"context_used\": {\"diagnostics\": {\"errors\": [], \"warnings\": [], \"raw\": {}}, \"symbol\": {}, \"git_diff\": {\"diff\": \"\"}, \"file_content\": {}}, \"prompt_generated\": \"你是一个专业的 Bug 修复专家，擅长快速定位和修复代码问题。\\n\\n## 当前诊断信息\\n- 无诊断信息\\n\\n## Java 特定提示\\n- 检查类和方法签名\\n- ",
+      "error": "",
+      "matched_keywords": [
+        "fix",
+        "修复"
+      ]
+    },
+    {
+      "test_id": "BF004",
+      "test_name": "Go内存泄漏修复",
+      "category": "Bug修复",
+      "success": true,
+      "duration_ms": 12748,
+      "response_preview": "{\"analysis\": \"\", \"fix_suggestion\": \"\", \"explanation\": \"\", \"context_used\": {\"diagnostics\": {\"errors\": [], \"warnings\": [], \"raw\": {}}, \"symbol\": {}, \"git_diff\": {\"diff\": \"\"}, \"file_content\": {}}, \"prompt_generated\": \"你是一个专业的 Bug 修复专家，擅长快速定位和修复代码问题。\\n\\n## 当前诊断信息\\n- 无诊断信息\\n\\n## 输出格式\\n### 问题分析\\n[详细分析问题的根",
+      "error": "",
+      "matched_keywords": [
+        "fix",
+        "修复"
+      ]
+    },
+    {
+      "test_id": "BF005",
+      "test_name": "Python类型错误修复",
+      "category": "Bug修复",
+      "success": true,
+      "duration_ms": 4996,
+      "response_preview": "{\"analysis\": \"\", \"fix_suggestion\": \"\", \"explanation\": \"\", \"context_used\": {\"diagnostics\": {\"errors\": [], \"warnings\": [], \"raw\": {}}, \"symbol\": {}, \"git_diff\": {\"diff\": \"\"}, \"file_content\": {}}, \"prompt_generated\": \"你是一个专业的 Bug 修复专家，擅长快速定位和修复代码问题。\\n\\n## 当前诊断信息\\n- 无诊断信息\\n\\n## Python 特定提示\\n- 检查缩进（Pytho",
+      "error": "",
+      "matched_keywords": [
+        "fix",
+        "修复",
+        "检查"
+      ]
+    },
+    {
+      "test_id": "EX001",
+      "test_name": "Python装饰器解释",
+      "category": "代码解释",
+      "success": true,
+      "duration_ms": 3753,
+      "response_preview": "{\"explanation\": \"这是一个**斐波那契数列**计算器，通过**记忆化（Memoization）装饰器**优化递归算法，将指数级时间复杂度降低到线性级别。\\n---\\n### 工作原理\\n1. **`memoize` 装饰器**：\\n   - 创建一个 `cache` 字典存储已计算过的结果\\n   - 返回 `wrapper` 函数作为被装饰函数的替代\\n2. **`wrapper` 函数**：\\n   - 接收任意参数 `*args`\\n   - 检查参数是否在缓存中：\\n     - **未缓存** → 调用原函数计算并存储结果\\n     - **已缓存** → 直接返回",
+      "error": "",
+      "matched_keywords": [
+        "装饰器",
+        "缓存",
+        "递归",
+        "记忆化"
+      ]
+    },
+    {
+      "test_id": "EX002",
+      "test_name": "JavaScript Promise解释",
+      "category": "代码解释",
+      "success": true,
+      "duration_ms": 9235,
+      "response_preview": "{\"explanation\": \"这是一个带**自动重试机制**的网络请求封装函数。当 `fetch` 请求失败时，会自动重复尝试，直到成功或达到最大重试次数。\\n---\\n### 工作原理\\n```\\nfetchWithRetry(url, retries=3)\\n         │\\n         ▼\\n┌─────────────────────────┐\\n│  创建 Promise            │\\n│  内部定义 attempt(n)     │\\n│  首次调用 attempt(3)     │\\n└─────────────────────────┘\\n    ",
+      "error": "",
+      "matched_keywords": [
+        "Promise",
+        "重试"
+      ]
+    },
+    {
+      "test_id": "EX003",
+      "test_name": "TypeScript泛型解释",
+      "category": "代码解释",
+      "success": true,
+      "duration_ms": 3774,
+      "response_preview": "{\"explanation\": \"这部分需要说明代码做什么\\n### 工作原理\\n这部分需要解释代码如何工作的\\n这段代码实现了一个**通用数据仓储模式**（Repository Pattern），用于对数据进行 CRUD 操作，并通过 `UserRepository` 类具体实现了用户数据的内存管理。\\n### 工作原理\\n**1. 接口定义**\\n```typescript\\ninterface Repository<T extends { id: number }>\\n```\\n- 定义了一个泛型接口，约束类型 `T` 必须包含 `id` 属性\\n- 规定了 5 个标准方法：`findB",
+      "error": "",
+      "matched_keywords": [
+        "泛型",
+        "接口",
+        "TypeScript",
+        "实现"
+      ]
+    },
+    {
+      "test_id": "EX004",
+      "test_name": "Go Goroutine解释",
+      "category": "代码解释",
+      "success": true,
+      "duration_ms": 3520,
+      "response_preview": "{\"explanation\": \"实现 **Fan-Out/Fan-In** 并发模式：将输入通道的数据分配给多个 worker 并发处理，处理结果汇总到输出通道。\\n### 工作原理\\n```\\n输入通道 ──┬── Worker 1 ──┐\\n           ├── Worker 2 ──┼──> 输出通道\\n           ├── ...        │\\n           └── Worker n ──┘\\n```\\n1. **Fan-Out**：启动 `workers` 个 goroutine，同时从同一个输入通道读取数据\\n2. **Fan-In**：各 work",
+      "error": "",
+      "matched_keywords": [
+        "goroutine",
+        "并发",
+        "WaitGroup"
+      ]
+    },
+    {
+      "test_id": "EX005",
+      "test_name": "Rust生命周期解释",
+      "category": "代码解释",
+      "success": true,
+      "duration_ms": 14306,
+      "response_preview": "{\"explanation\": \"这段代码实现两个独立的功能：\\n1. **`longest` 函数**：比较两个字符串切片，返回较长的那个\\n2. **`Parser` 结构体**：一个轻量级的字符串解析器，支持逐字符遍历输入字符串\\n---\\n### 工作原理\\n#### 1. `longest` 函数\\n```\\n生命周期 'a 的作用：确保返回值的生命周期不会超过两个输入中最短的那个\\n```\\n- 接受两个字符串切片的引用\\n- 比较长度后返回指向较长字符串的引用\\n- 生命周期 `'a` 保证返回值的有效性（不会返回已释放的内存）\\n#### 2. `Parser` 结构体\\n- ",
+      "error": "",
+      "matched_keywords": [
+        "生命周期",
+        "Rust",
+        "引用"
+      ]
+    },
+    {
+      "test_id": "RF001",
+      "test_name": "Python列表推导式重构",
+      "category": "代码重构",
+      "success": true,
+      "duration_ms": 8231,
+      "response_preview": "{\"refactored_code\": \"def get_even_squares(numbers):\\n    return [n * n for n in numbers if n % 2 == 0]\", \"changes\": [], \"explanation\": \"1. **使用列表推导式**：一行代码替代了原来的 5 行代码，简洁高效\\n2. **提升可读性**：列表推导式的 `[表达式 for 变量 in 可迭代对象 if 条件]` 结构清晰表达了\\\"筛选-转换\\\"的逻辑\\n3. **性能更好**：列表推导式比普通循环快约 20%，因为内部做了优化\\n4. **避免手动管理列表**：",
+      "error": "",
+      "matched_keywords": [
+        "重构",
+        "列表推导式",
+        "简洁",
+        "Python"
+      ]
+    },
+    {
+      "test_id": "RF002",
+      "test_name": "JavaScript解构赋值重构",
+      "category": "代码重构",
+      "success": true,
+      "duration_ms": 17029,
+      "response_preview": "{\"refactored_code\": \"function processUser(user) {\\n    // 检查 user 是否存在\\n    if (!user) {\\n        throw new Error('User object is required');\\n    }\\n    const { name, email, age } = user;\\n    // 添加防御性检查\\n    if (typeof name !== 'string' || !name) {\\n        throw new Error('User name is required a",
+      "error": "",
+      "matched_keywords": [
+        "重构",
+        "解构",
+        "ES6",
+        "简洁"
+      ]
+    },
+    {
+      "test_id": "RF003",
+      "test_name": "Java Stream API重构",
+      "category": "代码重构",
+      "success": true,
+      "duration_ms": 6652,
+      "response_preview": "{\"refactored_code\": \"import java.util.List;\\nimport java.util.stream.Collectors;\\npublic class UserService {\\n    private static final int MIN_NAME_LENGTH = 3;\\n    public List<String> getActiveUserNames(List<User> users) {\\n        return users.stream()\\n                .filter(User::isActive)\\n   ",
+      "error": "",
+      "matched_keywords": [
+        "重构",
+        "Stream",
+        "Java"
+      ]
+    },
+    {
+      "test_id": "RF004",
+      "test_name": "Go接口抽象重构",
+      "category": "代码重构",
+      "success": true,
+      "duration_ms": 13908,
+      "response_preview": "{\"refactored_code\": \"// 定义数据库接口抽象\\ntype Database interface {\\n    Connect() error\\n    Query(sql string) ([]map[string]interface{}, error)\\n    Close() error\\n}\\n// 数据库配置结构体\\ntype DBConfig struct {\\n    Host     string\\n    Port     int\\n    Username string\\n    Password string\\n    Database string\\",
+      "error": "",
+      "matched_keywords": [
+        "重构",
+        "接口",
+        "Go",
+        "抽象"
+      ]
+    },
+    {
+      "test_id": "RF005",
+      "test_name": "Python策略模式重构",
+      "category": "代码重构",
+      "success": true,
+      "duration_ms": 6761,
+      "response_preview": "{\"refactored_code\": \"from typing import Union\\nfrom dataclasses import dataclass\\n@dataclass(frozen=True)\\nclass ShippingRate:\\n    \\\"\\\"\\\"配送费率配置\\\"\\\"\\\"\\n    multiplier: float\\nclass ShippingCalculator:\\n    \\\"\\\"\\\"配送计算器\\\"\\\"\\\"\\n    # 配送方式映射表（可配置、易扩展）\\n    RATES: dict[str, ShippingRate] = {\\n        'st",
+      "error": "",
+      "matched_keywords": [
+        "重构",
+        "Python",
+        "扩展"
+      ]
+    },
+    {
+      "test_id": "BD001",
+      "test_name": "空代码输入处理",
+      "category": "边界条件",
+      "success": true,
+      "duration_ms": 9,
+      "response_preview": "{\"detail\": \"代码内容不能为空\"}",
+      "error": "",
+      "matched_keywords": [
+        "空",
+        "不能为空"
+      ]
+    },
+    {
+      "test_id": "BD002",
+      "test_name": "超长代码输入处理",
+      "category": "边界条件",
+      "success": true,
+      "duration_ms": 4730,
+      "response_preview": "{\"review\": \"\", \"issues\": [], \"suggestions\": [\"**提供有效代码**: 请提供需要审查的真实 Python 代码，而不是占位符文本\", \"**代码示例**:\"], \"score\": 0, \"context_used\": {\"diagnostics\": {\"errors\": [], \"warnings\": [], \"raw\": {}}, \"symbol\": {}, \"git_diff\": {\"diff\": \"\"}, \"file_content\": {}}, \"prompt_generated\": \"你是一个资深的代码审查专家，擅长发现代码中的问题和改进",
+      "error": "",
+      "matched_keywords": [
+        "review",
+        "建议",
+        "代码"
+      ]
+    },
+    {
+      "test_id": "BD003",
+      "test_name": "特殊字符代码处理",
+      "category": "边界条件",
+      "success": true,
+      "duration_ms": 6698,
+      "response_preview": "{\"review\": \"\", \"issues\": [\"**编码问题**：注释中包含多种特殊字符和 emoji（🚀 🎉 ✅ ❌），可能导致某些编辑器或终端显示异常，建议确认文件编码为 UTF-8\", \"**缺少文档字符串**：函数缺少 docstring，建议添加说明函数功能\", \"**魔法字符串未定义**：返回字符串中的 `\\\\n\\\\t\\\\r` 可考虑使用常量或更清晰的表达\"], \"suggestions\": [\"添加 `# -*- coding: utf-8 -*-` 显式声明编码\", \"增加函数文档字符串，提高可读性\", \"使用 f-string 提高代码可维护性\"], \"score\": ",
+      "error": "",
+      "matched_keywords": [
+        "review",
+        "建议",
+        "代码"
+      ]
+    },
+    {
+      "test_id": "BD004",
+      "test_name": "深度嵌套代码处理",
+      "category": "边界条件",
+      "success": true,
+      "duration_ms": 31361,
+      "response_preview": "{\"review\": \"\", \"issues\": [\"**多层嵌套的if语句** - 代码有5层嵌套，可读性差\", \"**魔法字符串** - 硬编码的字符串没有提取为常量\", \"**字典访问不安全** - `sub['id']` 使用直接访问可能抛出KeyError\", \"**缺少类型注解** - 函数没有类型提示\", \"**缺少文档字符串** - 没有说明函数功能\", \"**没有错误处理** - 对None值和异常情况缺少处理\", \"**可以优化为列表推导式** - 更Pythonic\"], \"suggestions\": [\"使用列表推导式重构代码\", \"提取常量定义\", \"添加类型注解\",",
+      "error": "",
+      "matched_keywords": [
+        "review",
+        "嵌套",
+        "重构"
+      ]
+    },
+    {
+      "test_id": "BD005",
+      "test_name": "多语言代码检测",
+      "category": "边界条件",
+      "success": true,
+      "duration_ms": 16428,
+      "response_preview": "{\"review\": \"\", \"issues\": [\"语法混用错误\", \"未定义的变量\", \"可能的运行时错误\", \"**语法混用错误** ❌\", \"**未定义变量** ❌\", \"**逻辑冗余** ⚠️\"], \"suggestions\": [], \"score\": 0, \"context_used\": {\"diagnostics\": {\"errors\": [], \"warnings\": [], \"raw\": {}}, \"symbol\": {}, \"git_diff\": {\"diff\": \"\"}, \"file_content\": {}}, \"prompt_generated\": \"你是一个资深的",
+      "error": "",
+      "matched_keywords": [
+        "review",
+        "错误",
+        "语法",
+        "问题"
+      ]
+    },
+    {
+      "test_id": "WF001",
+      "test_name": "知识构建工作流",
+      "category": "集成工作流",
+      "success": true,
+      "duration_ms": 26,
+      "response_preview": "{\"statistics\": {\"total_entities\": 482, \"total_relations\": 329, \"entity_types\": {\"document\": 77, \"component\": 9, \"config\": 172, \"api\": 209, \"feature\": 10, \"concept\": 5}, \"relation_types\": {\"documents\": 320, \"depends_on\": 3, \"communicates_with\": 1, \"configures\": 1, \"uses\": 4}, \"created_at\": \"2026-06-0",
+      "error": "",
+      "matched_keywords": [
+        "statistics",
+        "entities_extracted",
+        "relations_extracted"
+      ]
+    },
+    {
+      "test_id": "WF002",
+      "test_name": "文本翻译工作流",
+      "category": "集成工作流",
+      "success": true,
+      "duration_ms": 2278,
+      "response_preview": "{\"original\": \"OpenCopilot is an AI-powered coding assistant that helps developers write better code.\", \"processed\": \"<think>用户拖拽了一段文本，要求翻译成中文。这是一段关于 OpenCopilot 的介绍文本，是英语翻译成中文的请求。\\n\\n内容本身是简单的英语，我直接翻译即可。</think>\\n\\n\\n\\nOpenCopilot 是一款由 AI 驱动的编程助手，旨在帮助开发者编写更高质量的代码。\", \"action\": \"translate\"}",
+      "error": "",
+      "matched_keywords": [
+        "翻译",
+        "助手",
+        "代码",
+        "AI"
+      ]
+    },
+    {
+      "test_id": "WF003",
+      "test_name": "文本转表格工作流",
+      "category": "集成工作流",
+      "success": true,
+      "duration_ms": 15,
+      "response_preview": "{\"content\": \"| 姓名 | 年龄 | 城市 | 职业   |\\n| -- | -- | -- | ---- |\\n| 张三 | 25 | 北京 | 工程师  |\\n| 李四 | 30 | 上海 | 设计师  |\\n| 王五 | 28 | 广州 | 产品经理 |\", \"format\": \"markdown\", \"rows\": 4, \"columns\": 4}",
+      "error": "",
+      "matched_keywords": [
+        "姓名",
+        "张三",
+        "markdown"
+      ]
+    },
+    {
+      "test_id": "WF004",
+      "test_name": "内容质量评价工作流",
+      "category": "集成工作流",
+      "success": true,
+      "duration_ms": 19,
+      "response_preview": "{\"score\": 4.408333333333333, \"level\": \"良好\", \"summary\": \"## 自动模式评价结果\\n\\n**总分**: 4.4/5.0 (良好)\\n\\n### 各维度得分\\n\\n- ✅ **类型判断准确性**: 4.5/5.0 - 输出过长，可能过度解释\\n- ✅ **响应恰当性**: 5.0/5.0 - 响应恰当\\n- ✅ **输出质量**: 5.0/5.0 - 输出质量良好\\n- ✅ **输出长度控制**: 5.0/5.0 - 输出长度合理\\n- ✅ **错误处理能力**: 4.0/5.0 - 空输入时未给出适当提示\\n- ✅ **多次调用一致性**:",
+      "error": "",
+      "matched_keywords": [
+        "评价",
+        "质量"
+      ]
+    },
+    {
+      "test_id": "WF005",
+      "test_name": "人设列表查询工作流",
+      "category": "集成工作流",
+      "success": true,
+      "duration_ms": 13,
+      "response_preview": "{\"personas\": [\"code\", \"custom\", \"default\", \"office/academic/paper\", \"office/business/email\", \"office/business/presentation\", \"office/business/report\", \"office/technical/documentation\", \"polish\", \"revision\", \"translate\", \"translation/technical\"], \"built_in\": [\"code\", \"custom\", \"default\", \"polish\", \"r",
+      "error": "",
+      "matched_keywords": [
+        "persona"
+      ]
+    },
+    {
+      "test_id": "SK001",
+      "test_name": "代码复杂度分析",
+      "category": "技能测试",
+      "success": true,
+      "duration_ms": 29407,
+      "response_preview": "{\"analysis\": \"```\\nmerge_sort(arr)     # 主递归函数\\n├── len(arr) <= 1   # 递归终止条件 ✓\\n├── arr[:mid]       # 左半部分切片\\n├── arr[mid:]       # 右半部分切片  \\n├── merge_sort()    # 递归调用 ✓\\n└── merge()         # 合并操作\\nmerge(left, right)  # 合并函数\\n├── 双指针遍历      ✓\\n├── 结果追加       ✓\\n└── 剩余元素拼接    ✓\\n```\\n---\\n\", \"issue",
+      "error": "",
+      "matched_keywords": [
+        "分析"
+      ]
+    },
+    {
+      "test_id": "SK002",
+      "test_name": "知识实体搜索",
+      "category": "技能测试",
+      "success": true,
+      "duration_ms": 197,
+      "response_preview": "{\"query\": \"Python\", \"entity_type\": \"concept\", \"count\": 1, \"entities\": [{\"id\": \"entity_0\", \"name\": \"Python\", \"entity_type\": \"concept\", \"description\": \"关键词: Python\", \"properties\": {\"source\": \"test_document\"}, \"source_documents\": [], \"created_at\": \"2026-06-01T13:27:11.887189\", \"updated_at\": \"2026-06-01",
+      "error": "",
+      "matched_keywords": [
+        "entity",
+        "Python"
+      ]
+    },
+    {
+      "test_id": "SK003",
+      "test_name": "目录文件列表",
+      "category": "技能测试",
+      "success": true,
+      "duration_ms": 14,
+      "response_preview": "{\"directory\": \".\", \"items\": [{\"name\": \"Office_Prompt_Library_Design.md\", \"path\": \"./Office_Prompt_Library_Design.md\", \"is_dir\": false, \"size\": 19570}, {\"name\": \"OpenCopilot_ThreeLayer_Memory_Design.md\", \"path\": \"./OpenCopilot_ThreeLayer_Memory_Design.md\", \"is_dir\": false, \"size\": 212837}, {\"name\": \"",
+      "error": "",
+      "matched_keywords": [
+        "files"
+      ]
+    },
+    {
+      "test_id": "SK004",
+      "test_name": "内容评分测试",
+      "category": "技能测试",
+      "success": true,
+      "duration_ms": 18,
+      "response_preview": "{\"score\": 4.408333333333333, \"level\": \"良好\", \"summary\": \"## 自动模式评价结果\\n\\n**总分**: 4.4/5.0 (良好)\\n\\n### 各维度得分\\n\\n- ✅ **类型判断准确性**: 4.5/5.0 - 输出过长，可能过度解释\\n- ✅ **响应恰当性**: 5.0/5.0 - 响应恰当\\n- ✅ **输出质量**: 5.0/5.0 - 输出质量良好\\n- ✅ **输出长度控制**: 5.0/5.0 - 输出长度合理\\n- ✅ **错误处理能力**: 4.0/5.0 - 空输入时未给出适当提示\\n- ✅ **多次调用一致性**:",
+      "error": "",
+      "matched_keywords": [
+        "score",
+        "评分"
+      ]
+    },
+    {
+      "test_id": "SK005",
+      "test_name": "Markdown转Word",
+      "category": "技能测试",
+      "success": true,
+      "duration_ms": 33,
+      "response_preview": "{\"content\": \"测试文档\\n第一章\\n这是测试内容。\\n要点1\\n要点2\", \"format\": \"docx\", \"paragraphs\": 5}",
+      "error": "",
+      "matched_keywords": [
+        "docx"
+      ]
+    },
+    {
+      "test_id": "PF001",
+      "test_name": "API并发性能测试",
+      "category": "性能测试",
+      "success": true,
+      "duration_ms": 11,
+      "response_preview": "{\"status\": \"healthy\", \"version\": \"1.0.0\", \"uptime\": 1.313835}",
+      "error": "",
+      "matched_keywords": [
+        "status",
+        "healthy"
+      ]
+    },
+    {
+      "test_id": "PF002",
+      "test_name": "大文本处理性能",
+      "category": "性能测试",
+      "success": true,
+      "duration_ms": 14244,
+      "response_preview": "{\"review\": \"\", \"issues\": [\"**代码重复严重 (Critical)**\", \"**代码被截断**\", \"**可维护性极差**\", \"**没有使用 Pythonic 的设计模式**\", \"**命名不规范**\"], \"suggestions\": [], \"score\": 0, \"context_used\": {\"diagnostics\": {\"errors\": [], \"warnings\": [], \"raw\": {}}, \"symbol\": {}, \"git_diff\": {\"diff\": \"\"}, \"file_content\": {}}, \"prompt_genera",
+      "error": "",
+      "matched_keywords": [
+        "review",
+        "建议",
+        "代码"
+      ]
+    }
+  ]
+}

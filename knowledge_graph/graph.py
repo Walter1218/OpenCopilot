@@ -51,11 +51,18 @@ class GraphManager:
         Returns:
             知识图谱
         """
-        # 如果图谱文件存在且不强制重建，直接加载
+        # 如果图谱文件存在且不强制重建，尝试加载
         if self.graph_file.exists() and not force_rebuild:
-            logger.info(f"加载现有知识图谱: {self.graph_file}")
-            self.knowledge_graph = KnowledgeGraph.load_from_file(str(self.graph_file))
-            return self.knowledge_graph
+            try:
+                # 检查文件是否为空
+                if self.graph_file.stat().st_size > 0:
+                    logger.info(f"加载现有知识图谱: {self.graph_file}")
+                    self.knowledge_graph = KnowledgeGraph.load_from_file(str(self.graph_file))
+                    return self.knowledge_graph
+                else:
+                    logger.warning(f"知识图谱文件为空，将重新构建: {self.graph_file}")
+            except Exception as e:
+                logger.warning(f"加载知识图谱失败，将重新构建: {e}")
         
         logger.info("构建新的知识图谱...")
         

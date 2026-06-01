@@ -137,7 +137,7 @@ class EvaluationSkill(BaseSkill):
         # 获取参数
         content = context.input_data.get("content")
         scene = context.input_data.get("scene", "auto")
-        input_text = context.input_data.get("input_text", "")
+        input_text = context.input_data.get("input_text") or ""
         reference = context.input_data.get("reference")
         instruction = context.input_data.get("instruction")
         full_document = context.input_data.get("full_document")

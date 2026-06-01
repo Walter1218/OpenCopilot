@@ -1,8 +1,8 @@
 # OpenCopilot 定制智能体 (Custom Agent) 开发与使用指南
 
-> **文档状态**: V2.1
-> **更新日期**: 2026-05-28
-> **状态**: P0-P2 阶段（主动感知、多模态、无感划词、Persona 工作坊）已全面完成
+> **文档状态**: V2.2
+> **更新日期**: 2026-06-01
+> **状态**: P0-P2 阶段已完成，Skill化架构全部实现
 
 ## 1. 什么是 OpenCopilot 定制智能体？
 
@@ -98,6 +98,7 @@ Agent 基于 **SQLite 本地持久化**（`asu_agent.db`）管理会话记忆，
 - IDE 选区读取 + 回写（/selection + /apply 端点）
 - 多模态视觉感知支持 (image_base64 透传)
 - 基于 WebSocket 的主动状态推送与托盘联动
+- Skill化架构全部实现（7个Skill，61个API端点，100%测试通过率）
 
 待推进（🔶）：
 - IDE Extension v2：补充 `/diagnostics`、`/git-diff` 端点

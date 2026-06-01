@@ -1,0 +1,76 @@
+{
+  "timestamp": "2026-06-01 00:46:46",
+  "summary": {
+    "total_tests": 5,
+    "passed": 5,
+    "failed": 0,
+    "pass_rate": 1.0,
+    "total_time": 55.13006591796875
+  },
+  "results": [
+    {
+      "name": "Bug修复",
+      "passed": true,
+      "duration": 7.648128032684326,
+      "details": {
+        "passed": true,
+        "duration": 7.648128032684326,
+        "analysis": "",
+        "fix_suggestion": "",
+        "confidence": 0.5
+      }
+    },
+    {
+      "name": "代码审查",
+      "passed": true,
+      "duration": 14.043919086456299,
+      "details": {
+        "passed": true,
+        "duration": 14.043919086456299,
+        "review": "",
+        "issues_count": 3,
+        "suggestions_count": 0,
+        "score": 0
+      }
+    },
+    {
+      "name": "代码解释",
+      "passed": true,
+      "duration": 4.442570924758911,
+      "details": {
+        "passed": true,
+        "duration": 4.442570924758911,
+        "explanation": "计算斐波那契数列第 n 项的值。斐波那契数列的规律是：每个数等于前两个数之和（如 0, 1, 1, 2, 3, 5, 8...）\n---\n### 工作原理\n1. **递归基准**：当 `n <= 1` 时，直接返回 n（n=0 返回 0，n=1 返回 1）\n2. **递归调用**：对于更大的 n，返回 `fibonacci(n-1) + fibonacci(n-2)`，即前两项之和\n---\n"
+      }
+    },
+    {
+      "name": "代码重构",
+      "passed": true,
+      "duration": 5.957261085510254,
+      "details": {
+        "passed": true,
+        "duration": 5.957261085510254,
+        "refactored_code": "from typing import Optional, Dict, Any\ndef get_user_info(user_id: int) -> Optional[Dict[str, Any]]:\n    \"\"\"\n    根据用户ID获取用户信息\n    Args:\n        user_id: 用户ID\n    Returns:\n        包含用户信息的字典，如果用户不存在则返回 None\n    \"\"\"\n    sql = \"SELECT name, email, age FROM users WHERE id = %s\"\n    result = execute_sql(sql, (user_id,))\n    if not result:\n        return None\n    row = result[0]\n    return {\n        \"name\": row[\"name\"],\n        \"email\": row[\"email\"],\n        \"age\": row[\"age\"]\n    }",
+        "changes_count": 0,
+        "explanation": "| 问题 | 解决方案 | 原因 |\n|------|----------|------|\n| SQL 注入 | 使用参数化查询 `(user_id,)` | 防止恶意 SQL 代码注入攻击 |\n| 列索引硬编码 | 使用字典键访问 `row[\"name\"]` | 增强可读性，表结构变化时代码不易出错 |\n| SELECT * | 明确指定 `name, email, age` | 只查询需要的字段，减少数据传输量 |\n| 缺少类型注解 | 添加参数和返回值类型 | 提高代码可读性和 IDE 支持 |\n| 缺少文档 | 添加 docstring | 明确函数用途和参数说明 |\n> **注意**：如果 `execute_sql` 使用 `?` 作为占位符（如 SQLite），请将 `%s` 改为 `?`。\n"
+      }
+    },
+    {
+      "name": "代码分析",
+      "passed": true,
+      "duration": 23.037853002548218,
+      "details": {
+        "passed": true,
+        "duration": 23.037853002548218,
+        "analysis": "- 这是一个数据处理类 DataProcessor\n- 包含4个方法：__init__, load_data, process, _transform\n- 使用了实例变量 data, cache\n```\nDataProcessor 类\n├── __init__()          # 初始化 data 和 cache\n├── load_data()         # 从文件加载 JSON 数据\n├── process()           # 处理数据（带缓存逻辑）\n└── _transform()        # 转换单个 item\n```\n- 类结构清晰，方法职责较单一\n- 使用了实例变量 `self.data`, `self.cache`\n- 体现了简单的缓存模式（避免重复处理）\n---\n",
+        "issues_count": 0,
+        "suggestions_count": 0
+      }
+    }
+  ],
+  "performance": {
+    "avg_duration": 11.025946426391602,
+    "max_duration": 23.037853002548218,
+    "min_duration": 4.442570924758911
+  }
+}

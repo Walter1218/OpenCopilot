@@ -1,0 +1,117 @@
+{
+  "timestamp": "2026-06-01T00:11:21.120732",
+  "summary": {
+    "total_intents": 48,
+    "covered_intents": 48,
+    "uncovered_intents": 0,
+    "coverage_rate": 1.0
+  },
+  "skill_coverage": {
+    "knowledge_skill": {
+      "total": 7,
+      "covered": 7,
+      "uncovered": [],
+      "coverage_rate": 1.0
+    },
+    "coding_skill": {
+      "total": 7,
+      "covered": 7,
+      "uncovered": [],
+      "coverage_rate": 1.0
+    },
+    "ppt_skill": {
+      "total": 8,
+      "covered": 8,
+      "uncovered": [],
+      "coverage_rate": 1.0
+    },
+    "evaluation_skill": {
+      "total": 5,
+      "covered": 5,
+      "uncovered": [],
+      "coverage_rate": 1.0
+    },
+    "file_skill": {
+      "total": 8,
+      "covered": 8,
+      "uncovered": [],
+      "coverage_rate": 1.0
+    },
+    "format_skill": {
+      "total": 6,
+      "covered": 6,
+      "uncovered": [],
+      "coverage_rate": 1.0
+    },
+    "persona_skill": {
+      "total": 7,
+      "covered": 7,
+      "uncovered": [],
+      "coverage_rate": 1.0
+    }
+  },
+  "uncovered_intents": [],
+  "existing_endpoints": [
+    "GET /",
+    "GET /api/chat/{session_id}/history",
+    "GET /api/config",
+    "GET /api/internal/self-check",
+    "GET /api/knowledge/statistics",
+    "GET /api/ppt/chat/{session_id}/history",
+    "GET /api/system/clipboard",
+    "GET /api/system/frontmost-app",
+    "GET /api/system/screenshot",
+    "GET /api/system/selection",
+    "GET /api/system/status",
+    "GET /health",
+    "POST /api/batch/process",
+    "POST /api/chat",
+    "POST /api/chat/stream",
+    "POST /api/coding/analyze",
+    "POST /api/coding/bug-fix",
+    "POST /api/coding/enhance-api",
+    "POST /api/coding/explain",
+    "POST /api/coding/refactor",
+    "POST /api/coding/review",
+    "POST /api/config",
+    "POST /api/config/scan-models",
+    "POST /api/content/analyze",
+    "POST /api/content/convert",
+    "POST /api/evaluation/evaluate",
+    "POST /api/evaluation/quality-check",
+    "POST /api/evaluation/score",
+    "POST /api/file/convert",
+    "POST /api/file/delete",
+    "POST /api/file/list",
+    "POST /api/file/read",
+    "POST /api/file/write",
+    "POST /api/format/md-to-docx",
+    "POST /api/format/md-to-pptx",
+    "POST /api/format/text-to-table",
+    "POST /api/internal/benchmark",
+    "POST /api/internal/test",
+    "POST /api/internal/verify",
+    "POST /api/knowledge/build",
+    "POST /api/knowledge/export",
+    "POST /api/knowledge/find-path",
+    "POST /api/knowledge/find-related",
+    "POST /api/knowledge/query",
+    "POST /api/knowledge/search-entity",
+    "POST /api/persona/delete",
+    "POST /api/persona/get",
+    "POST /api/persona/list",
+    "POST /api/persona/save",
+    "POST /api/ppt/analyze",
+    "POST /api/ppt/chat",
+    "POST /api/ppt/check",
+    "POST /api/ppt/cocreation",
+    "POST /api/ppt/extract-from-text",
+    "POST /api/ppt/generate",
+    "POST /api/ppt/generate-and-download",
+    "POST /api/ppt/suggest",
+    "POST /api/text/explain",
+    "POST /api/text/polish",
+    "POST /api/text/process",
+    "POST /api/text/translate"
+  ]
+}

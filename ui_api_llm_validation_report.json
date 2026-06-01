@@ -1,0 +1,157 @@
+{
+  "test_name": "UI入口与API LLM完整能力验证测试",
+  "test_time": "2026-06-01T10:41:01.853533",
+  "api_base_url": "http://localhost:8088",
+  "summary": {
+    "total": 18,
+    "passed": 18,
+    "failed": 0,
+    "pass_rate": "100.0%"
+  },
+  "test_results": [
+    {
+      "test_name": "API健康检查",
+      "category": "基础功能",
+      "success": true,
+      "duration_ms": 6,
+      "error": null,
+      "response_preview": "{'status': 'healthy', 'version': '1.0.0', 'uptime': 37.883919}"
+    },
+    {
+      "test_name": "系统状态API测试",
+      "category": "基础功能",
+      "success": true,
+      "duration_ms": 691,
+      "error": null,
+      "response_preview": "{'agent_online': True, 'broker_online': True, 'ide_connected': False, 'browser_connected': False, 'active_sessions': 0}"
+    },
+    {
+      "test_name": "自检API测试",
+      "category": "基础功能",
+      "success": true,
+      "duration_ms": 22,
+      "error": null,
+      "response_preview": "{'status': 'healthy', 'modules': {'content_analyzer': {'status': 'ok', 'version': '1.0.0', 'last_check': '2026-06-01T10:40:37.372095'}, 'suggestion_engine': {'status': 'ok', 'version': '1.0.0', 'last_"
+    },
+    {
+      "test_name": "技能列表查询",
+      "category": "技能面板",
+      "success": true,
+      "duration_ms": 3516,
+      "error": null,
+      "response_preview": "<think>用户想要列出所有可用的技能（Skill）。根据系统提示，我有以下Skill可以使用：\n\n- KnowledgeSkill：知识图谱查询与管理\n- CodingSkill：代码生成、修复、审查\n- PPTSkill：PPT创作与优化\n- EvaluationSkill：内容质量评估\n- FileSkill：文件操作与管理\n- FormatSkill：格式转换与处理\n- PersonaS"
+    },
+    {
+      "test_name": "KnowledgeSkill API测试",
+      "category": "技能面板-知识",
+      "success": true,
+      "duration_ms": 13,
+      "error": null,
+      "response_preview": "{'query': 'Python编程语言', 'entity_type': None, 'count': 0, 'entities': []}"
+    },
+    {
+      "test_name": "知识构建API测试",
+      "category": "技能面板-知识",
+      "success": true,
+      "duration_ms": 12,
+      "error": null,
+      "response_preview": "{'statistics': {'total_entities': 0, 'total_relations': 0, 'entity_types': {}, 'relation_types': {}, 'created_at': '2026-05-31T23:51:09.290848', 'updated_at': '2026-05-31T23:51:09.290849'}, 'force_reb"
+    },
+    {
+      "test_name": "FormatSkill API测试",
+      "category": "技能面板-格式",
+      "success": true,
+      "duration_ms": 12,
+      "error": null,
+      "response_preview": "{'content': '| 姓名 | 年龄 | 城市 |\\n| -- | -- | -- |\\n| 张三 | 25 | 北京 |\\n| 李四 | 30 | 上海 |\\n| 王五 | 28 | 广州 |', 'format': 'markdown', 'rows': 4, 'columns': 3}"
+    },
+    {
+      "test_name": "PersonaSkill API测试",
+      "category": "技能面板-人设",
+      "success": true,
+      "duration_ms": 15,
+      "error": null,
+      "response_preview": "{'personas': ['code', 'custom', 'default', 'office/academic/paper', 'office/business/email', 'office/business/presentation', 'office/business/report', 'office/technical/documentation', 'polish', 'revi"
+    },
+    {
+      "test_name": "EvaluationSkill API测试",
+      "category": "技能面板-评价",
+      "success": true,
+      "duration_ms": 14,
+      "error": null,
+      "response_preview": "{'score': 4.408333333333333, 'level': '良好', 'summary': '## 自动模式评价结果\\n\\n**总分**: 4.4/5.0 (良好)\\n\\n### 各维度得分\\n\\n- ✅ **类型判断准确性**: 4.5/5.0 - 输出过长，可能过度解释\\n- ✅ **响应恰当性**: 5.0/5.0 - 响应恰当\\n- ✅ **输出质量**: 5.0/5.0"
+    },
+    {
+      "test_name": "CodingSkill API测试",
+      "category": "右键菜单-代码",
+      "success": true,
+      "duration_ms": 96,
+      "error": null,
+      "response_preview": "{'review': '', 'issues': ['代码风格问题', '潜在的性能问题'], 'suggestions': ['添加类型注解', '优化循环结构'], 'score': 7, 'context_used': {'diagnostics': {'errors': [], 'warnings': [], 'raw': {}}, 'symbol': {}, 'git_diff': {'"
+    },
+    {
+      "test_name": "Bug修复API测试",
+      "category": "右键菜单-代码",
+      "success": true,
+      "duration_ms": 23,
+      "error": null,
+      "response_preview": "{'analysis': '', 'fix_suggestion': '', 'explanation': '', 'context_used': {'diagnostics': {'errors': [], 'warnings': [], 'raw': {}}, 'symbol': {}, 'git_diff': {'diff': ''}, 'file_content': {}}, 'promp"
+    },
+    {
+      "test_name": "代码解释API测试",
+      "category": "右键菜单-代码",
+      "success": true,
+      "duration_ms": 9,
+      "error": null,
+      "response_preview": "{'explanation': '这段代码实现了一个功能。\\n### 工作原理\\n通过特定的算法实现。\\n', 'key_points': [], 'prompt_generated': '你是一个代码解释专家，擅长用简洁清晰的语言解释复杂代码。\\n\\n## 待解释代码\\n```python\\n\\nclass SingletonMeta(type):\\n    _instances = {}\\n "
+    },
+    {
+      "test_name": "代码重构API测试",
+      "category": "右键菜单-代码",
+      "success": true,
+      "duration_ms": 36,
+      "error": null,
+      "response_preview": "{'refactored_code': '# 重构后的代码\\ndef improved_function():\\n    return True', 'changes': [], 'explanation': '重构提高了代码的可读性和性能。\\n', 'context_used': {'diagnostics': {'errors': [], 'warnings': [], 'raw': {}},"
+    },
+    {
+      "test_name": "FileSkill API测试",
+      "category": "右键菜单-文件",
+      "success": true,
+      "duration_ms": 17,
+      "error": null,
+      "response_preview": "{'directory': '.', 'items': [{'name': 'Office_Prompt_Library_Design.md', 'path': './Office_Prompt_Library_Design.md', 'is_dir': False, 'size': 19570}, {'name': 'test_cocreation_dialog.py', 'path': './"
+    },
+    {
+      "test_name": "文本处理API测试",
+      "category": "快捷按钮",
+      "success": true,
+      "duration_ms": 4800,
+      "error": null,
+      "response_preview": "{'original': 'Hello, how are you?', 'processed': '<think>用户通过拖拽方式提交了一段文本，内容是英文：\"Hello, how are you?\"\\n\\n根据指示，我需要对这段文本进行处理。这是一句简单的英文问候语，需要翻译成中文。\\n\\n我应该直接输出翻译结果，不需要说多余的客套话。\\n</think>\\n\\n你好，你好吗？', 'actio"
+    },
+    {
+      "test_name": "文本润色API测试",
+      "category": "快捷按钮",
+      "success": true,
+      "duration_ms": 3419,
+      "error": null,
+      "response_preview": "{'original': '这个代码写的不好，需要改进一下', 'processed': '<think>用户通过拖拽提交了一段文本：\"这个代码写的不好，需要改进一下\"\\n\\n这是一段普通文本，需要进行润色，使其更加专业和流畅。\\n\\n原文本比较口语化，直译可以是：\\n\"This code is poorly written and needs improvement\"\\n\\n润色后的专业表达可以"
+    },
+    {
+      "test_name": "对话API测试",
+      "category": "连续对话",
+      "success": true,
+      "duration_ms": 4447,
+      "error": null,
+      "response_preview": "{'session_id': 'cc3efdfd-ba11-4191-8303-2effacf1a175', 'response': '<think>用户通过拖拽提交了一段文本，内容是：\"你好，请介绍一下OpenCopilot的功能。\"\\n\\n这是一段普通的文本请求，用户想要了解OpenCopilot这个工具的功能介绍。\\n\\n作为AI划词助手，我应该：\\n1. 总结或解释这段文本的内容\\n2. "
+    },
+    {
+      "test_name": "PPT生成API测试",
+      "category": "PPT助手",
+      "success": true,
+      "duration_ms": 25,
+      "error": null,
+      "response_preview": "{'file_path': '/var/folders/jz/64nl4nbx77sdrzyltxdkh6s00000gn/T/test_api.pptx', 'file_size': 29929, 'slide_count': 2}"
+    }
+  ]
+}

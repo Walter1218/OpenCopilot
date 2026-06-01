@@ -40,6 +40,21 @@ from widgets.batch_dialog import BatchDialog
 from widgets.terminology_dialog import TerminologyDialog
 from widgets.translation_memory import TranslationMemory
 
+# 新增：导入技能面板组件
+from widgets.skill_panel import SkillPanel, SkillSearchWidget, SkillCommandParser
+from widgets.skill_context_menu import SkillContextMenu, SkillCommandWidget
+from widgets.skill_search_dialog import SkillSearchDialog, SkillQuickAccessWidget
+
+# 导入 Skill 架构
+from skill_architecture import SkillRegistry, SkillContext, IntentRouter, SkillExecutor
+from skill_architecture.coding_skill import CodingSkill
+from skill_architecture.knowledge_skill import KnowledgeSkill
+from skill_architecture.ppt_skill import PPTSkill
+from skill_architecture.evaluation_skill import EvaluationSkill
+from skill_architecture.file_skill import FileSkill
+from skill_architecture.format_skill import FormatSkill
+from skill_architecture.persona_skill import PersonaSkill
+
 
 def check_accessibility_permission():
     """检测 macOS 辅助功能权限，未授权则弹出提示并尝试打开系统设置。"""
@@ -740,6 +755,11 @@ class AICardWindow(QWidget):
         self.progress_widget = ProgressWidget()
         self.multi_step_progress = MultiStepProgressWidget()
         
+        # 初始化 Skill 架构
+        self.skill_registry = SkillRegistry()
+        self.skill_executor = SkillExecutor()
+        self._init_skills()
+        
         self.current_active_app = ""
         self.current_bundle_id = ""
         self.recent_apps = []  # 记录最近激活的应用历史
@@ -762,6 +782,31 @@ class AICardWindow(QWidget):
         
         # 为了调试方便，在 UI 终端打印出系统焦点切换事件
         print(f"[UI 接收] 系统焦点已切换至: {app_name} ({bundle_id}) | 最近使用: {self.recent_apps}")
+    
+    def _init_skills(self):
+        """初始化所有 Skill"""
+        try:
+            # 注册所有 Skill
+            skills = [
+                CodingSkill(),
+                KnowledgeSkill(),
+                PPTSkill(),
+                EvaluationSkill(),
+                FileSkill(),
+                FormatSkill(),
+                PersonaSkill()
+            ]
+            
+            for skill in skills:
+                self.skill_registry.register(skill)
+                print(f"[Skill 注册] {skill.metadata.display_name}")
+            
+            print(f"[Skill 注册完成] 共注册 {len(skills)} 个技能")
+            
+        except Exception as e:
+            print(f"[Skill 注册失败] {e}")
+            import traceback
+            traceback.print_exc()
 
     def initUI(self):
         # 无边框、置顶
@@ -1336,10 +1381,63 @@ class AICardWindow(QWidget):
         ppt_layout.addStretch()
         
         self.tabs.addTab(self.tab_ppt_assistant, "🎯 PPT 助手")
+        
+        # ==========================
+        # Tab 4: 技能中心
+        # ==========================
+        self.tab_skill_center = QWidget()
+        skill_center_layout = QVBoxLayout(self.tab_skill_center)
+        skill_center_layout.setContentsMargins(0, 10, 0, 0)
+        
+        # 技能面板
+        self.skill_panel = SkillPanel(self.skill_registry)
+        self.skill_panel.skill_execute.connect(self._on_skill_execute)
+        skill_center_layout.addWidget(self.skill_panel)
+        
+        self.tabs.addTab(self.tab_skill_center, "⚡ 技能中心")
+        
         self.tabs.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
         # 确保切换 Tab 时重置焦点
         self.tabs.currentChanged.connect(self._on_tab_changed)
+        
+        # 初始化技能搜索对话框
+        self.skill_search_dialog = SkillSearchDialog(self.skill_registry)
+        self.skill_search_dialog.skill_execute.connect(self._on_skill_execute)
+        
+        # 初始化技能命令解析器
+        self.skill_command_parser = SkillCommandParser(self.skill_registry)
+        
+        # 设置快捷键
+        self._setup_shortcuts()
+
+    def _setup_shortcuts(self):
+        """设置快捷键"""
+        from PyQt6.QtGui import QShortcut, QKeySequence
+        
+        # Ctrl+K 打开技能搜索
+        search_shortcut = QShortcut(QKeySequence("Ctrl+K"), self)
+        search_shortcut.activated.connect(self._show_skill_search)
+        
+        # Ctrl+/ 打开技能命令输入
+        command_shortcut = QShortcut(QKeySequence("Ctrl+/"), self)
+        command_shortcut.activated.connect(self._show_skill_command)
+        
+        # Ctrl+Shift+S 切换到技能中心
+        skill_center_shortcut = QShortcut(QKeySequence("Ctrl+Shift+S"), self)
+        skill_center_shortcut.activated.connect(lambda: self.tabs.setCurrentWidget(self.tab_skill_center))
+    
+    def _show_skill_search(self):
+        """显示技能搜索对话框"""
+        self.skill_search_dialog.show_dialog()
+    
+    def _show_skill_command(self):
+        """显示技能命令输入"""
+        # 切换到对话Tab并清空输入框
+        self.tabs.setCurrentIndex(1)
+        self.chat_input.clear()
+        self.chat_input.setPlaceholderText("输入 /技能名称 执行技能...")
+        self.chat_input.setFocus()
 
     def jump_to_chat(self):
         # 切换到聊天 Tab，将源文本上下文带入对话
@@ -1361,6 +1459,97 @@ class AICardWindow(QWidget):
             self.chat_input.setFocus()
         # 注意：非聊天 Tab 不调用 self.setFocus()，
         # 否则会与 WA_ShowWithoutActivating 冲突，导致 macOS 收回窗口
+    
+    def _on_skill_execute(self, skill_name: str, params: Dict[str, Any]):
+        """执行技能"""
+        try:
+            # 获取技能
+            skill = self.skill_registry.get_skill(skill_name)
+            if not skill:
+                print(f"[技能执行失败] 未找到技能: {skill_name}")
+                return
+            
+            # 创建执行上下文
+            intent = params.get("intent", "")
+            input_data = params.get("input_data", {})
+            
+            # 添加当前上下文
+            if self.current_text:
+                input_data["selected_text"] = self.current_text
+            if self.context_source:
+                input_data["context_source"] = self.context_source
+            
+            context = SkillContext(
+                intent=intent,
+                input_data=input_data
+            )
+            
+            # 执行技能
+            print(f"[技能执行] {skill_name}, 意图: {intent}")
+            
+            # 切换到对话 Tab 显示结果
+            self.tabs.setCurrentIndex(1)
+            self.chat_input.setFocus()
+            
+            # 在对话中显示执行信息
+            self.append_chat_message("系统", f"正在执行技能: {skill.metadata.display_name}...")
+            
+            # 异步执行技能
+            import asyncio
+            
+            async def execute_skill():
+                try:
+                    result = await skill.execute(context)
+                    return result
+                except Exception as e:
+                    print(f"[技能执行异常] {e}")
+                    return None
+            
+            # 在新线程中执行异步任务
+            def run_async():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                result = loop.run_until_complete(execute_skill())
+                loop.close()
+                
+                # 在主线程中更新UI
+                from PyQt6.QtCore import QMetaObject, Qt
+                
+                if result and result.success:
+                    QMetaObject.invokeMethod(
+                        self, 
+                        "_on_skill_result",
+                        Qt.ConnectionType.QueuedConnection,
+                        skill_name,
+                        result.output
+                    )
+                else:
+                    QMetaObject.invokeMethod(
+                        self,
+                        "_on_skill_error", 
+                        Qt.ConnectionType.QueuedConnection,
+                        skill_name,
+                        str(result.error) if result else "执行失败"
+                    )
+            
+            # 启动执行线程
+            import threading
+            thread = threading.Thread(target=run_async)
+            thread.daemon = True
+            thread.start()
+            
+        except Exception as e:
+            print(f"[技能执行失败] {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _on_skill_result(self, skill_name: str, result: str):
+        """技能执行结果回调"""
+        self.append_chat_message("AI", f"技能 {skill_name} 执行结果:\n{result}")
+    
+    def _on_skill_error(self, skill_name: str, error: str):
+        """技能执行错误回调"""
+        self.append_chat_message("系统", f"技能 {skill_name} 执行失败: {error}")
     
     def _launch_ppt_cocreation(self):
         """启动 PPT 共创编辑器"""
@@ -2014,6 +2203,12 @@ class AICardWindow(QWidget):
         user_text = self.chat_input.text().strip()
         if not user_text:
             return
+        
+        # 检查是否是技能命令（以/开头）
+        if user_text.startswith('/'):
+            self._handle_skill_command(user_text)
+            self.chat_input.clear()
+            return
             
         self.chat_input.clear()
         self.append_chat_message("你", user_text)
@@ -2044,6 +2239,53 @@ class AICardWindow(QWidget):
         self.chat_worker.text_updated.connect(self.on_chat_updated)
         self.chat_worker.finished_signal.connect(self.on_chat_finished)
         self.chat_worker.start()
+    
+    def _handle_skill_command(self, command: str):
+        """处理技能命令"""
+        try:
+            # 解析命令
+            result = self.skill_command_parser.parse(command)
+            
+            if result:
+                skill_name = result["skill_name"]
+                intent = result["intent"]
+                params = result["params"]
+                
+                # 显示执行信息
+                self.append_chat_message("系统", f"正在执行技能: {result['metadata'].display_name}...")
+                
+                # 构建执行参数
+                execute_params = {
+                    "intent": intent,
+                    "input_data": params
+                }
+                
+                # 执行技能
+                self._on_skill_execute(skill_name, execute_params)
+            else:
+                # 显示帮助信息
+                self._show_skill_help(command)
+                
+        except Exception as e:
+            self.append_chat_message("系统", f"命令解析失败: {e}")
+    
+    def _show_skill_help(self, command: str):
+        """显示技能帮助信息"""
+        # 获取所有可用技能
+        all_metadata = self.skill_registry.get_all_metadata()
+        
+        help_text = f"可用技能列表 (输入 /技能名称 执行):\n\n"
+        
+        for skill_name, metadata in all_metadata.items():
+            help_text += f"• /{skill_name} - {metadata.display_name}\n"
+            help_text += f"  {metadata.description[:50]}...\n\n"
+        
+        help_text += "\n示例:\n"
+        help_text += "• /coding - 执行编程技能\n"
+        help_text += "• /knowledge:query - 查询知识库\n"
+        help_text += "• /ppt:generate - 生成PPT\n"
+        
+        self.append_chat_message("系统", help_text)
 
     def append_chat_message(self, role, text, is_temp=False):
         color = "#4da6ff" if role == "你" else "#42f554" if role == "AI" else "#aaaaaa"
@@ -2091,32 +2333,45 @@ class AICardWindow(QWidget):
         self._handle_file_drop(file_path)
 
     def _show_text_context_menu(self, position):
-        """显示文本右键菜单"""
+        """显示文本右键菜单（增强版，支持Skill）"""
         selected_text = self.text_edit.textCursor().selectedText()
-        menu = TextContextMenu(self)
-        menu.selected_text = selected_text
-
-        # 添加自定义菜单项
-        menu.addSeparator()
-        action_terminology = menu.addAction("📚 术语库管理")
-        action_memory = menu.addAction("💾 翻译记忆")
-
-        action = menu.exec(self.text_edit.mapToGlobal(position))
-
-        if action:
-            if action == action_terminology:
-                self._open_terminology_dialog()
-            elif action == action_memory:
-                self._open_translation_memory_dialog()
-            else:
-                # 处理标准菜单项
-                action_id = action.data()
-                if action_id == "translate":
-                    self.trigger_ai("translate")
-                elif action_id == "polish":
-                    self.trigger_ai("polish")
-                elif action_id == "copy":
-                    QApplication.clipboard().setText(selected_text)
+        
+        # 使用增强版右键菜单
+        menu = SkillContextMenu(self.skill_registry, self)
+        menu.skill_execute.connect(self._on_skill_execute)
+        menu.action_triggered.connect(self._on_context_menu_action)
+        
+        # 显示菜单
+        menu.show_for_text(selected_text, self.text_edit.mapToGlobal(position), {
+            "source": "text_edit",
+            "context_source": self.context_source
+        })
+    
+    def _on_context_menu_action(self, action_id: str, data):
+        """右键菜单动作处理"""
+        if action_id == "copy":
+            selected_text = self.text_edit.textCursor().selectedText()
+            QApplication.clipboard().setText(selected_text)
+        elif action_id == "translate":
+            self.trigger_ai("translate")
+        elif action_id == "polish":
+            self.trigger_ai("polish")
+        elif action_id == "revise":
+            self.trigger_ai("revise")
+        elif action_id == "explain":
+            self.trigger_ai("explain")
+        elif action_id == "summarize":
+            self.trigger_ai("summarize")
+        elif action_id == "open_terminology":
+            self._open_terminology_dialog()
+        elif action_id == "open_translation_memory":
+            self._open_translation_memory_dialog()
+        elif action_id == "show_all_skills":
+            # 切换到技能中心Tab
+            self.tabs.setCurrentWidget(self.tab_skill_center)
+        elif action_id == "open_command":
+            # 打开技能搜索对话框
+            self.skill_search_dialog.show_dialog()
 
     def _open_terminology_dialog(self):
         """打开术语库管理对话框"""

@@ -7,6 +7,20 @@ import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from llm_provider import MiniMaxProvider, LocalProvider, load_config
 
+# 导入记忆系统改进模块
+from memory_system.config import ConfigManager, MemoryType
+from memory_system.quota_manager import QuotaManager
+
+# 导入统一 Prompt 构建服务
+from prompt_builder import (
+    CONTEXT_DESCRIPTIONS,
+    CONTEXT_SOURCE_PRIORITY,
+    PERSONA_CONFLICT_PATTERNS,
+    build_context_prefix,
+    sanitize_persona_for_context,
+    load_persona,
+)
+
 
 # ==========================================
 # Context Window 管理（P0）
@@ -15,12 +29,59 @@ from llm_provider import MiniMaxProvider, LocalProvider, load_config
 class ContextWindowManager:
     """基于预算的上下文窗口管理器（字符预算近似 token 预算）。"""
 
-    def __init__(self, max_input_chars=24000, reserve_output_chars=6000,
-                 recent_turns=6, max_history_msg_chars=2200):
+    # 模型上下文限制映射（token 数）
+    MODEL_CONTEXT_LIMITS = {
+        "minimax-m2.7": 200000,
+        "gpt-4-turbo": 128000,
+        "gpt-4": 8192,
+        "gpt-3.5-turbo": 16385,
+        "claude-3-opus": 200000,
+        "claude-3-sonnet": 200000,
+        "claude-3-haiku": 200000,
+    }
+
+    def __init__(self, max_input_chars=120000, reserve_output_chars=30000,
+                 recent_turns=12, max_history_msg_chars=8000,
+                 model_name: str = None):
         self.max_input_chars = max_input_chars
         self.reserve_output_chars = reserve_output_chars
         self.recent_turns = recent_turns
         self.max_history_msg_chars = max_history_msg_chars
+        self.model_name = model_name
+        
+        # 添加配置管理器
+        self.config_manager = ConfigManager()
+        
+        # 如果指定了模型，动态调整配置
+        if model_name:
+            self.adjust_for_model(model_name)
+    
+    def adjust_for_model(self, model_name: str):
+        """根据模型能力动态调整配置"""
+        # 使用配置管理器获取模型限制
+        budget_config = self.config_manager.get_context_budget()
+        model_limit = budget_config.model_limits.get(model_name, 200000)
+        
+        # 将 token 限制转换为字符限制（中文约 1.5-2 token/字符）
+        # 使用保守估计：1 token ≈ 1.5 字符
+        max_chars = int(model_limit * 0.75)  # 75% 的 token 限制作为字符限制
+        
+        # 调整配置
+        self.max_input_chars = max_chars
+        self.reserve_output_chars = max_chars // 4  # 预留 25% 给输出
+        self.max_history_msg_chars = min(8000, max_chars // 15)  # 单条消息不超过总预算的 1/15
+        
+        # 根据模型能力调整轮数
+        if model_limit >= 100000:
+            self.recent_turns = 12
+        elif model_limit >= 32000:
+            self.recent_turns = 8
+        elif model_limit >= 8000:
+            self.recent_turns = 4
+        else:
+            self.recent_turns = 2
+        
+        return self
 
     def _truncate_text(self, text, limit):
         if not text or limit <= 0:
@@ -200,132 +261,18 @@ def normalize_context_envelope(req, fallback_text, fallback_source, fallback_met
     envelope["task"] = str(envelope.get("task", "") or "")
     return envelope
 
-# ==========================================
-# 上下文感知的 System Prompt 构建
-# ==========================================
-
-# 格式: "source_type": "人类可读的描述模板"
-CONTEXT_DESCRIPTIONS = {
-    "ide": (
-        "当前用户正在代码编辑器（IDE）中工作。"
-        "如果请求中包含 [diagnostics]（诊断报错）或 [git_diff]（版本变更），请重点结合这些信息来分析代码问题或代码变动。"
-        "如果请求中包含 [selection]（用户选中的文本片段）或 [content] 只是一个局部代码块，"
-        "说明用户只想修改当前聚焦的代码。此时：只输出修改后的代码片段，不要输出全文，不要输出解释。"
-        "如果没有选区，则以代码审查/架构分析的角度来理解和回应。"
-    ),
-    "browser": (
-        "当前用户正在浏览器中浏览网页。用户提供的是网页文本内容。"
-        "请以网页内容分析/信息提取的角度来理解和回应。"
-    ),
-    "drag": (
-        "用户通过拖拽的方式提交了一段文本。该文本可能来自任意应用程序。"
-    ),
-    "chat": (
-        "用户正在与ASU Copilot进行连续对话。请基于已有的对话历史进行连贯的追问回复。"
-    ),
-    "revision": (
-        "用户正在对文档进行修订。你收到两部分：[selection] 是用户选中的待修改文本，"
-        "[content] 是完整文档。请先按选中文本的要求进行修改，再扫描全文找出由于此修改而产生矛盾"
-        "或也应同步调整的位置，标记给用户。"
-    ),
-    "ppt_generator": (
-        "你现在是一个顶级的AI幻灯片策划师与结构化数据工程师。"
-        "用户的意图是根据提供的 [content]（长文本或大纲）生成一份高质量的演示文稿（PPT）。\n"
-        "你的任务是对文案进行降维提炼，并将结果严格输出为符合下列规范的 JSON 数组（不要输出任何 Markdown、不要输出任何解释说明代码，只输出 JSON）：\n"
-        "[\n"
-        "  {\n"
-        "    \"type\": \"title\", // 封面页\n"
-        "    \"layout\": \"center\", // title 页默认 center\n"
-        "    \"title\": \"主标题\",\n"
-        "    \"subtitle\": \"副标题或日期\"\n"
-        "  },\n"
-        "  {\n"
-        "    \"type\": \"content\", // 内容页\n"
-        "    \"layout\": \"text_only\", // 页面版式：text_only(纯文本), image_right(右侧配图), three_columns(三栏对比)\n"
-        "    \"title\": \"页面大标题\",\n"
-        "    \"items\": [\n"
-        "      {\"level\": 0, \"text\": \"一级要点\"},\n"
-        "      {\"level\": 1, \"text\": \"二级说明\"}\n"
-        "    ]\n"
-        "  }\n"
-        "]\n"
-        "要求：\n"
-        "1. 必须对长篇大论进行提炼压缩，不要把长段落直接塞进 PPT。\n"
-        "2. 页面不能过载，单页 items 超过 6 条时，请主动切分为新的一页（title后加'（续）'）。\n"
-        "3. 智能选择版式：如果内容适合配图说明，设置 layout 为 'image_right'；如果是多项并列对比，设置 layout 为 'three_columns'；默认使用 'text_only'。"
-    ),
-}
-
-
-def build_context_prefix(context_source, context_meta):
-    """根据上下文来源和元信息，生成注入到 system prompt 的前缀描述。"""
-    base = CONTEXT_DESCRIPTIONS.get(context_source, "")
-    parts = [base] if base else []
-
-    if context_meta:
-        file_name = context_meta.get("file_name", "")
-        language = context_meta.get("language", "")
-        app_name = context_meta.get("app_name", "")
-        task = context_meta.get("task", "")
-        revision_target = context_meta.get("revision_target", "")
-        custom_instruction = context_meta.get("custom_instruction", "")
-        source_text = context_meta.get("source_text", "")
-
-        if context_source in ("ide", "revision") and file_name:
-            detail = f"文件名：{file_name}"
-            if language:
-                detail += f"，编程语言：{language}"
-            parts.append(detail)
-        elif context_source == "browser" and app_name:
-            parts.append(f"浏览器：{app_name}")
-
-        # 全局系统焦点和最近使用历史（如果存在）
-        current_app = context_meta.get("current_active_app")
-        recent_apps = context_meta.get("recent_apps", [])
-        if current_app or recent_apps:
-            sys_state = "【全局系统状态】\n"
-            if current_app:
-                sys_state += f"- 当前用户正在使用的前台软件是: {current_app}\n"
-            if recent_apps:
-                sys_state += f"- 用户最近切换过的软件历史: {', '.join(recent_apps)}\n"
-            sys_state += "(如果用户询问当前在使用什么软件或开启了哪些程序，请参考上述信息回答)"
-            parts.append(sys_state)
-
-        # 任务上下文：工作台设定的任务注入到所有请求中
-        if task:
-            parts.append(f"用户当前任务：{task}。请围绕此任务目标进行回答，将分析结果与任务关联。")
-
-        # 修订模式降级：无全文时告知 Agent 仅做局部修订
-        if revision_target and context_source == "revision":
-            parts.append(f"[选择文本]（待修订内容）:\n{revision_target}")
-
-        # 自定义指令：明确告诉 Agent 用户的修改要求
-        if custom_instruction:
-            parts.append(f"[用户修改指令] {custom_instruction}\n请严格按此指令对提供的文本进行修改，只输出修改后的结果，不要输出任何解释。")
-
-        # 聊天模式中附带的源文本上下文
-        if source_text and context_source == "chat":
-            preview = source_text[:2000] + ("…" if len(source_text) > 2000 else "")
-            parts.append(f"[用户当前关注的源文本]:\n{preview}")
-
-    return "\n".join(parts)
-
-
-def load_persona(action_type):
-    """动态加载 Persona 文件，支持热更新"""
-    filepath = os.path.join(os.path.dirname(__file__), "personas", f"{action_type}.md")
-    if not os.path.exists(filepath):
-        filepath = os.path.join(os.path.dirname(__file__), "personas", "default.md")
-        if not os.path.exists(filepath):
-            return "你是一个强大的AI助手，请直接回答用户的问题。"
-    with open(filepath, "r", encoding="utf-8") as f:
-        return f.read().strip()
+# prompt_builder 模块已统一管理 CONTEXT_DESCRIPTIONS、build_context_prefix、
+# sanitize_persona_for_context、load_persona 等函数
+# 如需修改，请编辑 prompt_builder.py
 
 
 class ASUAgentMemory:
     def __init__(self, db_path="asu_agent.db"):
         self.db_path = db_path
         self._init_db()
+        # 添加配置和配额管理器
+        self.config_manager = ConfigManager()
+        self.quota_manager = QuotaManager(self.config_manager)
 
     def _get_conn(self):
         return sqlite3.connect(self.db_path)
@@ -379,6 +326,36 @@ class ASUAgentMemory:
                            (session_id, role, content, time.time()))
             cursor.execute("UPDATE sessions SET updated_at = ? WHERE session_id = ?", (time.time(), session_id))
             conn.commit()
+        
+        # 新增：检查并执行配额
+        self._check_and_enforce_quota(session_id)
+
+    def _check_and_enforce_quota(self, session_id):
+        """检查并执行配额"""
+        try:
+            # 获取当前会话的所有消息
+            ctx = self.get_context(session_id)
+            messages = ctx["messages"]
+            
+            # 按角色分类消息（简化处理，实际应按记忆类型分类）
+            user_messages = [m for m in messages if m["role"] == "user"]
+            assistant_messages = [m for m in messages if m["role"] == "assistant"]
+            
+            # 检查用户消息配额
+            user_stats = self.quota_manager.get_memory_stats(
+                [{"memory_id": f"user_{i}", "content": m["content"], "importance": 0.5, 
+                  "access_count": 1, "created_at": time.time() - 86400 * (len(user_messages) - i)} 
+                 for i, m in enumerate(user_messages)],
+                MemoryType.SHORT_TERM
+            )
+            
+            is_within_quota, reason = self.quota_manager.check_quota(MemoryType.SHORT_TERM, user_stats)
+            if not is_within_quota:
+                print(f"警告: 用户消息配额超出 - {reason}")
+                # 可以在这里实现自动清理逻辑
+        except Exception as e:
+            # 配额检查失败不应影响正常功能
+            pass
 
     def set_persona(self, session_id, persona):
         with self._get_conn() as conn:
@@ -407,13 +384,59 @@ class ASUAgentMemory:
             row = cursor.fetchone()
             return row[0] if row else 0
 
+    def cleanup_old_messages(self, session_id, days_threshold=30):
+        """清理旧消息"""
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cutoff_time = time.time() - (days_threshold * 24 * 60 * 60)
+            cursor.execute("DELETE FROM messages WHERE session_id = ? AND timestamp < ?", 
+                           (session_id, cutoff_time))
+            conn.commit()
+
+    def get_quota_usage(self, session_id):
+        """获取配额使用情况"""
+        ctx = self.get_context(session_id)
+        messages = ctx["messages"]
+        
+        # 按角色分类消息
+        user_messages = [m for m in messages if m["role"] == "user"]
+        assistant_messages = [m for m in messages if m["role"] == "assistant"]
+        
+        # 获取统计信息
+        user_stats = self.quota_manager.get_memory_stats(
+            [{"memory_id": f"user_{i}", "content": m["content"], "importance": 0.5, 
+              "access_count": 1, "created_at": time.time() - 86400 * (len(user_messages) - i)} 
+             for i, m in enumerate(user_messages)],
+            MemoryType.SHORT_TERM
+        )
+        
+        assistant_stats = self.quota_manager.get_memory_stats(
+            [{"memory_id": f"assistant_{i}", "content": m["content"], "importance": 0.6, 
+              "access_count": 2, "created_at": time.time() - 86400 * (len(assistant_messages) - i)} 
+             for i, m in enumerate(assistant_messages)],
+            MemoryType.SHORT_TERM
+        )
+        
+        return {
+            "user": {
+                "count": user_stats.count,
+                "total_chars": user_stats.total_chars,
+                "avg_importance": user_stats.avg_importance,
+            },
+            "assistant": {
+                "count": assistant_stats.count,
+                "total_chars": assistant_stats.total_chars,
+                "avg_importance": assistant_stats.avg_importance,
+            }
+        }
+
 
 memory = ASUAgentMemory()
 window_manager = ContextWindowManager(
-    max_input_chars=int(os.getenv("ASU_MAX_INPUT_CHARS", "24000")),
-    reserve_output_chars=int(os.getenv("ASU_RESERVE_OUTPUT_CHARS", "6000")),
-    recent_turns=int(os.getenv("ASU_RECENT_TURNS", "6")),
-    max_history_msg_chars=int(os.getenv("ASU_MAX_HISTORY_MSG_CHARS", "2200")),
+    max_input_chars=int(os.getenv("ASU_MAX_INPUT_CHARS", "120000")),  # MiniMax M2.7 支持 200K token，约 120K 字符
+    reserve_output_chars=int(os.getenv("ASU_RESERVE_OUTPUT_CHARS", "30000")),  # 预留 30K 字符给输出
+    recent_turns=int(os.getenv("ASU_RECENT_TURNS", "12")),  # 增加到 12 轮对话
+    max_history_msg_chars=int(os.getenv("ASU_MAX_HISTORY_MSG_CHARS", "8000")),  # 增加单条消息限制
 )
 
 def get_base_llm():
@@ -438,6 +461,27 @@ class AgentHTTPRequestHandler(BaseHTTPRequestHandler):
             resp = {
                 "status": "ok",
                 "active_sessions": memory.session_count()
+            }
+            self.wfile.write(json.dumps(resp, ensure_ascii=False).encode('utf-8'))
+        elif self.path == '/quota':
+            # 新增：配额使用情况端点
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            
+            # 获取所有会话的配额使用情况
+            quota_usage = {}
+            with memory._get_conn() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT session_id FROM sessions")
+                sessions = cursor.fetchall()
+                
+                for (session_id,) in sessions:
+                    quota_usage[session_id] = memory.get_quota_usage(session_id)
+            
+            resp = {
+                "status": "ok",
+                "quota_usage": quota_usage
             }
             self.wfile.write(json.dumps(resp, ensure_ascii=False).encode('utf-8'))
         else:
@@ -469,7 +513,11 @@ class AgentHTTPRequestHandler(BaseHTTPRequestHandler):
             persona_prompt = load_persona(current_persona)
 
             # 构建上下文前缀
-            context_prefix = build_context_prefix(envelope.get("source", "drag"), envelope.get("meta", {}))
+            context_source = envelope.get("source", "drag")
+            context_prefix = build_context_prefix(context_source, envelope.get("meta", {}))
+
+            # 根据 context_source 优先级清理 persona 中可能冲突的指令
+            persona_prompt = sanitize_persona_for_context(persona_prompt, context_source)
 
             # 将上下文前缀注入 system prompt
             if context_prefix:
@@ -477,7 +525,7 @@ class AgentHTTPRequestHandler(BaseHTTPRequestHandler):
             else:
                 enriched_system = persona_prompt
 
-            # P0: 用预算驱动的窗口管理替换“全量历史 + 全量正文”
+            # P0: 用预算驱动的窗口管理替换"全量历史 + 全量正文"
             messages = window_manager.build_messages(
                 system_prompt=enriched_system,
                 envelope=envelope,

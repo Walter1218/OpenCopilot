@@ -1,0 +1,90 @@
+{
+  "experiment_name": "状态管理模块消融实验",
+  "timestamp": 1780301138.91821,
+  "total_experiments": 4,
+  "experiments": [
+    {
+      "name": "任务管理消融实验",
+      "baseline": 0.1546468734741211,
+      "enhanced": 0.05475783348083496,
+      "improvement": 64.59169703809225,
+      "unit": "秒",
+      "details": {
+        "baseline_tasks_parsed": 100,
+        "enhanced_tasks_created": 100,
+        "baseline_code_lines": 15,
+        "enhanced_code_lines": 5,
+        "code_improvement_percent": 66.66666666666666,
+        "baseline_messages_count": 468,
+        "enhanced_api_calls": 200
+      }
+    },
+    {
+      "name": "状态跟踪消融实验",
+      "baseline": 0.015496969223022461,
+      "enhanced": 0.015166044235229492,
+      "improvement": 2.1354174679610454,
+      "unit": "秒",
+      "details": {
+        "baseline_state_parsed": true,
+        "enhanced_state_retrieved": true,
+        "baseline_features": [
+          "persona",
+          "is_active",
+          "task_count",
+          "last_update"
+        ],
+        "enhanced_features": [
+          "persona",
+          "is_active",
+          "task_count",
+          "last_update",
+          "task_count_actual",
+          "completed_task_count",
+          "created_at",
+          "updated_at"
+        ],
+        "feature_improvement_percent": 100.0,
+        "baseline_messages_count": 50,
+        "enhanced_api_calls": 50
+      }
+    },
+    {
+      "name": "查询效率消融实验",
+      "baseline": 0.25610923767089844,
+      "enhanced": 0.08838176727294922,
+      "improvement": 65.49059765406814,
+      "unit": "毫秒",
+      "details": {
+        "baseline_avg_ms": 0.25610923767089844,
+        "enhanced_avg_ms": 0.08838176727294922,
+        "baseline_std_ms": 0.016455987393004343,
+        "enhanced_std_ms": 0.007282116825157902,
+        "query_count": 10,
+        "data_size": 200
+      }
+    },
+    {
+      "name": "并发访问消融实验",
+      "baseline": 0.0,
+      "enhanced": 0.0,
+      "improvement": 0.0,
+      "unit": "%",
+      "details": {
+        "baseline_errors": [],
+        "enhanced_errors": [],
+        "baseline_error_rate": 0.0,
+        "enhanced_error_rate": 0.0,
+        "baseline_time": 0.07136297225952148,
+        "enhanced_time": 0.02347874641418457,
+        "thread_count": 5,
+        "operations_per_thread": 10
+      }
+    }
+  ],
+  "summary": {
+    "avg_improvement": 33.05442804003036,
+    "max_improvement": 65.49059765406814,
+    "min_improvement": 0.0
+  }
+}

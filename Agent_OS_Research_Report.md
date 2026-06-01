@@ -8,9 +8,9 @@
 
 ## 摘要 (Executive Summary)
 
-随着大语言模型（LLM）能力的跃升，AI Agent 正在从“单体脚本调用”向“多智能体并发协同”演进。传统的操作系统（如 Linux、macOS）是为**被动执行指令的进程（Processes）**设计的，无法有效管理具备自主意图的智能体。
+随着大语言模型（LLM）能力的跃升，AI Agent 正在从"单体脚本调用"向"多智能体并发协同"演进。传统的操作系统（如 Linux、macOS）是为**被动执行指令的进程（Processes）**设计的，无法有效管理具备自主意图的智能体。
 
-**Agent OS（智能体操作系统）**应运而生。它将 LLM 嵌入操作系统内核，把 Agent 作为系统的“一等公民”进行调度，提供了针对 LLM 的虚拟内存管理（Context Manager）、工具权限隔离（Tool Manager）以及语义进程间通信（Semantic IPC）。本文将深入剖析 Agent OS 的演进路线、核心架构流派，并为 OpenCopilot 的未来演进提供技术选型建议。
+**Agent OS（智能体操作系统）**应运而生。它将 LLM 嵌入操作系统内核，把 Agent 作为系统的"一等公民"进行调度，提供了针对 LLM 的虚拟内存管理（Context Manager）、工具权限隔离（Tool Manager）以及语义进程间通信（Semantic IPC）。本文将深入剖析 Agent OS 的演进路线、核心架构流派，并为 OpenCopilot 的未来演进提供技术选型建议。
 
 ---
 
@@ -43,7 +43,7 @@ Agent 的基础设施经历了三个阶段的范式跃迁：
 
 ### 2.1 认知内核层 (Cognitive Kernel)
 - **LLM Core (大模型调度器)**：统一接管所有 Agent 的 LLM 推理请求。通过请求批处理（Batching）和优先级队列，最大化算力利用率，解决并发挤兑。
-- **Context Manager (上下文管理器)**：充当智能体的“虚拟内存”。由于 LLM 的 Context Window 极其昂贵，该模块负责对挂起（Suspended）的 Agent 的工作记忆进行自动快照（Snapshot）、换出（Swap out）到硬盘，并在 Agent 被唤醒时恢复。
+- **Context Manager (上下文管理器)**：充当智能体的"虚拟内存"。由于 LLM 的 Context Window 极其昂贵，该模块负责对挂起（Suspended）的 Agent 的工作记忆进行自动快照（Snapshot）、换出（Swap out）到硬盘，并在 Agent 被唤醒时恢复。
 
 ### 2.2 语义存储层 (Semantic Memory Primitives)
 - 摒弃传统的层级文件系统（POSIX Filesystem）。
@@ -66,7 +66,7 @@ Agent 的基础设施经历了三个阶段的范式跃迁：
 |---------|-------------|--------------|----------|
 | **学术与底层架构派** | **AIOS (by AIOS Foundation)** | 提出最完整的 OS 内核抽象（Scheduler/Context/Tool Manager），提供 `Cerebrum` SDK，将 LLM 彻底嵌入 OS 内核。 | 理论研究与开源生态基础设施构建 |
 | **工程性能派** | **Rivet agentOS** | 基于 WebAssembly + V8 Isolates，主打极致轻量化（6ms 冷启动，比传统沙盒便宜 32 倍），将 S3/SQLite 挂载为 Agent 专属文件系统。 | 高并发 Agent 部署、云原生 Serverless 架构 |
-| **开发者工作流派** | **Agent OS (by BuilderMethods)** | 聚焦软件工程。核心机制是“标准注入（Standards Injection）”，自动将企业代码规范注入到 Claude Code 等底层 Agent 的运行流中。 | 研发效能提升、代码生成与审查 |
+| **开发者工作流派** | **Agent OS (by BuilderMethods)** | 聚焦软件工程。核心机制是"标准注入（Standards Injection）"，自动将企业代码规范注入到 Claude Code 等底层 Agent 的运行流中。 | 研发效能提升、代码生成与审查 |
 | **企业治理与编排派** | **PwC agent OS (普华永道)** | 面向大型企业。主打**可观测性与治理**，引入专利级缺陷追踪、自动化评分和人类反馈聚类，支持 GPT-5 等多模型编排。 | 复杂企业级业务流、强合规监管场景 |
 
 ---
@@ -75,17 +75,39 @@ Agent 的基础设施经历了三个阶段的范式跃迁：
 
 基于上述调研，OpenCopilot 目前的 `smart_copilot UI` + `asu_broker` 探针架构已经具备了 Agent OS 的雏形（UI 相当于 Shell，Broker 相当于 Kernel）。为了向真正的 OS-Level Copilot 演进，建议采取以下技术策略：
 
-### 1. 升级 Broker 为“上下文路由中心” (Context Router)
+### 1. 升级 Broker 为"上下文路由中心" (Context Router)
 不需要从头开发 Wasm 运行时，而是借鉴 AIOS 的 **Context Manager** 理念。
 - **当前状态**：Broker 仅是被动抓取屏幕或文本。
-- **演进方向**：Broker 应该维护一个全局的“情节记忆池（Episodic Memory Pool）”，自动记录用户的跨应用切换轨迹，将其标准化为 Semantic Context，并在用户唤起 UI 时，作为隐式 Prompt 注入给大模型。
+- **演进方向**：Broker 应该维护一个全局的"情节记忆池（Episodic Memory Pool）"，自动记录用户的跨应用切换轨迹，将其标准化为 Semantic Context，并在用户唤起 UI 时，作为隐式 Prompt 注入给大模型。
+- **已实现**：2026-06-01 完成的 5 个智能体核心模块中，**可观测性模块**（Observability Module）提供了分布式追踪和结构化日志能力，为上下文路由提供了基础支撑。
 
 ### 2. 引入能力令牌机制 (Capability-based Security)
 - **痛点**：目前给大模型赋予本地系统执行权限（如通过 Tool 执行命令）风险极高。
 - **演进方向**：借鉴 Agent OS 的零信任安全模型，在 Broker 层实现基于令牌的沙盒拦截。所有针对本地文件系统和终端的操作，必须经过 MCP 协议的严格白名单校验。
+- **已实现**：2026-06-01 完成的 5 个智能体核心模块中，**安全模块**（Security Module）实现了基于角色的权限控制（RBAC）、审批流程、速率限制和审计日志，为能力令牌机制提供了基础。
 
 ### 3. 实现状态的可观测与中断恢复 (State Persistence)
-- 针对耗时较长的后台任务（如大规模代码重构），引入 Agent State Snapshot 机制。将 Agent 的内部思维链（CoT）和执行栈序列化到 SQLite 中，支持用户强行打断后的“热恢复”。
+- 针对耗时较长的后台任务（如大规模代码重构），引入 Agent State Snapshot 机制。将 Agent 的内部思维链（CoT）和执行栈序列化到 SQLite 中，支持用户强行打断后的"热恢复"。
+- **已实现**：2026-06-01 完成的 5 个智能体核心模块中，**规划器模块**（Planner Module）支持任务分解、执行计划和动态调整，**可观测性模块**提供了分布式追踪能力，为状态持久化和中断恢复提供了基础。
+
+### 4. 新增：智能体核心模块实现
+
+基于上述演进方向，OpenCopilot 已于 2026-06-01 完成了 5 个智能体核心模块的开发：
+
+| 模块 | 功能 | 价值 |
+|------|------|------|
+| **Planner** | 任务分解、执行计划、动态调整、回滚机制 | 支持复杂任务的规划和执行 |
+| **Code Executor** | 代码执行、沙盒环境、资源限制、安全检查 | 安全地执行代码和工具 |
+| **Security** | 权限控制、审计日志、审批流程、速率限制 | 实现能力令牌机制 |
+| **Observability** | 结构化日志、指标收集、分布式追踪、健康检查 | 实现状态可观测性 |
+| **Agents MD** | 规则检查、违规检测、自动修复、安全防护 | 遵循项目规范 |
+
+**验证结果**：
+- API 覆盖率：51 个端点，100% 覆盖
+- 真实 LLM 验证：21 个测试用例，100% 通过
+- 消融测试：18 个测试用例，100% 通过，验证了每个模块的价值
+
+**文档**：[Agent_Core_Modules_Design.md](Agent_Core_Modules_Design.md)、[Module_Verification_Report.md](Module_Verification_Report.md)
 
 ---
 **附录：参考资源**

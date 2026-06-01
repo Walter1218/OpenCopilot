@@ -1,0 +1,289 @@
+{
+  "test_name": "记忆系统模块兼容性测试",
+  "timestamp": 1780302755.2859452,
+  "total_tests": 13,
+  "passed_tests": 13,
+  "failed_tests": 0,
+  "pass_rate": 100.0,
+  "results": [
+    {
+      "test_name": "get_context 接口",
+      "category": "接口兼容性",
+      "passed": true,
+      "error": null,
+      "details": {
+        "old_keys": [
+          "messages",
+          "persona"
+        ],
+        "new_keys": [
+          "messages",
+          "persona"
+        ],
+        "old_types": {
+          "messages": "list",
+          "persona": "str"
+        },
+        "new_types": {
+          "messages": "list",
+          "persona": "str"
+        }
+      },
+      "duration": 0.0006818771362304688
+    },
+    {
+      "test_name": "add_message 接口",
+      "category": "接口兼容性",
+      "passed": true,
+      "error": null,
+      "details": {
+        "old_message_count": 1,
+        "new_message_count": 1,
+        "old_message": {
+          "role": "user",
+          "content": "测试消息"
+        },
+        "new_message": {
+          "role": "user",
+          "content": "测试消息"
+        }
+      },
+      "duration": 0.0009279251098632812
+    },
+    {
+      "test_name": "set_persona 接口",
+      "category": "接口兼容性",
+      "passed": true,
+      "error": null,
+      "details": {
+        "old_persona": "coding",
+        "new_persona": "coding"
+      },
+      "duration": 0.0007569789886474609
+    },
+    {
+      "test_name": "clear 接口",
+      "category": "接口兼容性",
+      "passed": true,
+      "error": null,
+      "details": {
+        "old_messages_after_clear": 0,
+        "new_messages_after_clear": 0,
+        "old_persona_after_clear": "default",
+        "new_persona_after_clear": "default"
+      },
+      "duration": 0.0033469200134277344
+    },
+    {
+      "test_name": "session_count 接口",
+      "category": "接口兼容性",
+      "passed": true,
+      "error": null,
+      "details": {
+        "old_count": 7,
+        "new_count": 7
+      },
+      "duration": 0.0024559497833251953
+    },
+    {
+      "test_name": "消息格式兼容性",
+      "category": "数据格式兼容性",
+      "passed": true,
+      "error": null,
+      "details": {
+        "message_count": 5,
+        "old_messages": [
+          {
+            "role": "user",
+            "content": "用户消息"
+          },
+          {
+            "role": "assistant",
+            "content": "助手回复"
+          },
+          {
+            "role": "user",
+            "content": "包含特殊字符的消息：!@#$%^&*()"
+          },
+          {
+            "role": "assistant",
+            "content": "包含中文的消息：你好世界"
+          },
+          {
+            "role": "user",
+            "content": "包含换行的消息\n第二行\n第三行"
+          }
+        ],
+        "new_messages": [
+          {
+            "role": "user",
+            "content": "用户消息"
+          },
+          {
+            "role": "assistant",
+            "content": "助手回复"
+          },
+          {
+            "role": "user",
+            "content": "包含特殊字符的消息：!@#$%^&*()"
+          },
+          {
+            "role": "assistant",
+            "content": "包含中文的消息：你好世界"
+          },
+          {
+            "role": "user",
+            "content": "包含换行的消息\n第二行\n第三行"
+          }
+        ]
+      },
+      "duration": 0.003724813461303711
+    },
+    {
+      "test_name": "人设格式兼容性",
+      "category": "数据格式兼容性",
+      "passed": true,
+      "error": null,
+      "details": {
+        "personas_tested": [
+          "default",
+          "coding",
+          "translation",
+          "ppt_generator",
+          "custom_persona"
+        ],
+        "all_passed": true
+      },
+      "duration": 0.004101276397705078
+    },
+    {
+      "test_name": "ContextWindowManager 兼容性",
+      "category": "功能兼容性",
+      "passed": true,
+      "error": null,
+      "details": {
+        "message_count": 4,
+        "first_message_role": "system",
+        "last_message_role": "user"
+      },
+      "duration": 0.0009207725524902344
+    },
+    {
+      "test_name": "normalize_context_envelope 兼容性",
+      "category": "功能兼容性",
+      "passed": true,
+      "error": null,
+      "details": {
+        "new_envelope_keys": [
+          "source",
+          "content",
+          "selection",
+          "task",
+          "meta",
+          "timestamp"
+        ],
+        "old_envelope_keys": [
+          "source",
+          "content",
+          "selection",
+          "task",
+          "meta",
+          "timestamp"
+        ],
+        "new_source": "ide",
+        "old_source": "browser"
+      },
+      "duration": 8.821487426757812e-06
+    },
+    {
+      "test_name": "响应时间兼容性",
+      "category": "性能兼容性",
+      "passed": true,
+      "error": null,
+      "details": {
+        "iterations": 100,
+        "old_time": 0.04266214370727539,
+        "new_time": 0.050789833068847656,
+        "performance_ratio": 1.1905129150879075,
+        "old_avg_ms": 0.4266214370727539,
+        "new_avg_ms": 0.5078983306884766
+      },
+      "duration": 0.0934607982635498
+    },
+    {
+      "test_name": "内存使用兼容性",
+      "category": "性能兼容性",
+      "passed": true,
+      "error": null,
+      "details": {
+        "initial_memory_mb": 95.25,
+        "final_memory_mb": 97.109375,
+        "memory_increase_mb": 1.859375,
+        "messages_created": 1000
+      },
+      "duration": 0.3669850826263428
+    },
+    {
+      "test_name": "端到端兼容性",
+      "category": "集成兼容性",
+      "passed": true,
+      "error": null,
+      "details": {
+        "persona": "coding",
+        "message_count": 2,
+        "first_message": {
+          "role": "user",
+          "content": "帮我写一个Python函数"
+        },
+        "last_message": {
+          "role": "assistant",
+          "content": "好的，我来帮你写一个Python函数"
+        }
+      },
+      "duration": 0.0010399818420410156
+    },
+    {
+      "test_name": "错误处理兼容性",
+      "category": "集成兼容性",
+      "passed": true,
+      "error": null,
+      "details": {
+        "errors_handled": 0,
+        "error_messages": []
+      },
+      "duration": 0.0009212493896484375
+    }
+  ],
+  "summary": {
+    "interface_compatibility": {
+      "total": 5,
+      "passed": 5,
+      "failed": 0,
+      "pass_rate": 100.0
+    },
+    "data_format_compatibility": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "pass_rate": 100.0
+    },
+    "functionality_compatibility": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "pass_rate": 100.0
+    },
+    "performance_compatibility": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "pass_rate": 100.0
+    },
+    "integration_compatibility": {
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "pass_rate": 100.0
+    }
+  }
+}

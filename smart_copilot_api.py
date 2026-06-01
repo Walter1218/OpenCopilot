@@ -21,6 +21,7 @@ import json
 import uuid
 import tempfile
 import asyncio
+import requests
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -64,6 +65,8 @@ class ChatRequest(BaseModel):
     system_prompt: Optional[str] = Field("", description="系统提示词")
     stream: bool = Field(False, description="是否使用流式响应")
     context: Optional[Dict[str, Any]] = Field(None, description="上下文信息")
+    context_source: Optional[str] = Field("chat", description="上下文来源: ide/browser/chat/ppt_editor 等")
+    persona: Optional[str] = Field(None, description="人设名称: default/code/translate 等")
 
 class ChatResponse(BaseModel):
     """聊天响应"""
@@ -225,33 +228,61 @@ async def health_check():
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
-    与 AI 进行对话
+    与 AI 进行对话（通过 Agent API 统一处理）
     
     支持多轮对话，通过 session_id 维护会话上下文。
+    所有请求统一走 Agent API，确保 persona/context 冲突清理机制生效。
     """
-    global provider
-    
-    if not provider:
-        raise HTTPException(status_code=500, detail="LLM Provider 未初始化")
-    
     session_id = session_manager.get_or_create(request.session_id)
     session_manager.add_message(session_id, "user", request.message)
     
     try:
-        # 构建消息历史
-        messages = []
-        if request.system_prompt:
-            messages.append({"role": "system", "content": request.system_prompt})
+        # 构建 Agent API 请求
+        payload = {
+            "text": request.message,
+            "context_source": request.context_source or "chat",
+            "session_id": session_id,
+        }
         
-        # 添加历史消息
-        history = session_manager.get_history(session_id)
-        for msg in history[-10:]:  # 保留最近 10 条
-            messages.append({"role": msg["role"], "content": msg["content"]})
+        # 添加 persona（如果有）
+        if request.persona:
+            payload["persona"] = request.persona
         
-        # 获取 AI 响应
+        # 添加上下文信息（如果有）
+        if request.context:
+            payload["context_meta"] = request.context
+        
+        # 调用 Agent API
+        resp = requests.post(
+            "http://127.0.0.1:18888/v1/agent/chat",
+            json=payload,
+            stream=True,
+            timeout=120.0
+        )
+        
+        if resp.status_code != 200:
+            raise HTTPException(
+                status_code=resp.status_code,
+                detail=f"Agent API 返回错误: {resp.status_code}"
+            )
+        
+        # 解析 SSE 流式响应
         response_text = ""
-        for chunk in provider.stream_chat_with_history(messages):
-            response_text += chunk
+        for line in resp.iter_lines():
+            if not line:
+                continue
+            line_str = line.decode('utf-8')
+            if line_str.startswith("data: "):
+                data_str = line_str[6:]
+                if data_str == "[DONE]":
+                    break
+                try:
+                    data_json = json.loads(data_str)
+                    chunk = data_json.get("chunk", "")
+                    if chunk:
+                        response_text += chunk
+                except json.JSONDecodeError:
+                    pass
         
         session_manager.add_message(session_id, "assistant", response_text)
         
@@ -260,41 +291,80 @@ async def chat(request: ChatRequest):
             response=response_text,
             timestamp=datetime.now().isoformat()
         )
+    except requests.exceptions.Timeout:
+        raise HTTPException(status_code=504, detail="Agent API 响应超时")
+    except requests.exceptions.ConnectionError:
+        raise HTTPException(status_code=503, detail="无法连接到 Agent 服务，请确保 Agent 已启动")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI 对话失败: {str(e)}")
 
 @app.post("/api/chat/stream")
 async def chat_stream(request: ChatRequest):
     """
-    流式对话接口
+    流式对话接口（通过 Agent API 统一处理）
     
     返回 Server-Sent Events (SSE) 格式的流式响应。
+    所有请求统一走 Agent API，确保 persona/context 冲突清理机制生效。
     """
-    global provider
-    
-    if not provider:
-        raise HTTPException(status_code=500, detail="LLM Provider 未初始化")
-    
     session_id = session_manager.get_or_create(request.session_id)
     session_manager.add_message(session_id, "user", request.message)
     
     async def generate():
         try:
-            messages = []
-            if request.system_prompt:
-                messages.append({"role": "system", "content": request.system_prompt})
+            # 构建 Agent API 请求
+            payload = {
+                "text": request.message,
+                "context_source": request.context_source or "chat",
+                "session_id": session_id,
+            }
             
-            history = session_manager.get_history(session_id)
-            for msg in history[-10:]:
-                messages.append({"role": msg["role"], "content": msg["content"]})
+            # 添加 persona（如果有）
+            if request.persona:
+                payload["persona"] = request.persona
             
+            # 添加上下文信息（如果有）
+            if request.context:
+                payload["context_meta"] = request.context
+            
+            # 调用 Agent API
+            resp = requests.post(
+                "http://127.0.0.1:18888/v1/agent/chat",
+                json=payload,
+                stream=True,
+                timeout=120.0
+            )
+            
+            if resp.status_code != 200:
+                yield f"data: {json.dumps({'error': f'Agent API 返回错误: {resp.status_code}'})}\n\n"
+                return
+            
+            # 解析 SSE 流式响应
             full_response = ""
-            for chunk in provider.stream_chat_with_history(messages):
-                full_response += chunk
-                yield f"data: {json.dumps({'chunk': chunk, 'session_id': session_id})}\n\n"
+            for line in resp.iter_lines():
+                if not line:
+                    continue
+                line_str = line.decode('utf-8')
+                if line_str.startswith("data: "):
+                    data_str = line_str[6:]
+                    if data_str == "[DONE]":
+                        break
+                    try:
+                        data_json = json.loads(data_str)
+                        chunk = data_json.get("chunk", "")
+                        if chunk:
+                            full_response += chunk
+                            yield f"data: {json.dumps({'chunk': chunk, 'session_id': session_id})}\n\n"
+                    except json.JSONDecodeError:
+                        pass
             
             session_manager.add_message(session_id, "assistant", full_response)
             yield f"data: {json.dumps({'done': True, 'session_id': session_id, 'full_response': full_response})}\n\n"
+        except requests.exceptions.Timeout:
+            yield f"data: {json.dumps({'error': 'Agent API 响应超时'})}\n\n"
+        except requests.exceptions.ConnectionError:
+            yield f"data: {json.dumps({'error': '无法连接到 Agent 服务，请确保 Agent 已启动'})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
     

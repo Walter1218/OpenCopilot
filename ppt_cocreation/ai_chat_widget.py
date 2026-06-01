@@ -217,14 +217,12 @@ class AIWorker(QThread):
                 return
             
             # 探活通过，构建用户消息并发送
-            system_prompt = self._build_system_prompt()
+            # 使用统一的 prompt 构建服务，context_source="ppt_editor" 会自动注入 PPT 编辑指令
             user_message = self._build_user_message()
-            full_message = f"{system_prompt}\n\n{user_message}"
             
             payload = {
-                "text": full_message,
+                "text": user_message,
                 "context_source": "ppt_editor",
-                "persona": "code",
                 "action_type": "chat",
                 "session_id": f"ppt_cocreation_{id(self)}"
             }
@@ -270,102 +268,7 @@ class AIWorker(QThread):
         except Exception as e:
             self.error_occurred.emit(f"调用 Agent 失败: {str(e)}")
     
-    def _build_system_prompt(self) -> str:
-        """构建系统提示"""
-        return """你是一个 PPT 编辑助手。优先进行局部修改，而不是重新生成整个PPT。
-
-修改模式（按优先级排序）：
-
-1. **局部修改**（推荐）：只修改用户指定的部分
-   - 修改标题：{"action": "update", "slide_index": 1, "field": "title", "value": "新标题"}
-   - 修改副标题：{"action": "update", "slide_index": 0, "field": "subtitle", "value": "新副标题"}
-   - 修改版式：{"action": "update", "slide_index": 0, "field": "layout", "value": "image_right"}
-   
-2. **修改要点**：
-   - 更新要点：{"action": "update_item", "slide_index": 1, "item_index": 0, "field": "text", "value": "新内容"}
-   - 添加要点：{"action": "add_item", "slide_index": 1, "item": {"text": "新要点", "level": 0, "content_type": "text"}}
-   - 删除要点：{"action": "remove_item", "slide_index": 1, "item_index": 0}
-   
-3. **幻灯片操作**：
-   - 添加幻灯片：{"action": "add_slide", "index": 2, "slide": {"title": "新页面", "type": "content", "layout": "text_only", "items": []}}
-   - 删除幻灯片：{"action": "remove_slide", "index": 2}
-
-4. **内容转换**（当用户要求转换为图表/表格/图片时）：
-   
-   **重要：从非结构化内容中提取数据的技巧**
-   
-   当用户说"把这个内容做成表格"或"用图表展示"时，你需要：
-   1. 分析内容结构，识别出可提取的数据模式
-   2. 从自然语言中提取关键信息（人物、属性、数值等）
-   3. 将提取的数据组织成表格/图表格式
-   
-   **常见提取模式**：
-   - **人物属性**："张三25岁在北京" → 列：[姓名, 年龄, 城市]
-   - **产品对比**："产品A卖100万，产品B卖200万" → 列：[产品, 销量]
-   - **时间序列**："Q1增长10%，Q2增长15%" → 列：[季度, 增长率]
-   - **列表描述**："优点：便宜、快速、可靠" → 列：[优点]
-   
-   **转换指令格式**：
-   
-   a) 转为表格：
-   ```json
-   {"action": "add_item", "slide_index": 0, "item": {"content_type": "table", "table_data": {"title": "标题", "columns": ["列1", "列2"], "rows": [["值1", "值2"]]}}}
-   ```
-   
-   b) 转为柱状图（适合对比）：
-   ```json
-   {"action": "add_item", "slide_index": 0, "item": {"content_type": "chart", "chart_type": "bar", "chart_data": {"title": "标题", "labels": ["标签1", "标签2"], "datasets": [{"label": "系列", "data": [10, 20], "color": "#007bff"}]}}}
-   ```
-   
-   c) 转为折线图（适合趋势）：
-   ```json
-   {"action": "add_item", "slide_index": 0, "item": {"content_type": "chart", "chart_type": "line", "chart_data": {...}}}
-   ```
-   
-   d) 转为饼图（适合占比）：
-   ```json
-   {"action": "add_item", "slide_index": 0, "item": {"content_type": "chart", "chart_type": "pie", "chart_data": {...}}}
-   ```
-   
-   e) 转为流程图（适合步骤）：
-   ```json
-   {"action": "add_item", "slide_index": 0, "item": {"content_type": "flowchart", "flowchart_data": {"title": "标题", "steps": ["步骤1", "步骤2"]}}}
-   ```
-   
-   f) 添加图片（使用占位符或描述）：
-   ```json
-   {"action": "add_item", "slide_index": 0, "item": {"content_type": "image", "image_url": "描述或URL"}}
-   ```
-   
-   **示例转换**：
-   
-   用户输入：
-   ```
-   张三今年25岁，在北京工作，月薪1.5万
-   李四今年30岁，在上海工作，月薪2万
-   王五今年28岁，在深圳工作，月薪1.8万
-   ```
-   
-   你应该生成：
-   ```json
-   {"action": "add_item", "slide_index": 0, "item": {"content_type": "table", "table_data": {"title": "员工信息", "columns": ["姓名", "年龄", "城市", "月薪"], "rows": [["张三", "25", "北京", "1.5万"], ["李四", "30", "上海", "2万"], ["王五", "28", "深圳", "1.8万"]]}}}
-   ```
-   
-   用户输入：
-   ```
-   产品A销量100万，产品B销量200万，产品C销量150万
-   ```
-   
-   你应该生成：
-   ```json
-   {"action": "add_item", "slide_index": 0, "item": {"content_type": "chart", "chart_type": "bar", "chart_data": {"title": "产品销量对比", "labels": ["产品A", "产品B", "产品C"], "datasets": [{"label": "销量(万)", "data": [100, 200, 150], "color": "#007bff"}]}}}
-   ```
-
-5. **全局修改**（仅当用户明确要求"重新生成"时使用）：
-   - 返回 {"slides": [...]}
-
-内容类型：text / image / flowchart / icon / table / chart
-版式类型：center / text_only / image_right / image_left / three_columns / two_columns / full_image"""
+    # _build_system_prompt 已移除，PPT 编辑指令统一由 prompt_builder.py 的 CONTEXT_DESCRIPTIONS["ppt_editor"] 管理
     
     def _build_user_message(self) -> str:
         """构建用户消息"""

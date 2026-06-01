@@ -4,8 +4,15 @@
 根据上下文和意图生成针对性的 Prompt。
 """
 
+import os
+import sys
 from typing import Dict, Any, Optional, List
+
+# 添加项目根目录到路径
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from .intent_detector import CodingIntent
+from prompt_builder import load_persona
 
 
 class PromptTemplate:
@@ -42,15 +49,15 @@ class PromptTemplate:
 class PromptLibrary:
     """Prompt 模板库"""
     
-    # 角色定义
+    # 角色定义 - 使用 persona 文件名，通过 prompt_builder 统一加载
     ROLES = {
-        CodingIntent.BUG_FIX: "你是一个专业的 Bug 修复专家，擅长快速定位和修复代码问题。",
-        CodingIntent.CODE_REVIEW: "你是一个资深的代码审查专家，擅长发现代码中的问题和改进点。",
-        CodingIntent.EXPLAIN: "你是一个代码解释专家，擅长用简洁清晰的语言解释复杂代码。",
-        CodingIntent.REFACTOR: "你是一个代码重构专家，擅长在不改变行为的前提下改进代码结构。",
-        CodingIntent.ENHANCE_API: "你是一个代码分析专家，擅长补充分析上下文，提供更精准的分析结果。",
-        CodingIntent.ANALYZE: "你是一个代码分析专家，擅长静态分析和代码质量评估。",
-        CodingIntent.GENERAL: "你是一个专业的编程助手，擅长解决各种编程问题。"
+        CodingIntent.BUG_FIX: "code",           # 对应 personas/code.md
+        CodingIntent.CODE_REVIEW: "code",       # 对应 personas/code.md
+        CodingIntent.EXPLAIN: "code",           # 对应 personas/code.md
+        CodingIntent.REFACTOR: "code",          # 对应 personas/code.md
+        CodingIntent.ENHANCE_API: "code",       # 对应 personas/code.md
+        CodingIntent.ANALYZE: "code",           # 对应 personas/code.md
+        CodingIntent.GENERAL: "default",        # 对应 personas/default.md
     }
     
     # Bug 类型特定指导
@@ -226,7 +233,7 @@ class PromptLibrary:
     @classmethod
     def get_role(cls, intent: CodingIntent) -> str:
         """
-        获取角色定义
+        获取角色定义（从 persona 系统加载）
         
         Args:
             intent: 编码意图
@@ -234,7 +241,8 @@ class PromptLibrary:
         Returns:
             str: 角色定义
         """
-        return cls.ROLES.get(intent, cls.ROLES[CodingIntent.GENERAL])
+        persona_name = cls.ROLES.get(intent, cls.ROLES[CodingIntent.GENERAL])
+        return load_persona(persona_name)
     
     @classmethod
     def get_bug_guide(cls, error_type: str) -> Optional[Dict[str, Any]]:

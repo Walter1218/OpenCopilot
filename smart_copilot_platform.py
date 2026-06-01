@@ -17,6 +17,7 @@ import json
 import uuid
 import asyncio
 import tempfile
+import requests
 from typing import Optional, List, Dict, Any, Callable
 from datetime import datetime
 from dataclasses import dataclass, field
@@ -338,7 +339,7 @@ class ActionEngine:
             print(f"⚠️ LLM Provider 初始化失败: {e}")
     
     async def execute(self, request: ExecuteRequest) -> ActionResult:
-        """执行动作"""
+        """执行动作 - 通过 Agent API 统一处理"""
         # 获取上下文
         context = await self.context_manager.get_context(
             source=request.context_source,
@@ -353,37 +354,30 @@ class ActionEngine:
                 detail=f"无法获取上下文: {context.metadata.get('error', '内容为空')}"
             )
         
-        # 根据动作类型执行
-        if request.action == ActionType.TRANSLATE:
-            result = await self._execute_translate(context, request.parameters)
-        elif request.action == ActionType.POLISH:
-            result = await self._execute_polish(context, request.parameters)
-        elif request.action == ActionType.CODE:
-            result = await self._execute_code(context, request.parameters)
-        elif request.action == ActionType.REVISION:
-            result = await self._execute_revision(context, request.parameters)
-        elif request.action == ActionType.AUTO:
-            result = await self._execute_auto(context, request.parameters)
-        elif request.action == ActionType.EXPLAIN:
-            result = await self._execute_explain(context, request.parameters)
-        elif request.action == ActionType.SUMMARIZE:
-            result = await self._execute_summarize(context, request.parameters)
-        elif request.action == ActionType.CUSTOM:
-            result = await self._execute_custom(context, request.parameters)
-        elif request.action == ActionType.PPT_EXTRACT:
-            result = await self._execute_ppt_extract(context, request.parameters)
-        else:
-            raise HTTPException(status_code=400, detail=f"不支持的动作: {request.action}")
+        # 构建 Agent API 请求
+        payload = {
+            "text": context.content,
+            "context_source": request.context_source.value,
+            "action_type": request.action.value,
+            "session_id": request.session_id or str(uuid.uuid4()),
+        }
+        
+        # 添加参数
+        if request.parameters:
+            payload["parameters"] = request.parameters
+        
+        # 调用 Agent API（统一走 persona/context 路径）
+        result = await self._call_agent_api(payload)
         
         return ActionResult(
             action=request.action,
             result=result,
             context_used=context,
-            session_id=request.session_id or str(uuid.uuid4())
+            session_id=payload["session_id"]
         )
     
     async def execute_stream(self, request: ExecuteRequest):
-        """流式执行动作"""
+        """流式执行动作 - 通过 Agent API 统一处理"""
         # 获取上下文
         context = await self.context_manager.get_context(
             source=request.context_source,
@@ -391,131 +385,114 @@ class ActionEngine:
             metadata=request.context_metadata
         )
         
-        # 构建提示词
-        prompt = self._build_prompt(request.action, context, request.parameters)
+        # 构建 Agent API 请求
+        payload = {
+            "text": context.content,
+            "context_source": request.context_source.value,
+            "action_type": request.action.value,
+            "session_id": request.session_id or str(uuid.uuid4()),
+        }
         
-        # 流式生成
+        # 添加参数
+        if request.parameters:
+            payload["parameters"] = request.parameters
+        
+        # 调用 Agent API 流式接口
         full_result = ""
-        for chunk in self.provider.stream_chat(prompt):
-            full_result += chunk
-            yield {
-                "chunk": chunk,
-                "action": request.action.value,
-                "context_source": context.source.value
-            }
+        try:
+            resp = requests.post(
+                "http://127.0.0.1:18888/v1/agent/chat",
+                json=payload,
+                stream=True,
+                timeout=120.0
+            )
+            
+            if resp.status_code == 200:
+                for line in resp.iter_lines():
+                    if not line:
+                        continue
+                    line_str = line.decode('utf-8')
+                    if line_str.startswith("data: "):
+                        data_str = line_str[6:]
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            data_json = json.loads(data_str)
+                            chunk = data_json.get("chunk", "")
+                            if chunk:
+                                full_result += chunk
+                                yield {
+                                    "chunk": chunk,
+                                    "action": request.action.value,
+                                    "context_source": context.source.value
+                                }
+                        except json.JSONDecodeError:
+                            pass
+            else:
+                error_msg = f"Agent API 返回错误: {resp.status_code}"
+                yield {"error": error_msg}
+                return
+        except Exception as e:
+            yield {"error": f"调用 Agent API 失败: {str(e)}"}
+            return
         
         yield {
             "done": True,
             "full_result": full_result,
             "action": request.action.value,
-            "session_id": request.session_id or str(uuid.uuid4())
+            "session_id": payload["session_id"]
         }
     
-    def _build_prompt(self, action: ActionType, context: Context, 
-                     parameters: Optional[Dict[str, Any]] = None) -> str:
-        """构建提示词"""
-        params = parameters or {}
-        
-        prompts = {
-            ActionType.TRANSLATE: f"请将以下文本翻译成{'中文' if params.get('target_language', 'zh') == 'zh' else '英文'}：\n\n{context.content}",
-            ActionType.POLISH: f"请润色以下文本，使其更加专业和流畅：\n\n{context.content}",
-            ActionType.CODE: f"请解析以下代码，说明其功能和关键点：\n\n{context.content}",
-            ActionType.REVISION: f"请对以下文本进行全面修订，改进语法、风格和清晰度：\n\n{context.content}",
-            ActionType.AUTO: f"请分析以下内容并提供最佳处理建议：\n\n{context.content}",
-            ActionType.EXPLAIN: f"请详细解释以下内容：\n\n{context.content}",
-            ActionType.SUMMARIZE: f"请总结以下内容的要点：\n\n{context.content}",
-        }
-        
-        if action == ActionType.CUSTOM and params.get('custom_instruction'):
-            return f"{params['custom_instruction']}\n\n{context.content}"
-        
-        return prompts.get(action, f"请处理以下内容：\n\n{context.content}")
-    
-    async def _execute_translate(self, context: Context, params: Optional[Dict] = None) -> str:
-        """执行翻译"""
-        params = params or {}
-        target_lang = params.get('target_language', 'zh')
-        prompt = f"请将以下文本翻译成{'中文' if target_lang == 'zh' else '英文'}：\n\n{context.content}"
-        return await self._call_llm(prompt)
-    
-    async def _execute_polish(self, context: Context, params: Optional[Dict] = None) -> str:
-        """执行润色"""
-        prompt = f"请润色以下文本，使其更加专业和流畅：\n\n{context.content}"
-        return await self._call_llm(prompt)
-    
-    async def _execute_code(self, context: Context, params: Optional[Dict] = None) -> str:
-        """执行代码解析"""
-        prompt = f"请解析以下代码，说明其功能和关键点：\n\n{context.content}"
-        return await self._call_llm(prompt)
-    
-    async def _execute_revision(self, context: Context, params: Optional[Dict] = None) -> str:
-        """执行全文修订"""
-        prompt = f"请对以下文本进行全面修订，改进语法、风格和清晰度：\n\n{context.content}"
-        return await self._call_llm(prompt)
-    
-    async def _execute_auto(self, context: Context, params: Optional[Dict] = None) -> str:
-        """执行自动处理"""
-        prompt = f"请分析以下内容并提供最佳处理建议：\n\n{context.content}"
-        return await self._call_llm(prompt)
-    
-    async def _execute_explain(self, context: Context, params: Optional[Dict] = None) -> str:
-        """执行解释"""
-        prompt = f"请详细解释以下内容：\n\n{context.content}"
-        return await self._call_llm(prompt)
-    
-    async def _execute_summarize(self, context: Context, params: Optional[Dict] = None) -> str:
-        """执行总结"""
-        prompt = f"请总结以下内容的要点：\n\n{context.content}"
-        return await self._call_llm(prompt)
-    
-    async def _execute_custom(self, context: Context, params: Optional[Dict] = None) -> str:
-        """执行自定义处理"""
-        params = params or {}
-        instruction = params.get('custom_instruction', '请处理以下内容')
-        prompt = f"{instruction}\n\n{context.content}"
-        return await self._call_llm(prompt)
-    
-    async def _execute_ppt_extract(self, context: Context, params: Optional[Dict] = None) -> str:
-        """执行 PPT 提取"""
-        prompt = f"""请将以下文本转换为 PPT 大纲的 JSON 格式。
-
-要求：
-1. 输出格式为 JSON 数组
-2. 每个元素代表一页幻灯片
-3. 包含以下字段：
-   - type: "title" 或 "content"
-   - title: 幻灯片标题
-   - subtitle: 副标题（仅 title 类型）
-   - items: 内容要点数组
-   - layout: 布局方式（center/text_only/image_right/image_left）
-
-文本内容：
-{context.content}
-
-请直接输出 JSON，不要包含其他说明文字。"""
-        
-        response = await self._call_llm(prompt)
-        slides = extract_json_from_text(response)
-        return json.dumps(slides, ensure_ascii=False)
-    
-    async def _call_llm(self, prompt: str) -> str:
-        """调用 LLM"""
+    async def _call_agent_api(self, payload: Dict[str, Any]) -> str:
+        """调用 Agent API - 统一走 persona/context 路径"""
         import re
-        if not self.provider:
-            raise HTTPException(status_code=500, detail="LLM Provider 未初始化")
-        
-        response = ""
-        for chunk in self.provider.stream_chat(prompt):
-            response += chunk
-        
-        # 过滤掉 <think>...</think> 标签块
-        response = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL)
-        
-        # 如果存在未闭合的 <think> 标签，截取之前的内容
-        if '<think>' in response:
-            response = response.split('<think>')[0]
-        
-        return response.strip()
+        try:
+            resp = requests.post(
+                "http://127.0.0.1:18888/v1/agent/chat",
+                json=payload,
+                stream=True,
+                timeout=120.0
+            )
+            
+            if resp.status_code != 200:
+                raise HTTPException(
+                    status_code=resp.status_code,
+                    detail=f"Agent API 返回错误: {resp.status_code}"
+                )
+            
+            # 解析 SSE 流式响应
+            full_text = ""
+            for line in resp.iter_lines():
+                if not line:
+                    continue
+                line_str = line.decode('utf-8')
+                if line_str.startswith("data: "):
+                    data_str = line_str[6:]
+                    if data_str == "[DONE]":
+                        break
+                    try:
+                        data_json = json.loads(data_str)
+                        chunk = data_json.get("chunk", "")
+                        if chunk:
+                            full_text += chunk
+                    except json.JSONDecodeError:
+                        pass
+            
+            # 过滤掉 <think>...</think> 标签块
+            full_text = re.sub(r'<think>.*?</think>', '', full_text, flags=re.DOTALL)
+            if '<think>' in full_text:
+                full_text = full_text.split('<think>')[0]
+            
+            return full_text.strip()
+            
+        except requests.exceptions.Timeout:
+            raise HTTPException(status_code=504, detail="Agent API 响应超时")
+        except requests.exceptions.ConnectionError:
+            raise HTTPException(status_code=503, detail="无法连接到 Agent 服务，请确保 Agent 已启动")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"调用 Agent API 失败: {str(e)}")
 
 # ==========================================
 # 事件系统

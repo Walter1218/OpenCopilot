@@ -1,0 +1,29 @@
+{
+  "total": 14,
+  "passed": 14,
+  "failed": 0,
+  "pass_rate": 100.0,
+  "categories": {
+    "接口兼容性": {
+      "total": 4,
+      "passed": 4
+    },
+    "数据格式兼容性": {
+      "total": 3,
+      "passed": 3
+    },
+    "功能兼容性": {
+      "total": 3,
+      "passed": 3
+    },
+    "性能兼容性": {
+      "total": 2,
+      "passed": 2
+    },
+    "集成兼容性": {
+      "total": 2,
+      "passed": 2
+    }
+  },
+  "all_passed": true
+}

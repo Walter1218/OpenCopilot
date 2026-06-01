@@ -1,0 +1,264 @@
+{
+  "atomic": [
+    {
+      "name": "load_persona('default')",
+      "passed": true,
+      "detail": "长度=278, 前30字=你是一个强大的AI划词助手。请对用户提供的文本进行处理：如果..."
+    },
+    {
+      "name": "load_persona('code')",
+      "passed": true,
+      "detail": "长度=274, 前30字=你是一个资深架构师。请对用户提供的代码进行深度解析：\n1. ..."
+    },
+    {
+      "name": "load_persona('translate')",
+      "passed": true,
+      "detail": "长度=62, 前30字=你是一个金牌翻译官。请将用户提供的文本翻译为中文（如果是中文..."
+    },
+    {
+      "name": "load_persona('polish')",
+      "passed": true,
+      "detail": "长度=63, 前30字=你是一个资深编辑。请对用户提供的文本进行润色，修正语病，提升..."
+    },
+    {
+      "name": "load_persona('revision')",
+      "passed": true,
+      "detail": "长度=639, 前30字=你是一个文档修订专家。用户正在编辑一份完整文档，你需要对用户..."
+    },
+    {
+      "name": "load_persona('nonexistent_xyz') 回退到 default",
+      "passed": true,
+      "detail": "长度=278"
+    },
+    {
+      "name": "build_context_prefix('ide')",
+      "passed": true,
+      "detail": "长度=213"
+    },
+    {
+      "name": "build_context_prefix('browser')",
+      "passed": true,
+      "detail": "长度=51"
+    },
+    {
+      "name": "build_context_prefix('drag')",
+      "passed": true,
+      "detail": "长度=31"
+    },
+    {
+      "name": "build_context_prefix('chat')",
+      "passed": true,
+      "detail": "长度=43"
+    },
+    {
+      "name": "build_context_prefix('revision')",
+      "passed": true,
+      "detail": "长度=108"
+    },
+    {
+      "name": "build_context_prefix('ppt_generator')",
+      "passed": true,
+      "detail": "长度=719"
+    },
+    {
+      "name": "build_context_prefix('ppt_editor')",
+      "passed": true,
+      "detail": "长度=2404"
+    },
+    {
+      "name": "build_context_prefix('ide', meta) 含文件信息",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "build_context_prefix('browser', app_name) 含浏览器名",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "低优先级('chat')不修改 persona",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "高优先级('ide')添加冲突说明",
+      "passed": true,
+      "detail": "末尾内容: ...，深度解析文本。\n\n【重要】当前上下文（ide）的行为指令优先于上述人设指令。请优先遵循上下文指令。"
+    },
+    {
+      "name": "无冲突模式时不做修改",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "build_full_prompt 包含所有关键元素",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "build_system_messages 返回格式正确",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "高优先级 source 完整",
+      "passed": true,
+      "detail": "期望={'ppt_generator', 'ide', 'ppt_editor', 'revision'}, 实际={'ppt_generator', 'ide', 'ppt_editor', 'revision'}"
+    },
+    {
+      "name": "PERSONA_CONFLICT_PATTERNS['ide'] 非空",
+      "passed": true,
+      "detail": "模式数=6"
+    },
+    {
+      "name": "PERSONA_CONFLICT_PATTERNS['revision'] 非空",
+      "passed": true,
+      "detail": "模式数=2"
+    },
+    {
+      "name": "PERSONA_CONFLICT_PATTERNS['ppt_generator'] 非空",
+      "passed": true,
+      "detail": "模式数=4"
+    },
+    {
+      "name": "PERSONA_CONFLICT_PATTERNS['ppt_editor'] 非空",
+      "passed": true,
+      "detail": "模式数=4"
+    },
+    {
+      "name": "空 meta 不报错",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "未知 context_source 不报错",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "长文本构建 prompt 不报错",
+      "passed": true,
+      "detail": "prompt 总长度=50542"
+    },
+    {
+      "name": "特殊字符不破坏 prompt 构建",
+      "passed": true,
+      "detail": ""
+    }
+  ],
+  "composite": [
+    {
+      "name": "IDE 代码优化请求",
+      "passed": true,
+      "detail": "响应长度=660, 错误=None"
+    },
+    {
+      "name": "IDE 响应包含代码相关内容",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "PPT 编辑修改标题请求",
+      "passed": true,
+      "detail": "响应长度=398, 错误=None"
+    },
+    {
+      "name": "PPT 响应包含修改指令或相关内容",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "翻译请求",
+      "passed": true,
+      "detail": "响应长度=510, 错误=None"
+    },
+    {
+      "name": "翻译响应包含中文",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "浏览器网页内容分析请求",
+      "passed": true,
+      "detail": "响应长度=549, 错误=None"
+    },
+    {
+      "name": "IDE 代码审查请求",
+      "passed": true,
+      "detail": "响应长度=1007, 错误=None"
+    },
+    {
+      "name": "代码审查响应包含审查相关内容",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "多轮对话-第1轮",
+      "passed": true,
+      "detail": "响应长度=3443"
+    },
+    {
+      "name": "多轮对话-第2轮(LRU缓存)",
+      "passed": true,
+      "detail": "响应长度=2134"
+    },
+    {
+      "name": "第2轮响应包含LRU相关实现",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "PPT 生成请求",
+      "passed": true,
+      "detail": "响应长度=1891, 错误=None"
+    },
+    {
+      "name": "PPT 生成响应包含 JSON 结构",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "通用对话请求",
+      "passed": true,
+      "detail": "响应长度=295, 错误=None"
+    },
+    {
+      "name": "通用对话响应包含相关内容",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "修订模式请求",
+      "passed": true,
+      "detail": "响应长度=550, 错误=None"
+    },
+    {
+      "name": "设计模式解释请求",
+      "passed": true,
+      "detail": "响应长度=669"
+    },
+    {
+      "name": "响应包含设计模式相关内容",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "Agent 健康检查",
+      "passed": true,
+      "detail": "状态=ok, 会话数=82"
+    }
+  ],
+  "summary": {
+    "total": 49,
+    "passed": 49,
+    "failed": 0,
+    "atomic": {
+      "total": 29,
+      "passed": 29
+    },
+    "composite": {
+      "total": 20,
+      "passed": 20
+    }
+  }
+}

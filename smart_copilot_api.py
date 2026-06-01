@@ -1130,7 +1130,10 @@ class PPTContext(BaseModel):
 
 class SuggestRequest(BaseModel):
     """AI 主动建议请求"""
-    context: PPTContext = Field(..., description="PPT 上下文")
+    context: Optional[PPTContext] = Field(None, description="PPT 上下文")
+    topic: Optional[str] = Field(None, description="帮助主题（无 context 时可使用）")
+    audience: Optional[str] = Field(None, description="目标受众")
+    purpose: Optional[str] = Field(None, description="PPT 目的")
     focus: Optional[str] = Field(None, description="关注点：visual_enhance/content_optimize/structure_improve/style_consistent")
     max_suggestions: int = Field(3, description="最大建议数")
 
@@ -1221,8 +1224,49 @@ async def ppt_suggest(request: SuggestRequest):
     AI 主动建议
     
     分析当前幻灯片内容，主动提供优化建议。
+    支持两种模式：
+    1. context 模式：有完整 PPT 上下文时，分析当前幻灯片
+    2. topic 模式：仅有主题时，生成 PPT 大纲建议
     """
     try:
+        # 模式 2: topic 模式（无 context，仅基于主题生成建议）
+        if request.context is None and request.topic:
+            if not provider:
+                return {"suggestions": [], "analysis": None, "mode": "topic", "error": "LLM Provider 未初始化"}
+            
+            audience_hint = f"，目标受众为{request.audience}" if request.audience else ""
+            purpose_hint = f"，用途为{request.purpose}" if request.purpose else ""
+            
+            prompt = f"""请为主题"{request.topic}"{audience_hint}{purpose_hint}的PPT生成大纲建议。
+返回JSON格式：{{"slides":[{{"title":"幻灯片标题","content":"核心内容要点"}},...]}}
+最多{request.max_suggestions}页，每页1-2个要点。"""
+            
+            response = ""
+            for chunk in provider.stream_chat(prompt):
+                response += chunk
+            try:
+                import re
+                json_match = re.search(r'\{[\s\S]*\}', response)
+                outline = json.loads(json_match.group()) if json_match else {"slides": []}
+            except Exception:
+                outline = {"slides": []}
+            
+            suggestions = []
+            for i, slide in enumerate(outline.get("slides", [])[:request.max_suggestions]):
+                suggestions.append({
+                    "type": "outline_suggestion",
+                    "slide_index": i,
+                    "title": slide.get("title", ""),
+                    "content": slide.get("content", ""),
+                    "description": f"第{i+1}页: {slide.get('title', '')}",
+                    "priority": "medium"
+                })
+            return {"suggestions": suggestions, "analysis": None, "mode": "topic"}
+        
+        # 模式 1: context 模式（原有逻辑）
+        if request.context is None:
+            return {"suggestions": [], "analysis": None, "mode": "empty"}
+        
         # 转换为内部格式
         slides_data = []
         for slide in request.context.slides:
@@ -1263,10 +1307,11 @@ async def ppt_suggest(request: SuggestRequest):
                     "quality_score": analysis.quality_score,
                     "key_points": analysis.key_points,
                     "recommended_visual": analysis.recommended_visual.value if analysis.recommended_visual else None
-                }
+                },
+                "mode": "context"
             }
         else:
-            return {"suggestions": [], "analysis": None}
+            return {"suggestions": [], "analysis": None, "mode": "context_empty"}
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"建议生成失败: {str(e)}")

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "opencopilot": {
+      "command": "python",
+      "args": ["/Users/onetwo/Documents/trae_projects/OpenCopilot/tools/mcp_server.py"],
+      "env": {
+        "PYTHONPATH": "/Users/onetwo/Documents/trae_projects/OpenCopilot"
+      }
+    }
+  }
+}

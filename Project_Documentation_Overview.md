@@ -1,6 +1,6 @@
 # OpenCopilot 项目文档全景分析
 
-> **版本**: v2.1 | **日期**: 2026-06-02 | **状态**: 智能体核心模块完成，知识检索封装，Broker权限诊断，集成测试和消融实验验证通过
+> **版本**: v2.2 | **日期**: 2026-06-02 | **状态**: MCP Server实现，Provider故障转移完成，跨文件符号分析功能实现，全局测试100%通过
 
 ---
 
@@ -10,7 +10,7 @@
 
 | 分类 | 文件数 | 总大小 | 说明 |
 |------|--------|--------|------|
-| 项目核心文档 (.md) | 43 | ~420 KB | 根目录下的架构/指南/报告文档 |
+| 项目核心文档 (.md) | 44 | ~430 KB | 根目录下的架构/指南/报告文档 |
 | Skill化架构文档 (.md) | 15 | ~200 KB | skill_architecture/ 目录 |
 | 智能体核心模块文档 (.md) | 3 | ~80 KB | Agent_Core_Modules_*.md |
 | 设计文档 (.md) | 1 | 5.6 KB | docs/ 目录 |
@@ -18,7 +18,7 @@
 | 测试文档 (.md + .txt) | 31 | ~60 KB | test_docs/ 目录 |
 | 项目记忆 (.md) | 5 | ~100 KB | .codebuddy/memory/ |
 | 测试数据 | 2 | ~0.7 KB | tests/test_data/ |
-| **合计** | **112** | **~886 KB** | |
+| **合计** | **113** | **~896 KB** | |
 
 ### 1.2 文档分类树
 
@@ -63,10 +63,11 @@ OpenCopilot/
 │   ├── OpenCopilot_Code_Review_Report.md              # 代码审查报告
 │   └── Skill_Architecture_Design.md                   # Skill化架构设计文档
 │
-├── [3] API 文档（3个）
+├── [3] API 文档（4个）
 │   ├── Smart_Copilot_API_Guide.md                     # 能力平台 API 使用指南
 │   ├── Smart_Copilot_API_Redesign.md                  # API 设计方案（已实现）
-│   └── IDE_Extension_Development_Guide.md             # IDE 扩展开发指南
+│   ├── IDE_Extension_Development_Guide.md             # IDE 扩展开发指南
+│   └── MCP_Usage_Guide.md                            # MCP Server 使用指南
 │
 ├── [4] PPT 共创文档（3个）
 │   ├── PPT_CoCreation_Improvement_Plan.md             # 共创改进计划（v2.0）
@@ -129,7 +130,7 @@ OpenCopilot/
   - 快速开始指南（环境/权限/启动/操作）
   - 项目目录结构
 - **关键依赖**：引用 5 个架构设计文档作为进阶阅读
-- **当前版本**：v2.1 (2026-05-28)
+- **当前版本**：v2.6 (2026-06-02)
 
 #### `USER_GUIDE.md` — 用户指南
 - **定位**：面向终端用户的操作手册

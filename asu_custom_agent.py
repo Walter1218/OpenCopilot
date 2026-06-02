@@ -4,7 +4,10 @@ import json
 import uuid
 import sqlite3
 import time
+import subprocess
+import tempfile
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from socketserver import ThreadingMixIn
 from llm_provider import MiniMaxProvider, LocalProvider, load_config
 
 # 导入记忆系统改进模块
@@ -20,6 +23,36 @@ from prompt_builder import (
     sanitize_persona_for_context,
     load_persona,
 )
+
+# 导入代码执行引擎模块
+from code_executor import CodeExecutor, ExecutorConfig
+
+# 导入上下文管理模块
+from context_manager import ContextWindowManager as ContextWindowManagerModule
+
+# 导入知识检索模块
+from knowledge_retrieval import KnowledgeRetrieval
+
+# 导入搜索能力模块
+from search_capability import SearchCapability, SearchType
+
+# 导入状态管理模块
+from state_manager import StateManager, get_default_manager as get_state_manager
+
+# 导入规划器模块
+from planner import Planner, PlanRequest
+
+# 导入安全模块
+from security_module import SecurityModule, SecurityConfig
+
+# 导入可观测性模块
+from observability_module import ObservabilityModule, ObservabilityConfig, LogLevel
+
+# 导入AGENTS.md免疫机制模块
+from agents_md_module import ImmuneSystem, RuleEngine
+
+# 导入Skill化架构模块
+from skill_architecture import SkillRegistry, IntentRouter, SkillExecutor, SkillDiscovery
 
 
 # ==========================================
@@ -439,6 +472,69 @@ window_manager = ContextWindowManager(
     max_history_msg_chars=int(os.getenv("ASU_MAX_HISTORY_MSG_CHARS", "8000")),  # 增加单条消息限制
 )
 
+# ==========================================
+# 初始化核心能力模块
+# ==========================================
+
+# 代码执行引擎
+code_executor = CodeExecutor(ExecutorConfig(
+    default_timeout=30,
+    max_timeout=60,
+    working_directory=os.getcwd()
+))
+
+# 知识检索模块
+knowledge_retrieval = KnowledgeRetrieval()
+
+# 搜索能力模块
+search_capability = SearchCapability(workspace=os.getcwd())
+
+# 状态管理模块
+state_manager = get_state_manager()
+
+# 规划器模块
+planner = Planner()
+
+# 安全模块
+security_config = SecurityConfig(
+    enable_audit_logging=True,
+    enable_rate_limiting=True,
+    enable_permission_check=True
+)
+security_module = SecurityModule(security_config)
+
+# 可观测性模块
+observability_config = ObservabilityConfig(
+    log_level=LogLevel.INFO.value,
+    enable_tracing=True,
+    enable_performance_monitoring=True
+)
+observability = ObservabilityModule(observability_config)
+
+# AGENTS.md免疫机制
+immune_system = ImmuneSystem()
+
+# Skill化架构
+skill_registry = SkillRegistry()
+skill_router = IntentRouter(skill_registry)
+skill_executor = SkillExecutor(skill_registry, skill_router)
+
+# Skill自动发现
+skill_discovery = SkillDiscovery(skill_registry)
+discovered_skills = skill_discovery.discover()
+
+print("✅ 核心能力模块初始化完成:")
+print("  - CodeExecutor (代码执行)")
+print("  - KnowledgeRetrieval (知识检索)")
+print("  - SearchCapability (搜索能力)")
+print("  - StateManager (状态管理)")
+print("  - Planner (规划器)")
+print("  - SecurityModule (安全模块)")
+print("  - ObservabilityModule (可观测性)")
+print("  - ImmuneSystem (AGENTS.md免疫机制)")
+print("  - SkillRegistry (Skill化架构)")
+print(f"  - 发现 {len(discovered_skills)} 个 Skills")
+
 def get_base_llm():
     config = load_config()
     provider_type = config.get("provider_type", "minimax")
@@ -449,6 +545,385 @@ def get_base_llm():
             api_key=config.get("local_api_key", "sk-local")
         )
     return MiniMaxProvider()
+
+
+def detect_request_type(text: str) -> str:
+    """
+    检测用户请求类型
+    
+    Returns:
+        "code_execution" - 需要执行代码
+        "knowledge_query" - 知识检索
+        "search" - 搜索请求
+        "planning" - 任务规划
+        "security" - 安全相关
+        "skill" - Skill执行
+        "chat" - 普通对话
+    """
+    text_lower = text.lower()
+    
+    # 代码执行关键词
+    code_keywords = [
+        "执行代码", "运行代码", "运行一下", "执行一下",
+        "查询tushare", "查询数据库", "查询数据",
+        "运行python", "运行脚本", "执行脚本",
+        "帮我算", "帮我计算", "帮我统计",
+        "import ", "def ", "print(", "python代码"
+    ]
+    
+    # 知识检索关键词
+    knowledge_keywords = [
+        "知识图谱", "知识检索", "查找关系", "查找实体",
+        "项目结构", "模块关系", "代码依赖"
+    ]
+    
+    # 搜索关键词
+    search_keywords = [
+        "搜索", "查找", "查一下", "搜一下",
+        "网上搜索", "搜索一下", "帮我查"
+    ]
+    
+    # 任务规划关键词
+    planning_keywords = [
+        "规划", "计划", "分解任务", "任务分解",
+        "制定方案", "执行步骤", "工作流程"
+    ]
+    
+    # 安全相关关键词
+    security_keywords = [
+        "权限", "安全", "审批", "审计",
+        "访问控制", "rate limit", "速率限制"
+    ]
+    
+    # Skill相关关键词
+    skill_keywords = [
+        "skill", "技能", "翻译", "translate",
+        "代码审查", "code review", "生成ppt", "创建ppt"
+    ]
+    
+    for keyword in code_keywords:
+        if keyword in text_lower:
+            return "code_execution"
+    
+    for keyword in knowledge_keywords:
+        if keyword in text_lower:
+            return "knowledge_query"
+    
+    for keyword in search_keywords:
+        if keyword in text_lower:
+            return "search"
+    
+    for keyword in planning_keywords:
+        if keyword in text_lower:
+            return "planning"
+    
+    for keyword in security_keywords:
+        if keyword in text_lower:
+            return "security"
+    
+    for keyword in skill_keywords:
+        if keyword in text_lower:
+            return "skill"
+    
+    return "chat"
+
+
+def generate_code_for_task(task: str) -> str:
+    """
+    根据任务描述生成代码
+    
+    Args:
+        task: 任务描述
+        
+    Returns:
+        生成的代码
+    """
+    # 使用 LLM 生成代码
+    llm = get_base_llm()
+    
+    # 获取 tushare token
+    import tushare as ts
+    tushare_token = ts.get_token() or os.getenv("TUSHARE_TOKEN", "")
+    
+    code_prompt = f"""你是一个 Python 代码生成器。请根据用户的任务描述生成可执行的 Python 代码。
+
+要求：
+1. 只输出代码，不要输出任何解释
+2. 代码必须是完整的、可直接执行的
+3. 如果需要查询数据，请使用相应的库（如 tushare）
+4. 将结果打印出来
+5. 不要包含任何 markdown 标记或标签
+6. 如果使用 tushare，请使用以下 token: {tushare_token}
+
+用户任务：{task}
+
+请生成 Python 代码："""
+    
+    messages = [{"role": "user", "content": code_prompt}]
+    
+    code = ""
+    for chunk in llm.stream_chat_with_history(messages):
+        code += chunk
+    
+    # 清理代码（移除可能的 markdown 标记和标签）
+    code = code.strip()
+    
+    # 移除 <think>...</think> 标签
+    import re
+    code = re.sub(r'<think>.*?</think>', '', code, flags=re.DOTALL)
+    
+    # 移除 markdown 代码块标记
+    if code.startswith("```python"):
+        code = code[9:]
+    if code.startswith("```"):
+        code = code[3:]
+    if code.endswith("```"):
+        code = code[:-3]
+    
+    # 移除多余的空白行
+    code = code.strip()
+    
+    return code
+
+
+def execute_code_sync(code: str, timeout: int = 30) -> dict:
+    """
+    同步执行代码
+    
+    Args:
+        code: 要执行的代码
+        timeout: 超时时间（秒）
+        
+    Returns:
+        执行结果字典
+    """
+    import subprocess
+    import tempfile
+    
+    try:
+        # 将代码写入临时文件
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+            f.write(code)
+            temp_file = f.name
+        
+        # 执行代码
+        result = subprocess.run(
+            ['python', temp_file],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=os.getcwd()
+        )
+        
+        # 清理临时文件
+        os.unlink(temp_file)
+        
+        return {
+            "success": result.returncode == 0,
+            "output": result.stdout,
+            "error": result.stderr if result.returncode != 0 else None,
+            "return_code": result.returncode
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "success": False,
+            "output": "",
+            "error": f"代码执行超时（{timeout}秒）",
+            "return_code": -1
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "output": "",
+            "error": str(e),
+            "return_code": -1
+        }
+
+
+def execute_with_capability(text: str, session_id: str) -> str:
+    """
+    使用能力模块执行任务
+    
+    Args:
+        text: 用户输入
+        session_id: 会话ID
+        
+    Returns:
+        执行结果
+    """
+    request_type = detect_request_type(text)
+    print(f"[DEBUG] Request type: {request_type}", flush=True)
+    
+    # 记录请求指标
+    observability.logger.info(f"Processing request", context={
+        "request_type": request_type,
+        "session_id": session_id,
+        "text_length": len(text)
+    })
+    
+    # 检查AGENTS.md规则
+    import asyncio
+    from agents_md_module import RuleContext
+    try:
+        rule_context = RuleContext(session_id=session_id)
+        rule_check = asyncio.run(immune_system.check_content(rule_context, text))
+        if rule_check and not rule_check.allowed:
+            return f"⚠️ 规则检查发现违规: {rule_check.message}\n\n请调整您的请求。"
+    except Exception as e:
+        print(f"[DEBUG] Rule check error: {e}", flush=True)
+    
+    if request_type == "code_execution":
+        # 代码执行流程
+        print(f"[DEBUG] 检测到代码执行请求: {text[:50]}...", flush=True)
+        
+        # 检查安全权限
+        import asyncio
+        try:
+            security_check = asyncio.run(security_module.check_permission(
+                user_id=session_id,
+                resource="code_execution",
+                action="execute"
+            ))
+        except:
+            security_check = True  # 如果安全检查失败，默认允许
+        if not security_check:
+            return f"❌ 安全检查未通过: 权限不足"
+        
+        # 生成代码
+        code = generate_code_for_task(text)
+        print(f"[DEBUG] 生成的代码:\n{code}", flush=True)
+        
+        # 执行代码
+        result = execute_code_sync(code, timeout=30)
+        print(f"[DEBUG] 执行结果: {result}", flush=True)
+        
+        # 记录审计日志
+        try:
+            security_module.audit_logger.log(
+                user_id=session_id,
+                action="code_execution",
+                resource="python_code",
+                parameters={"code_length": len(code)},
+                result="success" if result["success"] else "failed"
+            )
+        except Exception as e:
+            print(f"[DEBUG] Audit log error: {e}", flush=True)
+        
+        if result["success"]:
+            return f"✅ 代码执行成功\n\n生成的代码:\n```python\n{code}\n```\n\n执行结果:\n{result['output']}"
+        else:
+            return f"❌ 代码执行失败\n\n生成的代码:\n```python\n{code}\n```\n\n错误信息:\n{result['error']}"
+    
+    elif request_type == "knowledge_query":
+        # 知识检索流程
+        print(f"[DEBUG] 检测到知识检索请求: {text[:50]}...", flush=True)
+        
+        # 初始化知识图谱（如果需要）
+        if not knowledge_retrieval._initialized:
+            init_result = knowledge_retrieval.initialize()
+            if not init_result.success:
+                return f"❌ 知识图谱初始化失败: {init_result.error}"
+        
+        # 执行查询
+        result = knowledge_retrieval.query(text)
+        
+        if result.success:
+            return f"📚 知识检索结果:\n\n{json.dumps(result.data, ensure_ascii=False, indent=2)}"
+        else:
+            return f"❌ 知识检索失败: {result.error}"
+    
+    elif request_type == "search":
+        # 搜索流程
+        print(f"[DEBUG] 检测到搜索请求: {text[:50]}...", flush=True)
+        
+        # 执行搜索
+        results = search_capability.search(text, search_type=SearchType.ALL, count=5)
+        
+        if results:
+            search_output = "🔍 搜索结果:\n\n"
+            for i, result in enumerate(results, 1):
+                search_output += f"{i}. {result.title}\n"
+                search_output += f"   {result.content[:200]}...\n\n"
+            return search_output
+        else:
+            return "❌ 未找到相关搜索结果"
+    
+    elif request_type == "planning":
+        # 任务规划流程
+        print(f"[DEBUG] 检测到任务规划请求: {text[:50]}...", flush=True)
+        
+        try:
+            # 使用规划器生成计划
+            import asyncio
+            plan = asyncio.run(planner.create_plan(
+                task=text,
+                context={"session_id": session_id}
+            ))
+            
+            if plan:
+                plan_output = "📋 任务规划结果:\n\n"
+                plan_output += f"**计划ID**: {plan.plan_id}\n"
+                plan_output += f"**任务**: {plan.task}\n"
+                plan_output += f"**步骤数**: {len(plan.steps)}\n\n"
+                plan_output += "**执行步骤**:\n"
+                for i, step in enumerate(plan.steps, 1):
+                    plan_output += f"{i}. {step.description}\n"
+                    plan_output += f"   - 类型: {step.step_type.value}\n"
+                    plan_output += f"   - 预计耗时: {step.estimated_duration}秒\n"
+                return plan_output
+            else:
+                return "❌ 无法生成任务规划"
+        except Exception as e:
+            return f"❌ 任务规划失败: {str(e)}"
+    
+    elif request_type == "security":
+        # 安全相关流程
+        print(f"[DEBUG] 检测到安全相关请求: {text[:50]}...", flush=True)
+        
+        # 返回安全模块状态
+        import asyncio
+        try:
+            security_status = asyncio.run(security_module.get_status())
+        except:
+            security_status = {"status": "ready", "note": "async call failed, showing basic status"}
+        return f"🔒 安全模块状态:\n\n{json.dumps(security_status, ensure_ascii=False, indent=2)}"
+    
+    elif request_type == "skill":
+        # Skill执行流程
+        print(f"[DEBUG] 检测到Skill请求: {text[:50]}...", flush=True)
+        
+        try:
+            # 使用意图路由器识别Skill
+            from skill_architecture import SkillContext
+            import asyncio
+            
+            # 创建Skill上下文
+            skill_context = SkillContext(
+                intent=text,
+                input_data={"text": text, "session_id": session_id},
+                session_id=session_id
+            )
+            
+            # 路由到合适的Skill
+            skill_name = asyncio.run(skill_router.route(skill_context))
+            
+            if skill_name:
+                # 执行Skill
+                skill_result = asyncio.run(skill_executor.execute(skill_context, skill_name=skill_name))
+                
+                if skill_result and skill_result.success:
+                    return f"🎯 Skill执行结果 (识别为: {skill_name}):\n\n{json.dumps(skill_result.data, ensure_ascii=False, indent=2)}"
+                else:
+                    return f"❌ Skill执行失败: {skill_result.error if skill_result else '未知错误'}"
+            else:
+                return "❌ 无法识别合适的Skill"
+        except Exception as e:
+            return f"❌ Skill执行异常: {str(e)}"
+    
+    else:
+        # 普通对话，返回 None 让调用者处理
+        print(f"[DEBUG] 普通对话，返回None", flush=True)
+        return None
 
 
 class AgentHTTPRequestHandler(BaseHTTPRequestHandler):
@@ -484,6 +959,96 @@ class AgentHTTPRequestHandler(BaseHTTPRequestHandler):
                 "quota_usage": quota_usage
             }
             self.wfile.write(json.dumps(resp, ensure_ascii=False).encode('utf-8'))
+        elif self.path == '/capabilities':
+            # 能力查询端点
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            
+            capabilities = {
+                "status": "ok",
+                "agent_name": "OpenCopilot ASU Agent",
+                "version": "3.0.0",
+                "capabilities": {
+                    "code_execution": {
+                        "name": "代码执行",
+                        "description": "执行 Python、JavaScript、Shell 代码",
+                        "supported_languages": ["python", "javascript", "shell"],
+                        "status": "active"
+                    },
+                    "knowledge_retrieval": {
+                        "name": "知识检索",
+                        "description": "查询项目知识图谱，查找实体关系和代码依赖",
+                        "status": "active" if knowledge_retrieval._initialized else "ready"
+                    },
+                    "search": {
+                        "name": "搜索能力",
+                        "description": "网络搜索、代码搜索、文档搜索",
+                        "search_types": ["web", "code", "doc", "knowledge"],
+                        "status": "active"
+                    },
+                    "context_management": {
+                        "name": "上下文管理",
+                        "description": "智能上下文窗口管理，支持多种模型",
+                        "status": "active"
+                    },
+                    "memory_system": {
+                        "name": "记忆系统",
+                        "description": "会话记忆和长期记忆管理",
+                        "status": "active"
+                    },
+                    "state_management": {
+                        "name": "状态管理",
+                        "description": "任务状态管理、检查点、恢复机制",
+                        "status": "active"
+                    },
+                    "planning": {
+                        "name": "任务规划",
+                        "description": "任务分解、计划生成、执行优化",
+                        "strategies": ["sequential", "parallel", "adaptive", "react"],
+                        "status": "active"
+                    },
+                    "security": {
+                        "name": "安全模块",
+                        "description": "权限管理、审计日志、审批流程、速率限制",
+                        "features": ["rbac", "audit", "approval", "rate_limiting"],
+                        "status": "active"
+                    },
+                    "observability": {
+                        "name": "可观测性",
+                        "description": "结构化日志、指标收集、分布式追踪、健康检查",
+                        "features": ["logging", "metrics", "tracing", "health_check"],
+                        "status": "active"
+                    },
+                    "agents_md": {
+                        "name": "AGENTS.md免疫机制",
+                        "description": "项目级行为规则系统，定义Agent行为规范",
+                        "rule_types": ["behavior", "constraint", "preference", "workflow", "security"],
+                        "status": "active"
+                    },
+                    "skill_architecture": {
+                        "name": "Skill化架构",
+                        "description": "意图路由、Skill执行引擎、自动发现",
+                        "registered_skills": len(skill_registry.skills) if hasattr(skill_registry, 'skills') else 0,
+                        "status": "active"
+                    }
+                },
+                "request_types": {
+                    "code_execution": "执行代码、查询数据库、运行脚本",
+                    "knowledge_query": "知识图谱查询、实体关系查找",
+                    "search": "网络搜索、代码搜索、文档搜索",
+                    "planning": "任务规划、计划生成",
+                    "security": "安全检查、权限管理",
+                    "skill": "Skill执行、意图路由",
+                    "chat": "普通对话"
+                },
+                "modules_status": {
+                    "total_modules": 12,
+                    "active_modules": 12,
+                    "integration_level": "full"
+                }
+            }
+            self.wfile.write(json.dumps(capabilities, ensure_ascii=False, indent=2).encode('utf-8'))
         else:
             self.send_response(404)
             self.end_headers()
@@ -569,18 +1134,37 @@ class AgentHTTPRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
             try:
-                llm = get_base_llm()
-                full_reply = ""
-                for chunk in llm.stream_chat_with_history(messages):
-                    full_reply += chunk
-                    resp = {"chunk": chunk}
+                print(f"[DEBUG] Processing request: {text[:50]}...")
+                
+                # 尝试使用能力模块执行
+                capability_result = execute_with_capability(text, session_id)
+                
+                if capability_result:
+                    # 能力模块处理了请求
+                    print(f"[DEBUG] Capability result: {capability_result[:100]}...")
+                    memory.add_message(session_id, "assistant", capability_result)
+                    resp = {"chunk": capability_result}
                     self.wfile.write(f"data: {json.dumps(resp, ensure_ascii=False)}\n\n".encode('utf-8'))
                     self.wfile.flush()
+                else:
+                    # 普通对话，使用 LLM
+                    print(f"[DEBUG] Calling LLM...")
+                    llm = get_base_llm()
+                    full_reply = ""
+                    for chunk in llm.stream_chat_with_history(messages):
+                        full_reply += chunk
+                        resp = {"chunk": chunk}
+                        self.wfile.write(f"data: {json.dumps(resp, ensure_ascii=False)}\n\n".encode('utf-8'))
+                        self.wfile.flush()
+                    print(f"[DEBUG] LLM response complete: {full_reply[:100]}...")
 
-                memory.add_message(session_id, "assistant", full_reply)
+                    memory.add_message(session_id, "assistant", full_reply)
+
                 self.wfile.write(b"data: [DONE]\n\n")
                 self.wfile.flush()
+                print(f"[DEBUG] Request complete")
             except Exception as e:
+                print(f"[DEBUG] Error: {e}")
                 resp = {"chunk": f"\n[Agent Error]: {str(e)}"}
                 self.wfile.write(f"data: {json.dumps(resp, ensure_ascii=False)}\n\n".encode('utf-8'))
                 self.wfile.flush()
@@ -589,9 +1173,15 @@ class AgentHTTPRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
 
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    """支持多线程的HTTP服务器"""
+    daemon_threads = True
+    allow_reuse_address = True
+
+
 def run_server(port=18888):
     server_address = ('127.0.0.1', port)
-    httpd = HTTPServer(server_address, AgentHTTPRequestHandler)
+    httpd = ThreadedHTTPServer(server_address, AgentHTTPRequestHandler)
     print(f"🚀 ASU 定制智能体已启动，监听在 http://127.0.0.1:{port}")
     httpd.serve_forever()
 

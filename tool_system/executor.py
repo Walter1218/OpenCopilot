@@ -228,7 +228,8 @@ class ToolExecutor:
         
         async def execute_with_semaphore(call: ToolCall) -> ToolResult:
             async with semaphore:
-                return await self.execute(call, user_id, session_id)
+                # 批量执行时跳过状态检查，直接执行
+                return await self._execute_direct(call, user_id, session_id)
         
         # 并行执行
         tasks = [execute_with_semaphore(call) for call in calls]
@@ -249,6 +250,123 @@ class ToolExecutor:
                 final_results.append(result)
         
         return final_results
+    
+    async def _execute_direct(
+        self,
+        call: ToolCall,
+        user_id: Optional[str] = None,
+        session_id: Optional[str] = None
+    ) -> ToolResult:
+        """
+        直接执行工具调用（跳过状态检查，用于批量并发执行）
+        
+        Args:
+            call: 工具调用请求
+            user_id: 用户 ID
+            session_id: 会话 ID
+            
+        Returns:
+            ToolResult: 执行结果
+        """
+        call_id = call.call_id or str(uuid.uuid4())
+        start_time = time.time()
+        
+        # 获取工具定义和处理函数
+        definition = self._registry.get_tool(call.tool_id)
+        if not definition:
+            return self._create_error_result(
+                call_id, call.tool_id, "unknown",
+                f"Tool not found: {call.tool_id}",
+                start_time
+            )
+        
+        handler = self._registry.get_handler(call.tool_id)
+        if not handler:
+            return self._create_error_result(
+                call_id, call.tool_id, definition.name,
+                f"No handler for tool: {call.tool_id}",
+                start_time
+            )
+        
+        # 验证参数
+        validation_error = self._validator.validate(
+            call.parameters, definition.parameters
+        )
+        if validation_error:
+            return self._create_error_result(
+                call_id, call.tool_id, definition.name,
+                f"Parameter validation failed: {validation_error}",
+                start_time
+            )
+        
+        # 检查是否需要审批
+        if definition.requires_approval:
+            if not await self._request_approval(definition, call, user_id):
+                return self._create_error_result(
+                    call_id, call.tool_id, definition.name,
+                    "Approval denied",
+                    start_time
+                )
+        
+        # 执行工具
+        try:
+            # 确定超时时间
+            timeout = call.timeout or definition.timeout
+            
+            # 执行（带超时）
+            result = await asyncio.wait_for(
+                self._execute_handler(handler, call.parameters),
+                timeout=timeout
+            )
+            
+            # 计算执行时间
+            duration_ms = (time.time() - start_time) * 1000
+            
+            # 创建成功结果
+            tool_result = ToolResult(
+                tool_call_id=call_id,
+                tool_id=call.tool_id,
+                tool_name=definition.name,
+                success=True,
+                output=result,
+                duration_ms=duration_ms,
+                metadata=call.metadata
+            )
+            
+            # 更新统计
+            self._update_stats(duration_ms, success=True)
+            
+            # 记录日志
+            self._log_execution(
+                call, definition, tool_result,
+                start_time, user_id, session_id
+            )
+            
+            return tool_result
+            
+        except asyncio.TimeoutError:
+            duration_ms = (time.time() - start_time) * 1000
+            error_msg = f"Tool execution timeout after {timeout}s"
+            
+            self._update_stats(duration_ms, success=False)
+            
+            return self._create_error_result(
+                call_id, call.tool_id, definition.name,
+                error_msg, start_time
+            )
+            
+        except Exception as e:
+            duration_ms = (time.time() - start_time) * 1000
+            error_msg = f"{type(e).__name__}: {str(e)}"
+            
+            logger.error(f"Tool execution failed: {error_msg}", exc_info=True)
+            
+            self._update_stats(duration_ms, success=False)
+            
+            return self._create_error_result(
+                call_id, call.tool_id, definition.name,
+                error_msg, start_time
+            )
     
     async def _execute_handler(
         self,

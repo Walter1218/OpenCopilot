@@ -31,9 +31,18 @@ from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
 import uvicorn
 
-from llm_provider import ProviderFactory, load_config, save_config
+from llm_provider import ProviderFactory, ProviderFactoryWithFailover, load_config, save_config
 from ppt_generator import generate_ppt_from_json, extract_json_from_text
 from system_probe_client import SystemProbeClient
+
+# 导入 API 注册中心
+from api_registry import APIRegistry, create_health_router
+
+# 导入 MCP 客户端
+from tools.mcp_client import get_mcp_client
+
+# 导入符号分析器
+from tools.symbol_analyzer import get_symbol_analyzer
 
 # ==========================================
 # 核心数据模型
@@ -332,9 +341,18 @@ class ActionEngine:
         self._initialize_provider()
     
     def _initialize_provider(self):
-        """初始化 LLM Provider"""
+        """初始化 LLM Provider（支持故障转移）"""
         try:
-            self.provider = ProviderFactory.create_provider()
+            # 检查是否启用故障转移
+            config = load_config()
+            failover_enabled = config.get("failover", {}).get("enabled", True)
+            
+            if failover_enabled:
+                self.provider = ProviderFactoryWithFailover.create_provider(use_failover=True)
+                print("✅ LLM Provider 初始化成功（故障转移模式）")
+            else:
+                self.provider = ProviderFactory.create_provider()
+                print("✅ LLM Provider 初始化成功（单 Provider 模式）")
         except Exception as e:
             print(f"⚠️ LLM Provider 初始化失败: {e}")
     
@@ -562,10 +580,79 @@ action_engine = ActionEngine(context_manager)
 event_bus = EventBus()
 start_time = datetime.now()
 
+# API 注册中心
+registry = APIRegistry(app)
+
+# MCP 客户端
+mcp_client = get_mcp_client()
+
+# 符号分析器
+symbol_analyzer = get_symbol_analyzer()
+
+# 立即注册健康检查路由（不依赖 startup 事件）
+health_router = create_health_router(registry)
+registry.register_module("system", health_router, prefix="", tags=["system"], description="系统健康检查")
+
+
+def initialize_all_modules():
+    """初始化所有模块并注册 API"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # 注册健康检查路由
+    health_router = create_health_router(registry)
+    registry.register_module("system", health_router, prefix="", tags=["system"])
+    
+    # 尝试导入并注册各个模块
+    modules_to_register = [
+        ("code_executor", "code_executor.api", "create_executor_router", "/api/executor", "代码执行器"),
+        ("security_module", "security_module.api", "create_security_router", "/api/security", "安全模块"),
+        ("observability_module", "observability_module.api", "create_observability_router", "/api/observability", "可观测性模块"),
+        ("agents_md_module", "agents_md_module.api", "create_immune_router", "/api/agents-md", "AGENTS.md 免疫系统"),
+        ("tool_system", "tool_system.api", "create_tool_router", "/api/tools", "工具系统"),
+    ]
+    
+    for module_name, module_path, factory_func_name, prefix, description in modules_to_register:
+        try:
+            # 动态导入模块
+            import importlib
+            module = importlib.import_module(module_path)
+            
+            # 获取工厂函数
+            factory_func = getattr(module, factory_func_name)
+            
+            # 创建路由器（不传入实例，使用默认配置）
+            router = factory_func()
+            
+            # 注册到主系统
+            registry.register_module(
+                module_name, 
+                router, 
+                prefix=prefix,
+                tags=[module_name],
+                description=description
+            )
+            
+            logger.info(f"✅ 已注册模块: {module_name}")
+            
+        except ImportError as e:
+            logger.warning(f"⚠️ 模块 {module_name} 导入失败（可能未安装）: {e}")
+        except Exception as e:
+            logger.error(f"❌ 注册模块 {module_name} 失败: {e}")
+    
+    # 打印注册摘要
+    registry.print_registration_summary()
+
+
 @app.on_event("startup")
 async def startup_event():
     """应用启动时初始化"""
     print("✅ Smart Copilot 能力平台启动")
+    
+    # 初始化所有模块
+    initialize_all_modules()
+    
+    print(f"✅ 已注册 {len(registry.get_registered_modules())} 个模块")
 
 # ==========================================
 # 依赖注入
@@ -899,6 +986,343 @@ async def generate_ppt_from_context(
         filename=filename,
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation"
     )
+
+# ==========================================
+# MCP 相关 API 端点
+# ==========================================
+
+@app.get("/api/mcp/servers", tags=["mcp"])
+async def list_mcp_servers():
+    """列出所有配置的 MCP Server"""
+    return {
+        "servers": mcp_client.list_servers(),
+        "count": len(mcp_client.list_servers())
+    }
+
+
+@app.get("/api/mcp/servers/{server_name}/tools", tags=["mcp"])
+async def get_mcp_server_tools(server_name: str):
+    """获取指定 MCP Server 的工具列表"""
+    if server_name not in mcp_client.list_servers():
+        raise HTTPException(status_code=404, detail=f"MCP Server '{server_name}' 不存在")
+    
+    tools = await mcp_client.get_server_tools(server_name)
+    return {
+        "server": server_name,
+        "tools": [
+            {
+                "name": t.name,
+                "description": t.description,
+                "inputSchema": t.input_schema
+            }
+            for t in tools
+        ],
+        "count": len(tools)
+    }
+
+
+class MCPCallRequest(BaseModel):
+    """MCP 工具调用请求"""
+    tool_name: str = Field(..., description="工具名称")
+    arguments: Dict[str, Any] = Field(default_factory=dict, description="工具参数")
+
+
+@app.post("/api/mcp/servers/{server_name}/call", tags=["mcp"])
+async def call_mcp_tool(server_name: str, request: MCPCallRequest):
+    """调用 MCP 工具"""
+    if server_name not in mcp_client.list_servers():
+        raise HTTPException(status_code=404, detail=f"MCP Server '{server_name}' 不存在")
+    
+    result = await mcp_client.call_tool(server_name, request.tool_name, request.arguments)
+    return {
+        "server": server_name,
+        "tool": request.tool_name,
+        "arguments": request.arguments,
+        "success": result.success,
+        "result": result.result,
+        "error": result.error
+    }
+
+
+@app.post("/api/mcp/refresh", tags=["mcp"])
+async def refresh_mcp_config():
+    """重新加载 MCP 配置"""
+    mcp_client.reload_config()
+    return {
+        "success": True,
+        "servers": mcp_client.list_servers()
+    }
+
+
+@app.get("/api/mcp/status", tags=["mcp"])
+async def get_mcp_status():
+    """获取 MCP 客户端状态"""
+    return mcp_client.get_status()
+
+
+# ==========================================
+# Provider 故障转移相关 API 端点
+# ==========================================
+
+@app.get("/api/provider/status", tags=["provider"])
+async def get_provider_status():
+    """获取 LLM Provider 状态（包括故障转移信息）"""
+    try:
+        # 获取 ActionEngine 实例
+        action_engine = globals().get("action_engine")
+        if action_engine and hasattr(action_engine, "provider"):
+            provider = action_engine.provider
+            
+            # 检查是否是故障转移 Provider
+            if hasattr(provider, "get_status"):
+                return {
+                    "success": True,
+                    "failover_enabled": True,
+                    "status": provider.get_status()
+                }
+            else:
+                return {
+                    "success": True,
+                    "failover_enabled": False,
+                    "provider_type": type(provider).__name__
+                }
+        else:
+            return {
+                "success": False,
+                "error": "ActionEngine 未初始化"
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@app.post("/api/provider/failover/test", tags=["provider"])
+async def test_failover():
+    """测试故障转移功能"""
+    try:
+        action_engine = globals().get("action_engine")
+        if not action_engine or not hasattr(action_engine, "provider"):
+            raise HTTPException(status_code=500, detail="ActionEngine 未初始化")
+        
+        provider = action_engine.provider
+        
+        # 检查是否是故障转移 Provider
+        if not hasattr(provider, "get_status"):
+            return {
+                "success": True,
+                "message": "当前未启用故障转移",
+                "failover_enabled": False
+            }
+        
+        # 测试故障转移
+        status_before = provider.get_status()
+        
+        # 模拟故障转移（切换到下一个 Provider）
+        if len(provider.providers) > 1:
+            provider._switch_to_next()
+            status_after = provider.get_status()
+            
+            return {
+                "success": True,
+                "message": "故障转移测试成功",
+                "failover_enabled": True,
+                "status_before": status_before,
+                "status_after": status_after
+            }
+        else:
+            return {
+                "success": True,
+                "message": "只有一个 Provider，无法测试故障转移",
+                "failover_enabled": True,
+                "status": status_before
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+# ==========================================
+# 符号引用相关 API 端点
+# ==========================================
+
+class SymbolReferenceRequest(BaseModel):
+    """符号引用请求"""
+    file_path: str = Field(..., description="文件路径")
+    line: int = Field(..., description="行号 (0-based)")
+    character: int = Field(..., description="列号 (0-based)")
+    include_declaration: bool = Field(True, description="是否包含声明")
+
+
+@app.post("/api/code/references", tags=["code"])
+async def find_symbol_references(request: SymbolReferenceRequest):
+    """查找符号引用"""
+    if not os.path.exists(request.file_path):
+        raise HTTPException(status_code=404, detail=f"文件 '{request.file_path}' 不存在")
+    
+    references = symbol_analyzer.find_references(
+        request.file_path,
+        request.line,
+        request.character,
+        request.include_declaration
+    )
+    
+    return {
+        "file": request.file_path,
+        "position": {
+            "line": request.line,
+            "character": request.character
+        },
+        "references": references,
+        "count": len(references)
+    }
+
+
+class SymbolDefinitionRequest(BaseModel):
+    """符号定义请求"""
+    file_path: str = Field(..., description="文件路径")
+    line: int = Field(..., description="行号 (0-based)")
+    character: int = Field(..., description="列号 (0-based)")
+
+
+@app.post("/api/code/definition", tags=["code"])
+async def find_symbol_definition(request: SymbolDefinitionRequest):
+    """查找符号定义"""
+    if not os.path.exists(request.file_path):
+        raise HTTPException(status_code=404, detail=f"文件 '{request.file_path}' 不存在")
+    
+    definition = symbol_analyzer.find_definition(
+        request.file_path,
+        request.line,
+        request.character
+    )
+    
+    return {
+        "file": request.file_path,
+        "position": {
+            "line": request.line,
+            "character": request.character
+        },
+        "definition": definition
+    }
+
+
+@app.get("/api/code/symbols", tags=["code"])
+async def get_file_symbols(file_path: str):
+    """获取文件符号列表"""
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail=f"文件 '{file_path}' 不存在")
+    
+    symbols = symbol_analyzer.get_document_symbols(file_path)
+    
+    return {
+        "file": file_path,
+        "symbols": symbols,
+        "count": len(symbols)
+    }
+
+
+@app.post("/api/code/clear-cache", tags=["code"])
+async def clear_symbol_cache():
+    """清除符号分析缓存"""
+    symbol_analyzer.clear_cache()
+    return {"success": True, "message": "缓存已清除"}
+
+
+# ==========================================
+# 跨文件符号分析 API 端点
+# ==========================================
+
+class ProjectIndexRequest(BaseModel):
+    """项目索引请求"""
+    project_path: str = Field(..., description="项目路径")
+    extensions: List[str] = Field(default=[".py"], description="文件扩展名过滤")
+
+
+@app.post("/api/code/project/index", tags=["code"])
+async def index_project(request: ProjectIndexRequest):
+    """索引项目"""
+    if not os.path.exists(request.project_path):
+        raise HTTPException(status_code=404, detail=f"项目路径 '{request.project_path}' 不存在")
+    
+    if not os.path.isdir(request.project_path):
+        raise HTTPException(status_code=400, detail=f"'{request.project_path}' 不是目录")
+    
+    indexed_count = symbol_analyzer.index_project(request.project_path, request.extensions)
+    
+    return {
+        "success": True,
+        "project_path": request.project_path,
+        "indexed_files": indexed_count,
+        "extensions": request.extensions
+    }
+
+
+class SymbolSearchRequest(BaseModel):
+    """符号搜索请求"""
+    name: str = Field(..., description="符号名称")
+    symbol_type: Optional[int] = Field(None, description="符号类型（SymbolKind 的值）")
+
+
+@app.post("/api/code/project/search", tags=["code"])
+async def search_symbol_in_project(request: SymbolSearchRequest):
+    """在项目中搜索符号"""
+    symbols = symbol_analyzer.find_symbol_in_project(request.name, request.symbol_type)
+    
+    return {
+        "success": True,
+        "query": request.name,
+        "symbol_type": request.symbol_type,
+        "symbols": symbols,
+        "count": len(symbols)
+    }
+
+
+class ProjectReferencesRequest(BaseModel):
+    """项目引用请求"""
+    name: str = Field(..., description="符号名称")
+    exclude_file: Optional[str] = Field(None, description="排除的文件路径")
+
+
+@app.post("/api/code/project/references", tags=["code"])
+async def find_references_in_project(request: ProjectReferencesRequest):
+    """在项目中查找符号引用"""
+    references = symbol_analyzer.find_references_in_project(request.name, request.exclude_file)
+    
+    return {
+        "success": True,
+        "query": request.name,
+        "exclude_file": request.exclude_file,
+        "references": references,
+        "count": len(references)
+    }
+
+
+@app.get("/api/code/project/symbols", tags=["code"])
+async def get_project_symbols():
+    """获取项目所有符号"""
+    symbols = symbol_analyzer.get_project_symbols()
+    
+    return {
+        "success": True,
+        "files": len(symbols),
+        "symbols": symbols
+    }
+
+
+@app.get("/api/code/project/statistics", tags=["code"])
+async def get_project_statistics():
+    """获取项目符号统计信息"""
+    stats = symbol_analyzer.get_project_statistics()
+    
+    return {
+        "success": True,
+        "statistics": stats
+    }
+
 
 # ==========================================
 # 启动入口

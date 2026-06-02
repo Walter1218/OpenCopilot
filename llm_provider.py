@@ -40,7 +40,7 @@ class MiniMaxProvider(BaseProvider):
         if not self.api_key:
             print("警告: 未找到 MINIMAX_API_KEY 环境变量或配置，请在 .env 文件中或设置面板中设置。")
         self.base_url = "https://api.minimax.chat/v1/chat/completions"
-        self.default_model = "MiniMax-M2.7"
+        self.default_model = "MiniMax-M3"
 
     def _do_stream(self, messages: list):
         headers = {
@@ -179,4 +179,176 @@ class ProviderFactory:
     @staticmethod
     def create_provider():
         # 现在所有请求都经过定制的 Agent Server 统一处理
+        return ASUCustomAgentClient()
+
+
+class FailoverProvider(BaseProvider):
+    """故障转移 Provider
+    
+    自动在多个 Provider 之间切换，保障服务可用性。
+    当主 Provider 失败时，自动切换到备选 Provider。
+    """
+    
+    def __init__(self, providers: list = None, health_check_interval: int = 60):
+        """
+        初始化故障转移 Provider
+        
+        Args:
+            providers: Provider 列表，按优先级排序
+            health_check_interval: 健康检查间隔（秒）
+        """
+        self.providers = providers or self._default_providers()
+        self.current_index = 0
+        self.health_check_interval = health_check_interval
+        self.failure_counts = {i: 0 for i in range(len(self.providers))}
+        self.max_failures = 3
+        self._last_health_check = 0
+        
+        # 日志
+        import logging
+        self.logger = logging.getLogger(__name__)
+    
+    def _default_providers(self) -> list:
+        """默认 Provider 列表"""
+        config = load_config()
+        providers = []
+        
+        # 优先使用云端 Provider
+        if config.get("minimax_api_key") or os.environ.get("MINIMAX_API_KEY"):
+            providers.append(("minimax", MiniMaxProvider()))
+        
+        # 备选本地 Provider
+        local_api_base = config.get("local_api_base", "http://localhost:11434/v1")
+        local_model = config.get("local_model", "llama3")
+        providers.append(("local", LocalProvider(local_api_base, local_model)))
+        
+        # 最后备选：ASU Custom Agent
+        providers.append(("agent", ASUCustomAgentClient()))
+        
+        return providers
+    
+    def _get_current_provider(self) -> BaseProvider:
+        """获取当前可用的 Provider"""
+        return self.providers[self.current_index][1]
+    
+    def _switch_to_next(self):
+        """切换到下一个 Provider"""
+        old_index = self.current_index
+        self.current_index = (self.current_index + 1) % len(self.providers)
+        self.logger.warning(f"[Failover] 切换 Provider: {self.providers[old_index][0]} -> {self.providers[self.current_index][0]}")
+    
+    def _record_failure(self):
+        """记录失败次数"""
+        self.failure_counts[self.current_index] += 1
+        
+        # 如果失败次数超过阈值，切换 Provider
+        if self.failure_counts[self.current_index] >= self.max_failures:
+            self.logger.warning(f"[Failover] Provider {self.providers[self.current_index][0]} 失败次数过多，切换到下一个")
+            self.failure_counts[self.current_index] = 0
+            self._switch_to_next()
+    
+    def _record_success(self):
+        """记录成功，重置失败计数"""
+        self.failure_counts[self.current_index] = 0
+    
+    def stream_chat(self, prompt: str, system_prompt: str = ""):
+        """流式聊天（带故障转移）"""
+        max_retries = len(self.providers)
+        
+        for attempt in range(max_retries):
+            try:
+                provider = self._get_current_provider()
+                self.logger.info(f"[Failover] 使用 Provider: {self.providers[self.current_index][0]}")
+                
+                # 尝试调用
+                chunks = []
+                for chunk in provider.stream_chat(prompt, system_prompt):
+                    chunks.append(chunk)
+                    yield chunk
+                
+                # 如果成功，记录成功
+                self._record_success()
+                return
+                
+            except Exception as e:
+                self.logger.error(f"[Failover] Provider {self.providers[self.current_index][0]} 失败: {e}")
+                self._record_failure()
+                
+                # 如果还有重试机会，切换到下一个
+                if attempt < max_retries - 1:
+                    self._switch_to_next()
+                    yield f"\n[Failover] 切换到备选 Provider...\n"
+                else:
+                    yield f"\n[Failover] 所有 Provider 都失败，请检查服务状态。\n"
+                    return
+    
+    def stream_chat_with_history(self, messages: list):
+        """带历史的流式聊天（带故障转移）"""
+        max_retries = len(self.providers)
+        
+        for attempt in range(max_retries):
+            try:
+                provider = self._get_current_provider()
+                self.logger.info(f"[Failover] 使用 Provider: {self.providers[self.current_index][0]}")
+                
+                # 尝试调用
+                chunks = []
+                for chunk in provider.stream_chat_with_history(messages):
+                    chunks.append(chunk)
+                    yield chunk
+                
+                # 如果成功，记录成功
+                self._record_success()
+                return
+                
+            except Exception as e:
+                self.logger.error(f"[Failover] Provider {self.providers[self.current_index][0]} 失败: {e}")
+                self._record_failure()
+                
+                # 如果还有重试机会，切换到下一个
+                if attempt < max_retries - 1:
+                    self._switch_to_next()
+                    yield f"\n[Failover] 切换到备选 Provider...\n"
+                else:
+                    yield f"\n[Failover] 所有 Provider 都失败，请检查服务状态。\n"
+                    return
+    
+    def get_status(self) -> dict:
+        """获取故障转移状态"""
+        return {
+            "current_provider": self.providers[self.current_index][0],
+            "providers": [
+                {
+                    "name": name,
+                    "failures": self.failure_counts[i],
+                    "available": self.failure_counts[i] < self.max_failures
+                }
+                for i, (name, _) in enumerate(self.providers)
+            ],
+            "total_providers": len(self.providers)
+        }
+
+
+class ProviderFactoryWithFailover(ProviderFactory):
+    """带故障转移的 Provider 工厂"""
+    
+    @staticmethod
+    def create_provider(use_failover: bool = True) -> BaseProvider:
+        """
+        创建 Provider
+        
+        Args:
+            use_failover: 是否使用故障转移
+            
+        Returns:
+            Provider 实例
+        """
+        if use_failover:
+            config = load_config()
+            failover_enabled = config.get("failover", {}).get("enabled", True)
+            
+            if failover_enabled:
+                return FailoverProvider()
+        
+        # 默认使用单个 Provider
         return ASUCustomAgentClient()

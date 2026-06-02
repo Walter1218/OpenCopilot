@@ -2746,6 +2746,401 @@ async def code_analyze(request: CodeExplainRequest):
         raise HTTPException(status_code=500, detail=f"代码分析失败: {str(e)}")
 
 # ==========================================
+# 会话管理接口
+# ==========================================
+
+class SessionClearRequest(BaseModel):
+    """清空会话请求"""
+    session_id: str = Field(..., description="会话 ID")
+
+class SessionListResponse(BaseModel):
+    """会话列表响应"""
+    sessions: List[Dict[str, Any]] = Field(..., description="会话列表")
+    total: int = Field(..., description="总会话数")
+
+@app.post("/v1/agent/session/clear")
+async def clear_session(request: SessionClearRequest):
+    """
+    清空会话
+    
+    清空指定会话的所有历史消息和上下文。
+    """
+    try:
+        if request.session_id in session_manager.sessions:
+            session_manager.sessions[request.session_id] = {
+                "created_at": datetime.now().isoformat(),
+                "messages": [],
+                "context": {}
+            }
+            return {"status": "success", "message": f"会话 {request.session_id} 已清空"}
+        else:
+            raise HTTPException(status_code=404, detail=f"会话 {request.session_id} 不存在")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"清空会话失败: {str(e)}")
+
+@app.get("/v1/agent/sessions", response_model=SessionListResponse)
+async def list_sessions():
+    """
+    获取会话列表
+    
+    返回所有活跃会话的列表。
+    """
+    try:
+        sessions = []
+        for session_id, session_data in session_manager.sessions.items():
+            sessions.append({
+                "session_id": session_id,
+                "created_at": session_data.get("created_at"),
+                "message_count": len(session_data.get("messages", [])),
+                "last_message": session_data.get("messages", [])[-1] if session_data.get("messages") else None
+            })
+        
+        return SessionListResponse(
+            sessions=sessions,
+            total=len(sessions)
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取会话列表失败: {str(e)}")
+
+@app.get("/v1/agent/personas")
+async def list_personas():
+    """
+    获取Persona列表
+    
+    返回所有可用的Persona列表。
+    """
+    try:
+        context = SkillContext(
+            intent="persona_list",
+            input_data={"action": "list"}
+        )
+        result = await persona_skill.execute(context)
+        
+        if result.success:
+            return result.data
+        else:
+            raise HTTPException(status_code=400, detail=result.error)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取Persona列表失败: {str(e)}")
+
+@app.post("/v1/agent/personas/reload")
+async def reload_personas():
+    """
+    热重载Persona
+    
+    重新加载所有Persona配置文件。
+    """
+    try:
+        global persona_skill
+        persona_skill = PersonaSkill()
+        return {"status": "success", "message": "Persona 已重新加载"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"重载Persona失败: {str(e)}")
+
+# ==========================================
+# 任务状态管理接口
+# ==========================================
+
+class TaskCreateRequest(BaseModel):
+    """创建任务请求"""
+    task_type: str = Field("default", description="任务类型")
+    description: str = Field("", description="任务描述")
+    session_id: Optional[str] = Field(None, description="关联会话 ID")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="任务元数据")
+
+class TaskUpdateRequest(BaseModel):
+    """更新任务请求"""
+    status: Optional[str] = Field(None, description="任务状态")
+    progress: Optional[float] = Field(None, description="任务进度 (0.0-1.0)")
+    result: Optional[Dict[str, Any]] = Field(None, description="任务结果")
+    error: Optional[str] = Field(None, description="错误信息")
+
+class TaskContextRequest(BaseModel):
+    """任务上下文请求"""
+    context_type: str = Field(..., description="上下文类型: file/web/resource/qa")
+    content: str = Field(..., description="上下文内容")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="元数据")
+
+class TaskTemplate(BaseModel):
+    """任务模板"""
+    name: str = Field(..., description="模板名称")
+    task_type: str = Field(..., description="任务类型")
+    system_prompt: str = Field("", description="系统提示词")
+    suggested_actions: List[str] = Field([], description="建议动作")
+
+# 任务模板定义
+TASK_TEMPLATES = {
+    "code_review": TaskTemplate(
+        name="代码审查",
+        task_type="code_review",
+        system_prompt="你是一个专业的代码审查专家，请仔细审查代码并提供改进建议。",
+        suggested_actions=["explain", "polish", "code"]
+    ),
+    "bug_fix": TaskTemplate(
+        name="Bug定位",
+        task_type="bug_fix",
+        system_prompt="你是一个Bug调试专家，请帮助定位和修复代码中的问题。",
+        suggested_actions=["explain", "code"]
+    ),
+    "doc_summary": TaskTemplate(
+        name="文档总结",
+        task_type="doc_summary",
+        system_prompt="你是一个文档分析专家，请总结文档的核心内容。",
+        suggested_actions=["summarize", "polish"]
+    ),
+    "translate": TaskTemplate(
+        name="翻译任务",
+        task_type="translate",
+        system_prompt="你是一个专业翻译，请准确翻译文本内容。",
+        suggested_actions=["translate"]
+    ),
+    "ppt_create": TaskTemplate(
+        name="PPT制作",
+        task_type="ppt_create",
+        system_prompt="你是一个PPT制作专家，请帮助创建专业的演示文稿。",
+        suggested_actions=["ppt_generate", "polish"]
+    )
+}
+
+# 任务存储
+tasks_storage: Dict[str, Dict[str, Any]] = {}
+
+@app.post("/api/tasks/create")
+async def create_task(request: TaskCreateRequest):
+    """
+    创建任务
+    
+    创建一个新的任务，可关联到会话。
+    """
+    try:
+        task_id = str(uuid.uuid4())
+        session_id = request.session_id or session_manager.get_or_create()
+        
+        task = {
+            "task_id": task_id,
+            "session_id": session_id,
+            "task_type": request.task_type,
+            "description": request.description,
+            "status": "pending",
+            "progress": 0.0,
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
+            "completed_at": None,
+            "result": None,
+            "error": None,
+            "context": [],
+            "metadata": request.metadata or {}
+        }
+        
+        tasks_storage[task_id] = task
+        
+        return {"status": "success", "task": task}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"创建任务失败: {str(e)}")
+
+@app.get("/api/tasks/{task_id}")
+async def get_task(task_id: str):
+    """
+    获取任务详情
+    
+    获取指定任务的详细信息。
+    """
+    try:
+        if task_id not in tasks_storage:
+            raise HTTPException(status_code=404, detail=f"任务 {task_id} 不存在")
+        
+        return {"status": "success", "task": tasks_storage[task_id]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取任务失败: {str(e)}")
+
+@app.put("/api/tasks/{task_id}")
+async def update_task(task_id: str, request: TaskUpdateRequest):
+    """
+    更新任务状态
+    
+    更新指定任务的状态、进度或结果。
+    """
+    try:
+        if task_id not in tasks_storage:
+            raise HTTPException(status_code=404, detail=f"任务 {task_id} 不存在")
+        
+        task = tasks_storage[task_id]
+        
+        if request.status is not None:
+            task["status"] = request.status
+            if request.status in ["completed", "failed", "cancelled"]:
+                task["completed_at"] = datetime.now().isoformat()
+        
+        if request.progress is not None:
+            task["progress"] = max(0.0, min(1.0, request.progress))
+        
+        if request.result is not None:
+            task["result"] = request.result
+        
+        if request.error is not None:
+            task["error"] = request.error
+        
+        task["updated_at"] = datetime.now().isoformat()
+        
+        return {"status": "success", "task": task}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"更新任务失败: {str(e)}")
+
+@app.get("/api/tasks")
+async def list_tasks(session_id: Optional[str] = None, status: Optional[str] = None):
+    """
+    获取任务列表
+    
+    获取所有任务，可按会话ID或状态过滤。
+    """
+    try:
+        tasks = list(tasks_storage.values())
+        
+        if session_id:
+            tasks = [t for t in tasks if t["session_id"] == session_id]
+        
+        if status:
+            tasks = [t for t in tasks if t["status"] == status]
+        
+        # 按创建时间倒序
+        tasks.sort(key=lambda x: x["created_at"], reverse=True)
+        
+        return {"status": "success", "tasks": tasks, "total": len(tasks)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取任务列表失败: {str(e)}")
+
+@app.post("/api/tasks/{task_id}/context")
+async def add_task_context(task_id: str, request: TaskContextRequest):
+    """
+    添加任务上下文
+    
+    为任务添加上下文信息（文件、网页、资源等）。
+    """
+    try:
+        if task_id not in tasks_storage:
+            raise HTTPException(status_code=404, detail=f"任务 {task_id} 不存在")
+        
+        task = tasks_storage[task_id]
+        
+        context_item = {
+            "type": request.context_type,
+            "content": request.content,
+            "metadata": request.metadata or {},
+            "added_at": datetime.now().isoformat()
+        }
+        
+        task["context"].append(context_item)
+        task["updated_at"] = datetime.now().isoformat()
+        
+        return {"status": "success", "context": context_item}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"添加任务上下文失败: {str(e)}")
+
+@app.get("/api/tasks/{task_id}/context")
+async def get_task_context(task_id: str):
+    """
+    获取任务上下文
+    
+    获取指定任务的所有上下文信息。
+    """
+    try:
+        if task_id not in tasks_storage:
+            raise HTTPException(status_code=404, detail=f"任务 {task_id} 不存在")
+        
+        task = tasks_storage[task_id]
+        
+        return {"status": "success", "context": task["context"]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取任务上下文失败: {str(e)}")
+
+@app.get("/api/tasks/templates")
+async def list_task_templates():
+    """
+    获取任务模板列表
+    
+    返回所有可用的任务模板。
+    """
+    try:
+        templates = [template.dict() for template in TASK_TEMPLATES.values()]
+        return {"status": "success", "templates": templates}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取任务模板失败: {str(e)}")
+
+@app.post("/api/tasks/templates/{template_name}/create")
+async def create_task_from_template(template_name: str, session_id: Optional[str] = None):
+    """
+    从模板创建任务
+    
+    使用指定模板创建新任务。
+    """
+    try:
+        if template_name not in TASK_TEMPLATES:
+            raise HTTPException(status_code=404, detail=f"模板 {template_name} 不存在")
+        
+        template = TASK_TEMPLATES[template_name]
+        session_id = session_id or session_manager.get_or_create()
+        
+        task_id = str(uuid.uuid4())
+        task = {
+            "task_id": task_id,
+            "session_id": session_id,
+            "task_type": template.task_type,
+            "description": template.name,
+            "status": "pending",
+            "progress": 0.0,
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
+            "completed_at": None,
+            "result": None,
+            "error": None,
+            "context": [],
+            "metadata": {
+                "template": template_name,
+                "system_prompt": template.system_prompt,
+                "suggested_actions": template.suggested_actions
+            }
+        }
+        
+        tasks_storage[task_id] = task
+        
+        return {"status": "success", "task": task}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"从模板创建任务失败: {str(e)}")
+
+@app.delete("/api/tasks/{task_id}")
+async def delete_task(task_id: str):
+    """
+    删除任务
+    
+    删除指定任务。
+    """
+    try:
+        if task_id not in tasks_storage:
+            raise HTTPException(status_code=404, detail=f"任务 {task_id} 不存在")
+        
+        del tasks_storage[task_id]
+        
+        return {"status": "success", "message": f"任务 {task_id} 已删除"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"删除任务失败: {str(e)}")
+
+# ==========================================
 # 启动入口
 # ==========================================
 

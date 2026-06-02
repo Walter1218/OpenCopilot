@@ -599,10 +599,10 @@ class TestConfigAndEnvironment:
         """[Badcase] 环境变量应能覆盖默认配置"""
         from asu_custom_agent import ContextWindowManager
 
-        # 测试默认值
+        # 测试默认值（MiniMax M2.7 支持 200K token，约 120K 字符）
         manager = ContextWindowManager()
-        assert manager.max_input_chars == 24000
-        assert manager.reserve_output_chars == 6000
+        assert manager.max_input_chars == 120000
+        assert manager.reserve_output_chars == 30000
 
         # 测试自定义值
         manager = ContextWindowManager(max_input_chars=10000, reserve_output_chars=2000)

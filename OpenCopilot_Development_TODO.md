@@ -1,8 +1,8 @@
 # OpenCopilot 后续开发方向 TODO
 
-> **文档状态**: v1.2  
-> **更新日期**: 2026-06-01  
-> **当前版本**: v2.4（P0-P2 阶段已完成，知识图谱、PPT共创模式、智能体核心模块已实现）  
+> **文档状态**: v1.3  
+> **更新日期**: 2026-06-02  
+> **当前版本**: v2.6（MCP Server实现，Provider故障转移完成，跨文件符号分析功能实现，全局测试100%通过）  
 > **目标**: 从"可用原型"升级为"成熟产品"
 
 ---
@@ -31,12 +31,15 @@
 | P2 | Skill化架构（模块化AI能力） | ✅ |
 | P3 | 智能体核心模块（5个模块开发） | ✅ |
 | P3 | 模块验证测试（API覆盖率100%） | ✅ |
+| P3 | MCP Server实现（5个工具） | ✅ |
+| P3 | Provider故障转移功能 | ✅ |
+| P3 | 跨文件符号分析功能 | ✅ |
+| P3 | 全局测试修复（100%通过率） | ✅ |
 
 ### 待完成的能力 🔶
 
 | 功能 | 状态 | 优先级 |
 |------|------|--------|
-| 多Provider故障转移 | 🔶 待规划 | P1 |
 | IDE Extension v2（诊断/diff） | 🔶 待规划 | P1 |
 | Broker产品化（权限诊断） | 🔶 部分完成 | P2 |
 
@@ -66,14 +69,14 @@ POST /v1/agent/personas/reload   # 热重载Persona
 
 **预计工作量**: 1-2天
 
-### 1.2 多Provider故障转移
+### 1.2 多Provider故障转移 ✅ 已完成
 
 **目标**: 保障极端情况下的可用性，实现云端/本地双擎平滑切换
 
 **当前状态**: 
 - MiniMax云端 ✅
 - Ollama本地 ✅
-- 自动故障转移 🔶
+- 自动故障转移 ✅
 
 **实现方案**:
 
@@ -96,13 +99,19 @@ class FailoverProvider:
         raise AllProvidersFailedError()
 ```
 
-**待实现功能**:
-1. Provider健康检查（定时ping）
-2. 故障检测与自动切换
-3. 切换状态通知UI
-4. 配置优先级设置
+**已实现功能**:
+1. Provider健康检查（定时ping）✅
+2. 故障检测与自动切换 ✅
+3. 切换状态通知UI ✅
+4. 配置优先级设置 ✅
 
-**预计工作量**: 3-5天
+**API端点**:
+- `GET /api/provider/status` - 获取 Provider 状态
+- `POST /api/provider/failover/test` - 测试故障转移功能
+
+**测试验证**: 13个测试全部通过
+
+**实现文件**: `llm_provider.py`
 
 ### 1.3 任务状态管理
 
@@ -620,7 +629,7 @@ EVENT_TYPES = {
 
 | 阶段 | 目标 | 核心产出 | 预计周期 |
 |------|------|----------|----------|
-| **阶段1** | Agent Core稳定化 | 统一API、多Provider故障转移、任务状态管理 | 2-3周 |
+| **阶段1** | Agent Core稳定化 | 统一API、多Provider故障转移、任务状态管理 | ✅ 故障转移已完成 |
 | **阶段2** | IDE深度集成 | Extension v2（诊断/diff/符号/工作区） | 2周 |
 | **阶段3** | Broker产品化 | 权限诊断、主动推送扩展、独立.app打包 | 1-2周 |
 | **阶段4** | 上下文感知增强 | 上下文注入、意图预测、沉浸度保护 | 2-3周 |
@@ -633,16 +642,7 @@ EVENT_TYPES = {
 
 ## 近期最建议优先做的3件事
 
-### 1. 多Provider故障转移 ⭐⭐⭐
-
-**理由**: 
-- 提升系统稳定性的关键
-- 确保云端服务不可用时系统仍能正常工作
-- 用户体验的底线保障
-
-**预计工作量**: 3-5天
-
-### 2. IDE Extension v2（诊断接口）⭐⭐⭐
+### 1. IDE Extension v2（诊断接口）⭐⭐⭐
 
 **理由**:
 - 开发场景的核心价值
@@ -651,7 +651,7 @@ EVENT_TYPES = {
 
 **预计工作量**: 2-3天
 
-### 3. 统一API协议 ⭐⭐
+### 2. 统一API协议 ⭐⭐
 
 **理由**:
 - 规范Agent接口
@@ -659,6 +659,15 @@ EVENT_TYPES = {
 - 提升API一致性
 
 **预计工作量**: 1-2天
+
+### 3. MCP Server 增强 ⭐⭐
+
+**理由**:
+- 已实现基础MCP Server，支持5个工具
+- 可扩展更多工具，如代码执行、文件操作等
+- 提升与外部工具的集成能力
+
+**预计工作量**: 2-3天
 
 ---
 
@@ -668,6 +677,7 @@ EVENT_TYPES = {
 - `OpenCopilot_Local_Agent_Roadmap.md` - 本地智能体开发路线
 - `OpenCopilot_Global_Context_Awareness_Design.md` - 全局上下文感知设计
 - `Smart_Copilot_API_Redesign.md` - 能力平台API设计方案
+- `MCP_Usage_Guide.md` - MCP Server 使用指南
 - `IDE_Extension_Development_Guide.md` - IDE扩展开发指南
 - `OpenCopilot_Code_Review_Report.md` - 代码审查报告
 

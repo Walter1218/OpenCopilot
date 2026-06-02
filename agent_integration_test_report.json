@@ -1,0 +1,106 @@
+{
+  "test_time": "2026-06-02T16:33:37.208552",
+  "session_id": "test-1780388257",
+  "summary": {
+    "total": 10,
+    "passed": 2,
+    "failed": 8,
+    "pass_rate": "20.0%"
+  },
+  "details": [
+    {
+      "name": "健康检查端点",
+      "status": "✅ PASS",
+      "details": "Status: ok",
+      "error": null
+    },
+    {
+      "name": "能力查询端点",
+      "status": "✅ PASS",
+      "details": "模块数: 11, 缺失: 无",
+      "error": null
+    },
+    {
+      "name": "代码执行能力",
+      "status": "❌ FAIL",
+      "details": "",
+      "error": "HTTPConnectionPool(host='127.0.0.1', port=18888): Read timed out."
+    },
+    {
+      "name": "知识检索能力",
+      "status": "❌ FAIL",
+      "details": "",
+      "error": "HTTPConnectionPool(host='127.0.0.1', port=18888): Read timed out."
+    },
+    {
+      "name": "搜索能力",
+      "status": "❌ FAIL",
+      "details": "",
+      "error": "HTTPConnectionPool(host='127.0.0.1', port=18888): Read timed out."
+    },
+    {
+      "name": "任务规划能力",
+      "status": "❌ FAIL",
+      "details": "",
+      "error": "HTTPConnectionPool(host='127.0.0.1', port=18888): Read timed out."
+    },
+    {
+      "name": "安全模块能力",
+      "status": "❌ FAIL",
+      "details": "",
+      "error": "HTTPConnectionPool(host='127.0.0.1', port=18888): Read timed out."
+    },
+    {
+      "name": "LLM对话能力",
+      "status": "❌ FAIL",
+      "details": "",
+      "error": "HTTPConnectionPool(host='127.0.0.1', port=18888): Read timed out."
+    },
+    {
+      "name": "代码生成场景",
+      "status": "❌ FAIL",
+      "details": "",
+      "error": "HTTPConnectionPool(host='127.0.0.1', port=18888): Read timed out."
+    },
+    {
+      "name": "知识问答场景",
+      "status": "❌ FAIL",
+      "details": "",
+      "error": "HTTPConnectionPool(host='127.0.0.1', port=18888): Read timed out."
+    }
+  ],
+  "errors": [
+    {
+      "test": "代码执行能力",
+      "error": "HTTPConnectionPool(host='127.0.0.1', port=18888): Read timed out."
+    },
+    {
+      "test": "知识检索能力",
+      "error": "HTTPConnectionPool(host='127.0.0.1', port=18888): Read timed out."
+    },
+    {
+      "test": "搜索能力",
+      "error": "HTTPConnectionPool(host='127.0.0.1', port=18888): Read timed out."
+    },
+    {
+      "test": "任务规划能力",
+      "error": "HTTPConnectionPool(host='127.0.0.1', port=18888): Read timed out."
+    },
+    {
+      "test": "安全模块能力",
+      "error": "HTTPConnectionPool(host='127.0.0.1', port=18888): Read timed out."
+    },
+    {
+      "test": "LLM对话能力",
+      "error": "HTTPConnectionPool(host='127.0.0.1', port=18888): Read timed out."
+    },
+    {
+      "test": "代码生成场景",
+      "error": "HTTPConnectionPool(host='127.0.0.1', port=18888): Read timed out."
+    },
+    {
+      "test": "知识问答场景",
+      "error": "HTTPConnectionPool(host='127.0.0.1', port=18888): Read timed out."
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, Request, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from typing import Dict, List, Any, Optional
 import sys
 import os
 import asyncio
@@ -438,3 +439,339 @@ async def api_shutdown(background_tasks: BackgroundTasks):
 
     background_tasks.add_task(_graceful_shutdown)
     return {"status": "success", "message": "Broker is shutting down gracefully"}
+
+
+# ============================================================
+# 权限诊断接口
+# ============================================================
+
+def check_accessibility_permission() -> Dict[str, Any]:
+    """
+    检查辅助功能权限
+    
+    Returns:
+        权限状态信息
+    """
+    try:
+        # 尝试导入 PyObjC
+        try:
+            import ApplicationServices
+            has_pyobjc = True
+        except ImportError:
+            has_pyobjc = False
+        
+        if not has_pyobjc:
+            return {
+                "available": False,
+                "granted": False,
+                "error": "PyObjC 未安装，无法检测辅助功能权限"
+            }
+        
+        # 检查辅助功能权限
+        granted = ApplicationServices.AXIsProcessTrusted()
+        
+        return {
+            "available": True,
+            "granted": granted,
+            "description": "辅助功能权限用于读取高亮文本和 UI 元素",
+            "impact": "无感划词、UI 元素读取" if granted else "无法使用无感划词功能"
+        }
+    except Exception as e:
+        return {
+            "available": False,
+            "granted": False,
+            "error": str(e)
+        }
+
+
+def check_screen_recording_permission() -> Dict[str, Any]:
+    """
+    检查屏幕录制权限
+    
+    Returns:
+        权限状态信息
+    """
+    try:
+        # 尝试导入 PyObjC
+        try:
+            from AppKit import NSWorkspace
+            has_pyobjc = True
+        except ImportError:
+            has_pyobjc = False
+        
+        if not has_pyobjc:
+            return {
+                "available": False,
+                "granted": False,
+                "error": "PyObjC 未安装，无法检测屏幕录制权限"
+            }
+        
+        # 尝试截图来检测屏幕录制权限
+        try:
+            from PIL import ImageGrab
+            # 尝试截图
+            screenshot = ImageGrab.grab()
+            granted = screenshot is not None
+        except Exception:
+            granted = False
+        
+        return {
+            "available": True,
+            "granted": granted,
+            "description": "屏幕录制权限用于截取屏幕截图",
+            "impact": "窗口截图、屏幕录制" if granted else "无法截取屏幕截图"
+        }
+    except Exception as e:
+        return {
+            "available": False,
+            "granted": False,
+            "error": str(e)
+        }
+
+
+def check_automation_permission() -> Dict[str, Any]:
+    """
+    检查自动化权限
+    
+    Returns:
+        权限状态信息
+    """
+    try:
+        # 尝试导入 subprocess
+        import subprocess
+        
+        # 尝试执行简单的 AppleScript 来检测自动化权限
+        try:
+            result = subprocess.run(
+                ['osascript', '-e', 'tell application "System Events" to get name of first process'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            granted = result.returncode == 0
+        except subprocess.TimeoutExpired:
+            granted = False
+        except Exception:
+            granted = False
+        
+        return {
+            "available": True,
+            "granted": granted,
+            "description": "自动化权限用于执行 AppleScript 控制其他应用",
+            "impact": "浏览器控制、备忘录操作、系统事件监听" if granted else "无法控制其他应用"
+        }
+    except Exception as e:
+        return {
+            "available": False,
+            "granted": False,
+            "error": str(e)
+        }
+
+
+def check_full_disk_access() -> Dict[str, Any]:
+    """
+    检查完全磁盘访问权限
+    
+    Returns:
+        权限状态信息
+    """
+    try:
+        import os
+        
+        # 尝试读取受保护的目录来检测完全磁盘访问权限
+        test_paths = [
+            os.path.expanduser("~/Library/Mail"),
+            os.path.expanduser("~/Library/Safari"),
+            os.path.expanduser("~/Library/Calendars")
+        ]
+        
+        accessible_paths = []
+        for path in test_paths:
+            if os.path.exists(path):
+                try:
+                    os.listdir(path)
+                    accessible_paths.append(path)
+                except PermissionError:
+                    pass
+        
+        granted = len(accessible_paths) > 0
+        
+        return {
+            "available": True,
+            "granted": granted,
+            "accessible_paths": accessible_paths,
+            "description": "完全磁盘访问权限用于读取系统保护目录",
+            "impact": "读取邮件、Safari 数据、日历等" if granted else "无法访问系统保护目录"
+        }
+    except Exception as e:
+        return {
+            "available": False,
+            "granted": False,
+            "error": str(e)
+        }
+
+
+@app.get("/api/v1/system/permissions", dependencies=[Depends(verify_token)])
+async def api_check_permissions():
+    """
+    权限诊断接口
+    
+    检查 Broker 运行所需的各种系统权限状态。
+    """
+    try:
+        permissions = {
+            "accessibility": check_accessibility_permission(),
+            "screen_recording": check_screen_recording_permission(),
+            "automation": check_automation_permission(),
+            "full_disk_access": check_full_disk_access()
+        }
+        
+        # 计算总体状态
+        granted_count = sum(1 for p in permissions.values() if p.get("granted", False))
+        total_count = len(permissions)
+        
+        # 确定哪些权限是必需的
+        required_permissions = ["accessibility", "automation"]
+        missing_required = [
+            name for name in required_permissions 
+            if not permissions[name].get("granted", False)
+        ]
+        
+        # 确定功能影响
+        feature_impact = []
+        if not permissions["accessibility"].get("granted", False):
+            feature_impact.append("无感划词功能不可用")
+        if not permissions["screen_recording"].get("granted", False):
+            feature_impact.append("屏幕截图功能不可用")
+        if not permissions["automation"].get("granted", False):
+            feature_impact.append("浏览器控制、备忘录操作不可用")
+        if not permissions["full_disk_access"].get("granted", False):
+            feature_impact.append("系统保护目录不可访问")
+        
+        return {
+            "status": "success",
+            "data": {
+                "permissions": permissions,
+                "summary": {
+                    "granted_count": granted_count,
+                    "total_count": total_count,
+                    "missing_required": missing_required,
+                    "feature_impact": feature_impact,
+                    "overall_status": "ok" if not missing_required else "partial"
+                },
+                "recommendations": generate_permission_recommendations(permissions)
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"权限诊断失败: {str(e)}")
+
+
+def generate_permission_recommendations(permissions: Dict[str, Any]) -> List[str]:
+    """
+    生成权限建议
+    
+    Args:
+        permissions: 权限状态字典
+        
+    Returns:
+        建议列表
+    """
+    recommendations = []
+    
+    if not permissions["accessibility"].get("granted", False):
+        recommendations.append(
+            "请在 系统设置 > 隐私与安全性 > 辅助功能 中添加 Broker 应用"
+        )
+    
+    if not permissions["screen_recording"].get("granted", False):
+        recommendations.append(
+            "请在 系统设置 > 隐私与安全性 > 屏幕录制 中添加 Broker 应用"
+        )
+    
+    if not permissions["automation"].get("granted", False):
+        recommendations.append(
+            "请在 系统设置 > 隐私与安全性 > 自动化 中允许 Broker 控制其他应用"
+        )
+    
+    if not permissions["full_disk_access"].get("granted", False):
+        recommendations.append(
+            "如需访问系统保护目录，请在 系统设置 > 隐私与安全性 > 完全磁盘访问 中添加 Broker 应用"
+        )
+    
+    if not recommendations:
+        recommendations.append("所有权限已正确配置，Broker 功能完整可用")
+    
+    return recommendations
+
+
+@app.get("/api/v1/system/permissions/guide", dependencies=[Depends(verify_token)])
+async def api_permission_guide():
+    """
+    权限引导接口
+    
+    获取权限配置的详细指南。
+    """
+    try:
+        guide = {
+            "accessibility": {
+                "name": "辅助功能权限",
+                "description": "允许 Broker 读取其他应用的 UI 元素和高亮文本",
+                "steps": [
+                    "打开 系统设置",
+                    "进入 隐私与安全性 > 辅助功能",
+                    "点击左下角的锁图标解锁",
+                    "点击 + 按钮添加 Broker 应用",
+                    "确保 Broker 已被勾选"
+                ],
+                "required_for": ["无感划词", "UI 元素读取", "高亮文本提取"]
+            },
+            "screen_recording": {
+                "name": "屏幕录制权限",
+                "description": "允许 Broker 截取屏幕截图",
+                "steps": [
+                    "打开 系统设置",
+                    "进入 隐私与安全性 > 屏幕录制",
+                    "点击左下角的锁图标解锁",
+                    "点击 + 按钮添加 Broker 应用",
+                    "确保 Broker 已被勾选"
+                ],
+                "required_for": ["窗口截图", "屏幕录制"]
+            },
+            "automation": {
+                "name": "自动化权限",
+                "description": "允许 Broker 通过 AppleScript 控制其他应用",
+                "steps": [
+                    "打开 系统设置",
+                    "进入 隐私与安全性 > 自动化",
+                    "找到 Broker 应用",
+                    "勾选需要控制的应用（如浏览器、备忘录等）"
+                ],
+                "required_for": ["浏览器控制", "备忘录操作", "系统事件监听"]
+            },
+            "full_disk_access": {
+                "name": "完全磁盘访问权限",
+                "description": "允许 Broker 访问系统保护目录",
+                "steps": [
+                    "打开 系统设置",
+                    "进入 隐私与安全性 > 完全磁盘访问",
+                    "点击左下角的锁图标解锁",
+                    "点击 + 按钮添加 Broker 应用",
+                    "确保 Broker 已被勾选"
+                ],
+                "required_for": ["读取邮件数据", "Safari 数据", "日历数据"]
+            }
+        }
+        
+        return {
+            "status": "success",
+            "data": {
+                "guide": guide,
+                "notes": [
+                    "权限更改后可能需要重启 Broker 才能生效",
+                    "某些权限可能需要管理员密码才能修改",
+                    "如果权限被拒绝，相关功能将无法使用"
+                ]
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取权限指南失败: {str(e)}")

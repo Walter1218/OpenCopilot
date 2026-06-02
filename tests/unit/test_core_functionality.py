@@ -603,7 +603,7 @@ class TestLLMProvider:
         provider = MiniMaxProvider(api_key="test_key")
         assert provider.api_key == "test_key"
         assert "minimax" in provider.base_url
-        assert provider.default_model == "MiniMax-M2.7"
+        assert provider.default_model == "MiniMax-M3"
 
     def test_local_provider_init(self):
         """LocalProvider 初始化"""

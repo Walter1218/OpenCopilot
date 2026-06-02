@@ -1371,6 +1371,107 @@ for step in plan.steps:
 
 ---
 
+## 七、实现状态
+
+### 7.1 模块实现进度
+
+| 模块 | 状态 | 实现文件 | 说明 |
+|------|------|----------|------|
+| **上下文管理** | ✅ 已完成 | `context_manager/` | 从 `asu_custom_agent.py` 抽取，保持向后兼容 |
+| **状态管理** | ✅ 已完成 | `state_manager/` | 6个文件，含检查点/恢复/持久化 |
+| **记忆系统** | ✅ 已完成 | `memory_system/` | 10个文件，含检索/遗忘/压缩/配额 |
+| **知识检索** | ⚠️ 部分完成 | `knowledge_graph/` | 有知识图谱，未封装为独立模块 |
+| **搜索能力** | ✅ 已完成 | `search_capability/` | 集成 MiniMax API，支持代码/文档/网络搜索 |
+| **规划器** | ✅ 已完成 | `planner/` | 8个文件，含4种策略 |
+| **工具调用** | ✅ 已完成 | `tool_system/` | 9个文件，含注册/执行/Skill适配 |
+| **代码执行** | ✅ 已完成 | `code_executor/` | 5个文件+5个语言处理器 |
+| **安全及HITL** | ✅ 已完成 | `security_module/` | 8个文件，含权限/审批/速率限制 |
+| **可观测性** | ✅ 已完成 | `observability_module/` | 8个文件，含日志/指标/追踪/健康检查 |
+
+### 7.2 最新更新 (2026-06-02)
+
+#### 搜索能力模块
+
+**实现文件**：
+- `search_capability/__init__.py` - 模块入口
+- `search_capability/core.py` - 核心接口
+- `search_capability/minimax_search.py` - MiniMax 网络搜索
+- `search_capability/code_search.py` - 代码搜索
+- `search_capability/doc_search.py` - 文档搜索
+
+**核心功能**：
+```python
+from search_capability import SearchCapability, SearchType
+
+search = SearchCapability()
+
+# 网络搜索（MiniMax API）
+results = search.web_search("Python async await")
+
+# 代码搜索
+results = search.code_search("def process_data", scope="./src")
+
+# 文档搜索
+results = search.doc_search("架构设计", scope="./docs")
+
+# 统一搜索
+results = search.search("机器学习", search_type=SearchType.ALL)
+```
+
+**MiniMax 搜索 API**：
+- 端点：`https://api.minimaxi.com/v1/coding_plan/search`
+- 参数：`query`（必填），`count`（1-10）
+- 需要 Token Plan API 密钥
+
+#### 上下文管理模块
+
+**实现文件**：
+- `context_manager/__init__.py` - 模块入口
+- `context_manager/core.py` - 核心接口
+- `context_manager/context_envelope.py` - 上下文信封
+
+**核心功能**：
+```python
+from context_manager import ContextManager, ContextWindowManager
+
+# 初始化
+manager = ContextManager(model_name="MiniMax-M3")
+
+# 会话管理
+manager.add_message("session_123", "user", "你好")
+context = manager.get_context("session_123")
+
+# 构建消息
+messages = manager.build_messages(system_prompt, context, history)
+```
+
+**向后兼容**：
+- 与 `asu_custom_agent.py` 中的 `ContextWindowManager` 100% 兼容
+- 支持旧格式的上下文信封
+
+### 7.3 测试验证
+
+**测试文件**：`test_search_context_modules.py`
+
+**测试结果**：
+```
+运行: 13, 失败: 0, 错误: 0
+测试结果: 通过
+```
+
+**测试覆盖**：
+- ✅ 搜索能力模块初始化
+- ✅ 代码搜索功能
+- ✅ 文档搜索功能
+- ✅ MiniMax 搜索提供者
+- ✅ 上下文管理器初始化
+- ✅ 模型适配
+- ✅ 消息构建
+- ✅ 会话管理
+- ✅ 向后兼容性
+
+---
+
 ## 附录：相关文档
 
 - `Agent_OS_Research_Report.md` - Agent OS 调研报告
@@ -1379,3 +1480,5 @@ for step in plan.steps:
 - `Smart_Copilot_API_Redesign.md` - API 重新设计
 - `smart_copilot_api.py` - 现有 API 实现
 - `asu_custom_agent.py` - 现有 Agent 实现
+- `search_capability/` - 搜索能力模块
+- `context_manager/` - 上下文管理模块

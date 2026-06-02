@@ -1,0 +1,282 @@
+{
+  "test_time": "2026-06-02T01:10:57.330653",
+  "models": [
+    "MiniMax-M2.7",
+    "MiniMax-M3"
+  ],
+  "test_cases": 8,
+  "results": {
+    "MiniMax-M2.7": {
+      "total_tests": 8,
+      "successful_tests": 8,
+      "avg_latency": 9.695439964532852,
+      "avg_tokens": 802.25,
+      "test_details": [
+        {
+          "test_name": "代码生成",
+          "success": true,
+          "latency": 4.9687819480896,
+          "token_count": 1044,
+          "response_length": 3494,
+          "scores": {
+            "success": 10.0,
+            "length": 10.0,
+            "speed": 8.0,
+            "token_efficiency": 10.0,
+            "content_quality": 8.0
+          },
+          "avg_score": 9.2,
+          "response_preview": "<think>用户要求我用Python编写一个快速排序算法，并添加详细的注释。这是一个经典的排序算法问题。\n\n快速排序（Quick Sort）是一种分治法的排序算法，主要步骤包括：\n1. 选择一个基准元素（pivot）\n2. 将数组分为两部分：小于基准的元素和大于基准的元素\n3. 递归地对两部分进行排序\n\n我需要：\n1. 编写清晰的Python代码\n2. 添加详细的中文注释解释每一步\n3. 考虑使..."
+        },
+        {
+          "test_name": "逻辑推理",
+          "success": true,
+          "latency": 5.847210884094238,
+          "token_count": 379,
+          "response_length": 927,
+          "scores": {
+            "success": 10.0,
+            "length": 9.0,
+            "speed": 6.0,
+            "token_efficiency": 8.0,
+            "content_quality": 5.0
+          },
+          "avg_score": 7.6,
+          "response_preview": "<think>\nThe user asks in Chinese: \"Xiao Ming has 5 apples, Xiao Hong's apples are twice that of Xiao Ming, Xiao Hua has 3 fewer apples than Xiao Hong. How many apples does Xiao Hua have? Please detail..."
+        },
+        {
+          "test_name": "创意写作",
+          "success": true,
+          "latency": 17.03862476348877,
+          "token_count": 985,
+          "response_length": 2778,
+          "scores": {
+            "success": 10.0,
+            "length": 10.0,
+            "speed": 4.0,
+            "token_efficiency": 8.0,
+            "content_quality": 5.5
+          },
+          "avg_score": 7.5,
+          "response_preview": "<think>The user is speaking Chinese: \"请写一首关于人工智能的现代诗，要求有科技感和人文关怀。\" which means \"Please write a modern poem about artificial intelligence, with a sense of technology and humanistic care.\"\n\nWe need to w..."
+        },
+        {
+          "test_name": "技术解释",
+          "success": true,
+          "latency": 8.00129508972168,
+          "token_count": 625,
+          "response_length": 1228,
+          "scores": {
+            "success": 10.0,
+            "length": 10.0,
+            "speed": 6.0,
+            "token_efficiency": 6.0,
+            "content_quality": 8.0
+          },
+          "avg_score": 8.0,
+          "response_preview": "<think>用户要求用通俗易懂的语言解释 Transformer 架构及其在自然语言处理中的重要性。我需要用简单的比喻和例子来解释这个复杂的技术概念，避免过多专业术语，同时保持准确性。\n\n我会从以下几个方面来解释：\n1. 什么是 Transformer - 用类比的方式\n2. 核心机制 - 自注意力机制（用简单比喻）\n3. 为什么重要 - 性能和能力的提升\n4. 应用场景\n\n让我用生活化的比喻来..."
+        },
+        {
+          "test_name": "问题分析",
+          "success": true,
+          "latency": 14.311126947402954,
+          "token_count": 1041,
+          "response_length": 2132,
+          "scores": {
+            "success": 10.0,
+            "length": 10.0,
+            "speed": 4.0,
+            "token_efficiency": 8.0,
+            "content_quality": 5.5
+          },
+          "avg_score": 7.5,
+          "response_preview": "<think>用户问的是关于Web应用响应时间突然变慢的可能原因和排查步骤。这是一个典型的性能问题排查场景，我需要从多个维度来分析。\n\n让我组织一下思路：\n\n## 可能的原因\n\n1. **网络层面**\n   - 网络带宽不足\n   - 网络延迟增加\n   - CDN/DNS问题\n   - 防火墙/负载均衡器问题\n\n2. **服务器层面**\n   - 服务器负载过高\n   - CPU使用率高\n   ..."
+        },
+        {
+          "test_name": "多轮对话理解",
+          "success": true,
+          "latency": 13.434340953826904,
+          "token_count": 1041,
+          "response_length": 3870,
+          "scores": {
+            "success": 10.0,
+            "length": 10.0,
+            "speed": 4.0,
+            "token_efficiency": 10.0,
+            "content_quality": 7.5
+          },
+          "avg_score": 8.3,
+          "response_preview": "<think>\n用户想要在 FastAPI 项目中添加用户认证功能。这是一个很常见的需求，我需要提供一个全面的解决方案，包括：\n\n1. 基本的用户认证概念\n2. JWT 认证的实现方式\n3. 密码哈希\n4. 完整的代码示例\n\n让我提供一个清晰、实用的指南。\n</think>\n\n# FastAPI 用户认证完整指南\n\n## 📋 认证方案概览\n\n```\n┌───────────────────────..."
+        },
+        {
+          "test_name": "错误处理",
+          "success": true,
+          "latency": 3.1912670135498047,
+          "token_count": 655,
+          "response_length": 1896,
+          "scores": {
+            "success": 10.0,
+            "length": 10.0,
+            "speed": 8.0,
+            "token_efficiency": 8.0,
+            "content_quality": 7.5
+          },
+          "avg_score": 8.7,
+          "response_preview": "<think>The user is asking me to find the problem in their Python code and fix it. Let me analyze the code:\n\n```python\ndef divide(a, b):\n    return a / b\n\nresult = divide(10, 0)\nprint(result)\n```\n\nThe ..."
+        },
+        {
+          "test_name": "数据处理",
+          "success": true,
+          "latency": 10.770872116088867,
+          "token_count": 648,
+          "response_length": 1914,
+          "scores": {
+            "success": 10.0,
+            "length": 10.0,
+            "speed": 4.0,
+            "token_efficiency": 8.0,
+            "content_quality": 8.0
+          },
+          "avg_score": 8.0,
+          "response_preview": "<think>\n用户想要一个 Python 脚本来：\n1. 读取 CSV 文件（包含 name, age, email）\n2. 找出年龄大于 30 岁的用户\n\n我将提供一个简洁清晰的 Python 脚本示例。\n</think>\n\n# Python CSV 数据筛选脚本\n\n## 基础版本\n\n```python\nimport csv\n\ndef filter_users_by_age(input_fil..."
+        }
+      ]
+    },
+    "MiniMax-M3": {
+      "total_tests": 8,
+      "successful_tests": 8,
+      "avg_latency": 29.53732517361641,
+      "avg_tokens": 951.75,
+      "test_details": [
+        {
+          "test_name": "代码生成",
+          "success": true,
+          "latency": 30.476207971572876,
+          "token_count": 1198,
+          "response_length": 2602,
+          "scores": {
+            "success": 10.0,
+            "length": 10.0,
+            "speed": 2.0,
+            "token_efficiency": 8.0,
+            "content_quality": 8.5
+          },
+          "avg_score": 7.7,
+          "response_preview": "<think>\n用户要求用 Python 编写一个快速排序算法，并添加详细注释。快速排序是一种经典的分治算法，我会提供清晰的实现和注释。\n\n让我编写一个完整的快速排序函数，包含：\n1. 递归实现\n2. 详细的注释说明每一步\n3. 选择基准元素（pivot）的策略\n4. 分区（partition）的过程\n5. 边界情况处理\n6. 时间和空间复杂度分析\n\n我会提供一个完整且易于理解的实现。\n</thi..."
+        },
+        {
+          "test_name": "逻辑推理",
+          "success": true,
+          "latency": 15.243625164031982,
+          "token_count": 644,
+          "response_length": 958,
+          "scores": {
+            "success": 10.0,
+            "length": 9.0,
+            "speed": 4.0,
+            "token_efficiency": 6.0,
+            "content_quality": 5.5
+          },
+          "avg_score": 6.9,
+          "response_preview": "<think>\nThe user is asking a math word problem in Chinese. Let me solve it step by step.\n\n小明有 5 个苹果 (Xiao Ming has 5 apples)\n小红的苹果是小明的 2 倍 (Xiao Hong has twice as many as Xiao Ming)\n小华的苹果比小红少 3 个 (Xia..."
+        },
+        {
+          "test_name": "创意写作",
+          "success": true,
+          "latency": 19.0403573513031,
+          "token_count": 414,
+          "response_length": 421,
+          "scores": {
+            "success": 10.0,
+            "length": 7.0,
+            "speed": 4.0,
+            "token_efficiency": 6.0,
+            "content_quality": 5.5
+          },
+          "avg_score": 6.5,
+          "response_preview": "<think>\n用户要求写一首关于人工智能的现代诗，要求有科技感和人文关怀。这是一个创作任务，没有政治敏感性。我需要创作一首融合科技元素和人文情感的诗作，体现AI时代的思考。\n</think>\n# 数据的诗篇\n\n在硅与光的交界处，\n我们学会了对话——\n用0与1的韵律，\n编织古老的语言。\n\n神经网络的褶皱里，\n藏着一千个人类文明的夜晚，\n每一颗星辰都学会了思考，\n每一行代码都沾染了月色。\n\n镜子中的..."
+        },
+        {
+          "test_name": "技术解释",
+          "success": true,
+          "latency": 48.86421513557434,
+          "token_count": 1199,
+          "response_length": 2981,
+          "scores": {
+            "success": 10.0,
+            "length": 10.0,
+            "speed": 2.0,
+            "token_efficiency": 8.0,
+            "content_quality": 6.5
+          },
+          "avg_score": 7.3,
+          "response_preview": "<think>\nThe user is asking me to explain the Transformer architecture in simple, easy-to-understand language, and why it's so important in natural language processing. They want a clear explanation su..."
+        },
+        {
+          "test_name": "问题分析",
+          "success": true,
+          "latency": 45.96536087989807,
+          "token_count": 1195,
+          "response_length": 2123,
+          "scores": {
+            "success": 10.0,
+            "length": 10.0,
+            "speed": 2.0,
+            "token_efficiency": 6.0,
+            "content_quality": 5.0
+          },
+          "avg_score": 6.6,
+          "response_preview": "<think>\nThe user is asking about a Web application whose response time has suddenly slowed down. They want me to list possible causes and troubleshooting steps. This is a classic backend engineering /..."
+        },
+        {
+          "test_name": "多轮对话理解",
+          "success": true,
+          "latency": 31.598145008087158,
+          "token_count": 1197,
+          "response_length": 3293,
+          "scores": {
+            "success": 10.0,
+            "length": 10.0,
+            "speed": 2.0,
+            "token_efficiency": 8.0,
+            "content_quality": 8.5
+          },
+          "avg_score": 7.7,
+          "response_preview": "<think>\n用户询问如何在 FastAPI 项目中添加用户认证功能。这是一个常见的需求，有多种实现方式。我需要提供全面但清晰的指导。\n\n让我思考一下 FastAPI 中用户认证的主要方案：\n\n1. **OAuth2 with Password (and hashing)** - FastAPI 官方教程中推荐的方式\n2. **OAuth2 with JWT tokens** - 更常见的生产级..."
+        },
+        {
+          "test_name": "错误处理",
+          "success": true,
+          "latency": 11.955229043960571,
+          "token_count": 556,
+          "response_length": 935,
+          "scores": {
+            "success": 10.0,
+            "length": 9.0,
+            "speed": 4.0,
+            "token_efficiency": 6.0,
+            "content_quality": 7.5
+          },
+          "avg_score": 7.3,
+          "response_preview": "<think>\nThe user is asking me to debug a Python code. The issue is that the code attempts to divide by zero, which raises a `ZeroDivisionError`.\n</think>\n# 问题分析\n\n你的代码中执行了**除以零**的操作，这会触发 Python 的 `Zero..."
+        },
+        {
+          "test_name": "数据处理",
+          "success": true,
+          "latency": 33.155460834503174,
+          "token_count": 1211,
+          "response_length": 3392,
+          "scores": {
+            "success": 10.0,
+            "length": 10.0,
+            "speed": 2.0,
+            "token_efficiency": 8.0,
+            "content_quality": 8.5
+          },
+          "avg_score": 7.7,
+          "response_preview": "<think>\n用户要求我帮忙写一个 Python 脚本来处理 CSV 文件。这是一个相对简单但很实用的数据处理任务。我应该提供一个清晰、健壮、且易于理解的脚本。\n\n让我思考一下应该包含哪些要素：\n1. 读取 CSV 文件\n2. 过滤出年龄大于 30 的用户\n3. 输出结果\n4. 错误处理（文件不存在、列名错误等）\n5. 可能的话，使用 pandas（更强大）或标准库 csv（更轻量）\n\n我会提供..."
+        }
+      ]
+    }
+  }
+}

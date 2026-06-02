@@ -1,0 +1,613 @@
+{
+  "test_time": "2026-06-02T02:06:15.480887",
+  "models": [
+    "MiniMax-M2.7",
+    "MiniMax-M3"
+  ],
+  "test_cases": {
+    "code": 8,
+    "ppt": 8
+  },
+  "results": {
+    "MiniMax-M2.7": {
+      "code": {
+        "total_tests": 8,
+        "successful_tests": 8,
+        "avg_latency": 16.158207029104233,
+        "avg_tokens": 1964.25,
+        "avg_score": 7.947474192950846,
+        "test_details": [
+          {
+            "test_name": "简单代码生成-冒泡排序",
+            "success": true,
+            "latency": 17.356940031051636,
+            "token_count": 1487,
+            "response_length": 3284,
+            "scores": {
+              "success": 10.0,
+              "speed": 6.0,
+              "token_efficiency": 6.62542030934768,
+              "code_quality": 6.5,
+              "comment_quality": 7.500000000000001,
+              "completeness": 9.5
+            },
+            "avg_score": 7.687570051557947,
+            "response_preview": "<think>用户要求用 Python 编写一个冒泡排序函数，并添加详细的中文注释。冒泡排序是一个基础的排序算法，我需要：\n\n1. 定义函数接受一个列表作为参数\n2. 实现冒泡排序的核心逻辑\n3. 添加详细的中文注释解释每一步\n4. 可能包含一个简单的测试示例\n\n冒泡排序的核心思想是：\n- 通过相邻元素的比较和交换，将最大的元素逐步\"冒泡\"到最后\n- 每一轮比较后，未排序部分的最大值会到达正确位置\n- 重复进行直到没有元素需要交换\n\n我会写一个清晰、带详细注释的版本。\n</think>\n\n# 冒泡排序算法实现\n\n```python\ndef bubble_sort(arr):\n    \"\"\"\n ..."
+          },
+          {
+            "test_name": "中等复杂度-装饰器",
+            "success": true,
+            "latency": 18.823564052581787,
+            "token_count": 2070,
+            "response_length": 7463,
+            "scores": {
+              "success": 10.0,
+              "speed": 6.0,
+              "token_efficiency": 10.0,
+              "code_quality": 7.5,
+              "comment_quality": 7.500000000000001,
+              "completeness": 9.5
+            },
+            "avg_score": 8.416666666666666,
+            "response_preview": "<think>用户需要一个装饰器来实现函数执行时间统计功能，需要支持：\n1. 异步函数\n2. 同步函数\n3. 可配置输出格式\n4. 详细注释\n\n我来编写一个完整的实现，包含：\n- 支持同步和异步函数的装饰器\n- 可配置的输出格式（可以自定义格式化函数）\n- 详细的类型注解\n- 完整的文档字符串\n- 详细的代码注释\n- 多种输出格式选项\n\n我会创建一个完整的模块，包含：\n1. 核心装饰器类\n2. 预定义的格式化器\n3. 使用示例\n</think>\n\n\n\n# Python 函数执行时间统计装饰器\n\n## 完整实现代码\n\n```python\n\"\"\"\n函数执行时间统计装饰器模块\n\n功能特性：\n- 支持..."
+          },
+          {
+            "test_name": "复杂代码-ORM框架",
+            "success": true,
+            "latency": 8.700337886810303,
+            "token_count": 2081,
+            "response_length": 7997,
+            "scores": {
+              "success": 10.0,
+              "speed": 8.0,
+              "token_efficiency": 10.0,
+              "code_quality": 8.5,
+              "comment_quality": 5.4,
+              "completeness": 8.5
+            },
+            "avg_score": 8.4,
+            "response_preview": "<think>用户要求用 Python 实现一个完整的 ORM 框架，需要包含以下功能：\n1. 模型定义 - 支持定义数据模型，字段类型\n2. CRUD 操作 - Create, Read, Update, Delete\n3. 关系映射 - 一对一、一对多、多对多关系\n4. 查询构建器 - 支持链式调用构建查询\n5. 事务支持 - 支持事务操作\n\n我需要设计一个清晰、可扩展的架构：\n\n1. 字段系统 (Fields)\n   - BaseField, IntegerField, StringField, BooleanField, DateTimeField 等\n\n2. 模型元数据 (Model..."
+          },
+          {
+            "test_name": "代码调试",
+            "success": true,
+            "latency": 16.074251890182495,
+            "token_count": 1766,
+            "response_length": 5587,
+            "scores": {
+              "success": 10.0,
+              "speed": 6.0,
+              "token_efficiency": 9.490939977349944,
+              "code_quality": 9.0,
+              "comment_quality": 6.1000000000000005,
+              "completeness": 9.5
+            },
+            "avg_score": 8.348489996224991,
+            "response_preview": "<think>让我分析这段 Python 代码，找出所有的 bug：\n\n1. **`crawl_all()` 是异步方法但被同步调用**\n   - `crawler.crawl_all()` 返回的是一个协程对象，而不是结果\n   - 需要用 `asyncio.run()` 或 `await` 来执行异步方法\n\n2. **`fetch()` 方法没有错误处理**\n   - 网络请求可能会失败，没有 try-except 处理\n   - 应该处理可能的异常\n\n3. **`aiohttp.ClientSession()` 在每次 `fetch()` 调用时创建和关闭**\n   - 这是低效的，应该..."
+          },
+          {
+            "test_name": "代码重构",
+            "success": true,
+            "latency": 18.77277112007141,
+            "token_count": 1479,
+            "response_length": 4143,
+            "scores": {
+              "success": 10.0,
+              "speed": 6.0,
+              "token_efficiency": 8.403651115618661,
+              "code_quality": 7.5,
+              "comment_quality": 5.4,
+              "completeness": 9.5
+            },
+            "avg_score": 7.800608519269777,
+            "response_preview": "<think>用户希望我重构这段Python代码，提高其可读性、可维护性和性能。让我分析一下这段代码的问题：\n\n1. **可读性问题**：\n   - 使用了多层嵌套的if语句，深度达到4层\n   - 使用`range(len(data))`而不是直接迭代\n   - 魔法数字（-1, -2, -3, 0, 2）没有明确的语义\n\n2. **可维护性问题**：\n   - 错误码（-1, -2, -3）没有定义常量\n   - 逻辑分散在多层嵌套中\n\n3. **性能问题**：\n   - 使用索引访问而不是直接迭代\n\n重构方案：\n1. 使用枚举或常量定义错误码\n2. 使用直接迭代而不是索引访问\n3. 提取..."
+          },
+          {
+            "test_name": "代码解释-设计模式",
+            "success": true,
+            "latency": 20.73784112930298,
+            "token_count": 2281,
+            "response_length": 6890,
+            "scores": {
+              "success": 10.0,
+              "speed": 4.0,
+              "token_efficiency": 9.061814993423937,
+              "code_quality": 8.0,
+              "comment_quality": 5.4,
+              "completeness": 9.5
+            },
+            "avg_score": 7.660302498903989,
+            "response_preview": "<think>用户请求我详细解释这段 Python 代码的功能、设计模式和潜在问题。这段代码实现了一个熔断器（Circuit Breaker）模式。让我仔细分析一下：\n\n## 功能分析\n\n这是一个典型的**熔断器模式**的实现，主要用于防止级联故障。让我逐步分析：\n\n### 状态机\n- **Closed（关闭）**：正常状态，请求会正常执行。如果失败次数达到阈值，转向 Open\n- **Open（打开）**：故障状态，所有请求直接拒绝，不执行函数\n- **Half-Open（半开）**：试探状态，等待恢复超时后，允许一个请求尝试执行，如果成功则转为 Closed，如果失败则继续 Open\n\n#..."
+          },
+          {
+            "test_name": "单元测试生成",
+            "success": true,
+            "latency": 8.086522102355957,
+            "token_count": 2201,
+            "response_length": 7664,
+            "scores": {
+              "success": 10.0,
+              "speed": 8.0,
+              "token_efficiency": 10.0,
+              "code_quality": 7.0,
+              "comment_quality": 6.1000000000000005,
+              "completeness": 8.5
+            },
+            "avg_score": 8.266666666666667,
+            "response_preview": "<think>用户要求为 BankAccount 类编写完整的单元测试，使用 pytest 框架。我需要覆盖：\n\n1. 正常情况：\n   - 初始化账户（带初始余额和不带初始余额）\n   - 存款（正数金额）\n   - 取款（正数金额且不超过余额）\n   - 获取余额\n   - 获取交易记录\n\n2. 边界情况：\n   - 存款金额为 0\n   - 存款金额为负数\n   - 取款金额为 0\n   - 取款金额为负数\n   - 取款金额等于余额（全额取款）\n   - 取款金额大于余额（超出余额）\n   - 初始余额为 0\n   - 初始余额为负数（如果有验证的话，但实际上没有）\n   - 空账户名..."
+          },
+          {
+            "test_name": "代码审查-安全审计",
+            "success": true,
+            "latency": 20.713428020477295,
+            "token_count": 2349,
+            "response_length": 5322,
+            "scores": {
+              "success": 10.0,
+              "speed": 4.0,
+              "token_efficiency": 6.796934865900384,
+              "code_quality": 8.0,
+              "comment_quality": 4.7,
+              "completeness": 8.5
+            },
+            "avg_score": 6.999489144316731,
+            "response_preview": "<think>用户要求对这段 Python 代码进行全面的代码审查。让我仔细分析这段代码，从安全性、代码质量、性能等多个角度进行评估。\n\n## 1. 严重的安全问题\n\n### 1.1 MD5 密码哈希（严重）\n使用 MD5 进行密码哈希是**极其不安全**的。MD5 已被证明是易受碰撞攻击的，且计算速度太快，容易被暴力破解。对于密码存储，应该使用专门的密码哈希函数，如：\n- bcrypt\n- scrypt\n- Argon2\n- PBKDF2（如果必须使用标准库）\n\n### 1.2 无盐哈希（严重）\n代码直接使用 `hashlib.md5(password.encode())` 进行哈希，完全没..."
+          }
+        ]
+      },
+      "ppt": {
+        "total_tests": 8,
+        "successful_tests": 8,
+        "avg_latency": 15.47085565328598,
+        "avg_tokens": 1787.0,
+        "avg_score": 6.956105063723044,
+        "test_details": [
+          {
+            "test_name": "PPT内容生成-医疗AI",
+            "success": true,
+            "latency": 10.186454057693481,
+            "token_count": 2114,
+            "response_length": 3723,
+            "scores": {
+              "success": 10.0,
+              "speed": 6.0,
+              "token_efficiency": 5.283349101229896,
+              "professionalism": 6.8000000000000025,
+              "creativity": 4.6,
+              "practicality": 6.5,
+              "completeness": 9.0
+            },
+            "avg_score": 6.883335585889986,
+            "response_preview": "<think>用户需要我为一个关于\"人工智能在医疗领域的应用\"的PPT生成完整的内容大纲。根据Style Guidance的要求，我需要：\n\n1. 使用正式书面语，专业术语\n2. 采用分级标题结构（标题、目录、各章节）\n3. 每个部分都要有具体要点和关键信息\n4. 面向医疗从业者、技术开发者、投资者等\n5. 覆盖AI医疗的主要应用领域\n6. 突出中国特色，结合国内政策和发展现状\n\n让我按照用户要求的9个部分来组织内容：\n\n1. 标题页\n2. 目录\n3. 引言\n4. 主要应用领域（至少4个）\n5. 案例分析\n6. 挑战与机遇\n7. 未来展望\n8. 结论\n9. 参考文献\n\n我会确保：\n- 使用中文..."
+          },
+          {
+            "test_name": "PPT结构设计-创业路演",
+            "success": true,
+            "latency": 13.279449224472046,
+            "token_count": 2074,
+            "response_length": 4331,
+            "scores": {
+              "success": 10.0,
+              "speed": 6.0,
+              "token_efficiency": 6.264705882352942,
+              "professionalism": 7.600000000000003,
+              "creativity": 5.199999999999999,
+              "practicality": 5.0,
+              "completeness": 9.0
+            },
+            "avg_score": 7.0092436974789925,
+            "response_preview": "<think>用户需要一个创业项目路演PPT结构，项目是\"基于AI的智能教育平台\"。需要设计10-12页的PPT，每页有标题、要点和视觉元素建议。\n\n我需要提供一个完整的、专业的PPT结构设计，包括：\n1. 封面\n2. 问题/痛点\n3. 解决方案\n4. 市场规模\n5. 商业模式\n6. 竞争分析\n7. 团队介绍\n8. 产品演示/技术架构\n9. 运营数据/里程碑\n10. 融资需求\n11. 愿景/未来规划\n12. 结束页/联系方式\n\n每个页面需要包含：\n- 明确的标题\n- 关键要点\n- 视觉元素建议\n\n让我开始设计一个专业、逻辑清晰的PPT结构。</think>\n\n# AI智能教育平台路演PPT结构..."
+          },
+          {
+            "test_name": "PPT内容优化",
+            "success": true,
+            "latency": 22.624387741088867,
+            "token_count": 1393,
+            "response_length": 3212,
+            "scores": {
+              "success": 10.0,
+              "speed": 4.0,
+              "token_efficiency": 6.917444364680545,
+              "professionalism": 7.200000000000003,
+              "creativity": 4.0,
+              "practicality": 5.5,
+              "completeness": 9.0
+            },
+            "avg_score": 6.659634909240078,
+            "response_preview": "<think>\n用户需要我优化一个PPT的内容，要求更加专业和有说服力。这是一个关于公司业绩报告的PPT优化任务。\n\n我需要：\n1. 优化标题，使其更加专业和有力\n2. 重新组织要点，使其更有逻辑性和说服力\n3. 建议添加具体的数据和图表类型\n4. 确保优化建议具有实操性\n\n让我来系统地优化这份PPT：\n\n**标题优化方向**：\n- 使用量化语言\n- 体现增长和成就\n- 更加聚焦和有冲击力\n\n**要点优化方向**：\n- 将模糊描述改为具体指标\n- 使用专业术语\n- 按照重要程度或逻辑顺序排列\n- 突出关键成就\n\n**数据建议**：\n- 具体的百分比增长\n- 同比/环比数据\n- 行业对标数据\n-..."
+          },
+          {
+            "test_name": "PPT风格建议-科技发布会",
+            "success": true,
+            "latency": 11.34299921989441,
+            "token_count": 2092,
+            "response_length": 5215,
+            "scores": {
+              "success": 10.0,
+              "speed": 6.0,
+              "token_efficiency": 7.478489483747611,
+              "professionalism": 8.000000000000004,
+              "creativity": 6.999999999999998,
+              "practicality": 6.0,
+              "completeness": 9.0
+            },
+            "avg_score": 7.639784211963944,
+            "response_preview": "<think>用户需要为科技公司产品发布会设计PPT，需要详细的设计建议。这是一个非常具体的设计咨询请求，用户已经明确了几项要求：\n1. 配色方案\n2. 字体搭配建议\n3. 布局风格\n4. 动画效果建议\n5. 视觉元素建议\n6. 整体设计原则\n\n要求是现代、科技感强、专业。\n\n我需要提供一个全面、专业的设计方案，用中文回答，符合角色设定中的专业设计师身份。\n\n让我组织一个完整的PPT设计方案：\n</think>\n\n# 科技公司产品发布会 PPT 设计方案\n\n---\n\n## 1. 配色方案\n\n### 主色推荐\n\n| 颜色类型 | 色值 | 用途 |\n|---------|------|-----..."
+          },
+          {
+            "test_name": "PPT图表设计-数据可视化",
+            "success": true,
+            "latency": 8.154765129089355,
+            "token_count": 1931,
+            "response_length": 4237,
+            "scores": {
+              "success": 10.0,
+              "speed": 8.0,
+              "token_efficiency": 6.5825996892801655,
+              "professionalism": 6.8000000000000025,
+              "creativity": 4.0,
+              "practicality": 6.5,
+              "completeness": 9.0
+            },
+            "avg_score": 7.26894281275431,
+            "response_preview": "<think>用户需要我为四组不同数据设计合适的图表，并在PPT中呈现。让我逐一分析：\n\n1. **2023年Q1-Q4销售额**（120万、150万、180万、210万）\n   - 这是时间序列数据，展示趋势\n   - 最适合：**柱状图**或**折线图**\n   - 柱状图：直观展示各季度销售额对比\n   - 折线图：强调增长趋势\n   - 建议：可以用组合图，或者如果强调增长趋势用折线图更好\n\n2. **各产品线占比**（A 35%、B 25%、C 20%、其他 20%）\n   - 这是比例/构成数据\n   - 最适合：**饼图**或**环形图**\n   - 可以展示整体构成比例\n   ..."
+          },
+          {
+            "test_name": "PPT演讲备注生成",
+            "success": true,
+            "latency": 3.639991044998169,
+            "token_count": 519,
+            "response_length": 786,
+            "scores": {
+              "success": 10.0,
+              "speed": 10.0,
+              "token_efficiency": 4.543352601156069,
+              "professionalism": 5.200000000000001,
+              "creativity": 4.0,
+              "practicality": 4.0,
+              "completeness": 6.0
+            },
+            "avg_score": 6.249050371593724,
+            "response_preview": "<think>用户需要我为PPT页面\"AI技术架构\"生成演讲备注。页面包含4个要点：\n1. 微服务架构设计\n2. 实时数据处理流程\n3. 模型训练与部署\n4. 系统监控与告警\n\n要求：\n- 每个要点2-3句话\n- 语言口语化\n- 包含过渡语\n- 总时长控制在2分钟内（大约300字左右）\n\n我需要用演讲教练的专业能力来写这些备注，让语言自然、有感染力，像是在演讲而不是念稿。\n\n让我来构思：\n\n开场：可以简单承接上文或直接切入主题\n过渡语：要点之间需要有衔接\n\n每个要点2-3句话，大约40-60字左右，总计约250-300字\n</think>\n\n## 演讲备注\n\n【开场】\n各位好，下面我来介绍一下..."
+          },
+          {
+            "test_name": "PPT模板设计-技术分享",
+            "success": true,
+            "latency": 11.6875319480896,
+            "token_count": 2088,
+            "response_length": 9519,
+            "scores": {
+              "success": 10.0,
+              "speed": 6.0,
+              "token_efficiency": 10.0,
+              "professionalism": 7.600000000000003,
+              "creativity": 5.199999999999999,
+              "practicality": 4.5,
+              "completeness": 9.0
+            },
+            "avg_score": 7.471428571428572,
+            "response_preview": "<think>用户需要一个技术分享会的PPT模板设计方案。我需要提供一个详细的设计方案，包括7个主要部分的设计要求。\n\n让我来设计一个现代、简洁、技术感强的PPT模板方案：\n\n1. 封面设计 - 技术分享会需要专业、现代感\n2. 目录页 - 清晰的导航\n3. 内容页 - 承载主要信息\n4. 图表页 - 数据可视化\n5. 代码展示页 - 技术分享必备\n6. 结论页 - 总结要点\n7. Q&A页 - 互动环节\n\n我会使用深色主题配合亮色点缀，符合技术人员审美，并使用ASCII格式的表格来展示颜色方案。\n</think>\n\n# 技术分享会PPT模板设计方案\n\n## 设计规范总览\n\n### 🎨 配色方..."
+          },
+          {
+            "test_name": "PPT动画设计-产品发布",
+            "success": true,
+            "latency": 42.851266860961914,
+            "token_count": 2085,
+            "response_length": 3803,
+            "scores": {
+              "success": 10.0,
+              "speed": 2.0,
+              "token_efficiency": 5.471942446043165,
+              "professionalism": 7.600000000000003,
+              "creativity": 5.199999999999999,
+              "practicality": 6.0,
+              "completeness": 9.0
+            },
+            "avg_score": 6.467420349434739,
+            "response_preview": "<think>\n用户需要为产品发布PPT设计动画效果，要求专业、不花哨、增强表达力。我需要提供一个全面的动画设计指南，涵盖用户要求的5个方面。\n\n让我按照要求组织内容：\n1. 页面切换动画建议\n2. 元素入场动画\n3. 数据展示动画\n4. 流程图动画\n5. 重点强调动画\n\n我会使用Mermaid图表来可视化一些动画流程，并提供专业、实用的建议。\n</think>\n\n# 产品发布PPT动画设计指南\n\n## 设计原则\n\n```mermaid\ngraph TD\n    A[动画设计原则] --> B[简洁有力]\n    A --> C[节奏控制]\n    A --> D[聚焦内容]\n    A --..."
+          }
+        ]
+      }
+    },
+    "MiniMax-M3": {
+      "code": {
+        "total_tests": 8,
+        "successful_tests": 8,
+        "avg_latency": 55.79675316810608,
+        "avg_tokens": 2299.0,
+        "avg_score": 7.361878969135235,
+        "test_details": [
+          {
+            "test_name": "简单代码生成-冒泡排序",
+            "success": true,
+            "latency": 52.404489040374756,
+            "token_count": 2193,
+            "response_length": 4304,
+            "scores": {
+              "success": 10.0,
+              "speed": 2.0,
+              "token_efficiency": 5.8878248974008205,
+              "code_quality": 6.5,
+              "comment_quality": 7.500000000000001,
+              "completeness": 9.5
+            },
+            "avg_score": 6.89797081623347,
+            "response_preview": "<think>\n用户要求用 Python 编写一个冒泡排序函数，并添加详细注释。这是一个非常基础的算法问题，我需要提供清晰的实现和注释。\n\n冒泡排序的核心思想：\n1. 比较相邻的元素，如果顺序错误就交换它们\n2. 对每一对相邻元素做同样的工作，从开始到结束\n3. 针对所有的元素重复以上步骤，除了最后一个\n4. 持续每次对越来越少的元素重复上面的步骤，直到没有任何一对数字需要比较\n\n我需要考虑：\n- 函数签名：接收一个列表，返回排序后的列表（或者原地排序）\n- 优化：添加一个标志位，如果某一轮没有发生交换，说明已经有序，可以提前结束\n- 详细注释：解释每一步的作用\n\n让我写一个清晰的实现：\n\n`..."
+          },
+          {
+            "test_name": "中等复杂度-装饰器",
+            "success": true,
+            "latency": 61.26899313926697,
+            "token_count": 2224,
+            "response_length": 7465,
+            "scores": {
+              "success": 10.0,
+              "speed": 2.0,
+              "token_efficiency": 10.0,
+              "code_quality": 7.5,
+              "comment_quality": 6.800000000000001,
+              "completeness": 9.5
+            },
+            "avg_score": 7.633333333333333,
+            "response_preview": "<think>\n用户要求编写一个 Python 装饰器，实现函数执行时间统计功能。让我仔细分析需求：\n\n1. 支持异步函数\n2. 支持同步函数\n3. 可配置输出格式\n4. 添加详细注释\n\n这是一个生产级别的需求，我需要考虑以下几个方面：\n\n1. **异步函数支持**：使用 `asyncio.iscoroutinefunction` 检测，或者直接使用 `inspect.iscoroutinefunction`。异步函数需要 `await` 后才能获取执行时间。\n\n2. **同步函数支持**：直接调用并测量时间。\n\n3. **可配置输出格式**：\n   - 可以使用 logging 模块\n   ..."
+          },
+          {
+            "test_name": "复杂代码-ORM框架",
+            "success": true,
+            "latency": 66.30443096160889,
+            "token_count": 2235,
+            "response_length": 8211,
+            "scores": {
+              "success": 10.0,
+              "speed": 2.0,
+              "token_efficiency": 10.0,
+              "code_quality": 7.5,
+              "comment_quality": 5.4,
+              "completeness": 9.5
+            },
+            "avg_score": 7.3999999999999995,
+            "response_preview": "<think>\nThe user wants me to implement a simple ORM framework in Python. Let me think about the architecture carefully.\n\nRequirements:\n1. Model definition - declarative class-based models\n2. CRUD operations - Create, Read, Update, Delete\n3. Relationship mapping - One-to-Many, Many-to-One, Many-to-Ma..."
+          },
+          {
+            "test_name": "代码调试",
+            "success": true,
+            "latency": 51.47789692878723,
+            "token_count": 2134,
+            "response_length": 6764,
+            "scores": {
+              "success": 10.0,
+              "speed": 2.0,
+              "token_efficiency": 9.508903467666354,
+              "code_quality": 9.0,
+              "comment_quality": 5.4,
+              "completeness": 9.5
+            },
+            "avg_score": 7.568150577944393,
+            "response_preview": "<think>\nThe user wants me to analyze and fix bugs in a Python async web crawler. Let me carefully analyze the code.\n\n```python\nimport asyncio\nimport aiohttp\n\nclass AsyncCrawler:\n    def __init__(self, urls):\n        self.urls = urls\n        self.results = []\n    \n    async def fetch(self, url):\n    ..."
+          },
+          {
+            "test_name": "代码重构",
+            "success": true,
+            "latency": 53.704055070877075,
+            "token_count": 2313,
+            "response_length": 8231,
+            "scores": {
+              "success": 10.0,
+              "speed": 2.0,
+              "token_efficiency": 10.0,
+              "code_quality": 8.5,
+              "comment_quality": 5.4,
+              "completeness": 8.5
+            },
+            "avg_score": 7.3999999999999995,
+            "response_preview": "<think>\nThe user wants me to refactor a Python function to improve readability, maintainability, and performance. Let me analyze the original code first:\n\nThe original function:\n1. Iterates through data with index\n2. Has nested if-else statements (5 levels deep)\n3. Uses index-based access (not Pytho..."
+          },
+          {
+            "test_name": "代码解释-设计模式",
+            "success": true,
+            "latency": 55.49802017211914,
+            "token_count": 2435,
+            "response_length": 6801,
+            "scores": {
+              "success": 10.0,
+              "speed": 2.0,
+              "token_efficiency": 8.379055441478439,
+              "code_quality": 9.0,
+              "comment_quality": 5.4,
+              "completeness": 9.5
+            },
+            "avg_score": 7.37984257357974,
+            "response_preview": "<think>\nThe user is asking me to explain a Python code that implements a Circuit Breaker pattern. Let me analyze this thoroughly.\n\nThe code is a class `CircuitBreaker` that implements the Circuit Breaker design pattern. Let me break down each aspect:\n\n1. **Imports**: \n   - `functools.wraps` for pres..."
+          },
+          {
+            "test_name": "单元测试生成",
+            "success": true,
+            "latency": 43.010956048965454,
+            "token_count": 2355,
+            "response_length": 8596,
+            "scores": {
+              "success": 10.0,
+              "speed": 2.0,
+              "token_efficiency": 10.0,
+              "code_quality": 8.0,
+              "comment_quality": 5.4,
+              "completeness": 8.5
+            },
+            "avg_score": 7.316666666666666,
+            "response_preview": "<think>\nThe user wants me to write comprehensive unit tests for a `BankAccount` class using pytest. Let me analyze the class carefully:\n\n1. **Constructor `__init__`**: Takes `owner` and optional `balance` (default 0). Initializes `owner`, `balance`, and `_transactions` (private list).\n\n2. **`deposit..."
+          },
+          {
+            "test_name": "代码审查-安全审计",
+            "success": true,
+            "latency": 62.70518398284912,
+            "token_count": 2503,
+            "response_length": 6670,
+            "scores": {
+              "success": 10.0,
+              "speed": 2.0,
+              "token_efficiency": 7.994406711945665,
+              "code_quality": 8.5,
+              "comment_quality": 6.800000000000001,
+              "completeness": 8.5
+            },
+            "avg_score": 7.2990677853242785,
+            "response_preview": "<think>\nThe user is asking me to perform a comprehensive code review of a Python `UserManager` class. Let me analyze it thoroughly across multiple dimensions: security vulnerabilities, performance issues, code quality, and best practices.\n\nLet me go through the code systematically:\n\n1. **Security Is..."
+          }
+        ]
+      },
+      "ppt": {
+        "total_tests": 8,
+        "successful_tests": 8,
+        "avg_latency": 66.86422330141068,
+        "avg_tokens": 1920.5,
+        "avg_score": 6.346019546470242,
+        "test_details": [
+          {
+            "test_name": "PPT内容生成-医疗AI",
+            "success": true,
+            "latency": 77.60450601577759,
+            "token_count": 2268,
+            "response_length": 4393,
+            "scores": {
+              "success": 10.0,
+              "speed": 2.0,
+              "token_efficiency": 5.810846560846561,
+              "professionalism": 6.8000000000000025,
+              "creativity": 4.6,
+              "practicality": 5.5,
+              "completeness": 9.0
+            },
+            "avg_score": 6.244406651549509,
+            "response_preview": "<think>\nThe user wants me to create a complete content outline for a PPT about \"AI Applications in Healthcare\". They've specified 9 sections and want specific bullet points and key information for each. Let me create a professional, in-depth outline as requested.\n\nLet me think about this carefully a..."
+          },
+          {
+            "test_name": "PPT结构设计-创业路演",
+            "success": true,
+            "latency": 80.32648825645447,
+            "token_count": 2229,
+            "response_length": 4248,
+            "scores": {
+              "success": 10.0,
+              "speed": 2.0,
+              "token_efficiency": 5.717362045760431,
+              "professionalism": 8.800000000000004,
+              "creativity": 4.6,
+              "practicality": 5.5,
+              "completeness": 9.0
+            },
+            "avg_score": 6.516766006537205,
+            "response_preview": "<think>\nThe user is asking for a PPT structure design for a startup roadshow (创业项目路演) about an \"AI-based Smart Education Platform\". They need 10-12 pages, with each page having clear titles, key points, and visual element suggestions.\n\nLet me design a professional, comprehensive structure that follo..."
+          },
+          {
+            "test_name": "PPT内容优化",
+            "success": true,
+            "latency": 60.492337226867676,
+            "token_count": 1528,
+            "response_length": 3055,
+            "scores": {
+              "success": 10.0,
+              "speed": 2.0,
+              "token_efficiency": 5.99803664921466,
+              "professionalism": 7.600000000000003,
+              "creativity": 4.0,
+              "practicality": 6.0,
+              "completeness": 9.0
+            },
+            "avg_score": 6.371148092744952,
+            "response_preview": "<think>\nThe user is asking me to optimize PPT content to make it more professional and persuasive. They've provided a basic outline about a company performance report. I need to:\n\n1. Suggest a more professional and impactful title\n2. Reorganize and enhance the bullet points\n3. Recommend specific dat..."
+          },
+          {
+            "test_name": "PPT风格建议-科技发布会",
+            "success": true,
+            "latency": 85.81162214279175,
+            "token_count": 2246,
+            "response_length": 3868,
+            "scores": {
+              "success": 10.0,
+              "speed": 2.0,
+              "token_efficiency": 5.166518254674978,
+              "professionalism": 7.600000000000003,
+              "creativity": 5.799999999999999,
+              "practicality": 6.0,
+              "completeness": 9.0
+            },
+            "avg_score": 6.509502607810711,
+            "response_preview": "<think>\n用户需要为科技公司产品发布会设计PPT，要求现代、科技感强、专业。这是一个非常具体的设计需求，我需要从UI/UX和PPT设计专业角度提供全面、详细的设计建议。\n\n让我从六个方面来组织答案：\n\n1. 配色方案 - 需要现代科技感，配色要专业\n2. 字体搭配 - 中英文都要考虑\n3. 布局风格 - 现代简洁的布局原则\n4. 动画效果 - 科技感动画\n5. 视觉元素 - 图标、图形、图片\n6. 整体设计原则\n\n让我详细思考每个方面的内容：\n\n**配色方案：**\n- 深色系主题：深蓝/深灰 + 科技蓝/电光蓝\n- 渐变色：蓝紫渐变\n- 强调色：荧光绿/橙红\n- 经典科技配色：黑白灰 +..."
+          },
+          {
+            "test_name": "PPT图表设计-数据可视化",
+            "success": true,
+            "latency": 57.33904981613159,
+            "token_count": 1800,
+            "response_length": 2788,
+            "scores": {
+              "success": 10.0,
+              "speed": 2.0,
+              "token_efficiency": 4.6466666666666665,
+              "professionalism": 8.400000000000004,
+              "creativity": 4.6,
+              "practicality": 6.0,
+              "completeness": 9.0
+            },
+            "avg_score": 6.378095238095239,
+            "response_preview": "<think>\n用户提供了四组不同类型的数据，需要我设计合适的图表类型并说明PPT呈现方式。让我逐一分析：\n\n1. 季度销售额（120万、150万、180万、210万）- 趋势型数据，4个时间点\n2. 产品线占比（百分比构成）- 占比数据\n3. 月度用户增长（6个月）- 趋势型数据，较多时间点\n4. 地区分布（百分比构成）- 占比数据\n\n我需要为每组数据推荐最合适的图表类型，并给出PPT设计建议。让我从可视化最佳实践角度分析：\n\n1. 季度销售额：折线图或柱状图都可以，但如果是强调季度间的\"增长趋势\"，折线图更好；如果是强调季度间的\"对比\"，柱状图更好。考虑到数据呈现明显的上升趋势，折线图更能..."
+          },
+          {
+            "test_name": "PPT演讲备注生成",
+            "success": true,
+            "latency": 26.973755836486816,
+            "token_count": 810,
+            "response_length": 1026,
+            "scores": {
+              "success": 10.0,
+              "speed": 4.0,
+              "token_efficiency": 3.8,
+              "professionalism": 5.200000000000001,
+              "creativity": 4.0,
+              "practicality": 5.0,
+              "completeness": 7.5
+            },
+            "avg_score": 5.642857142857143,
+            "response_preview": "<think>\n用户需要为PPT页面\"AI技术架构\"生成演讲备注。要求：\n- 每个要点2-3句话\n- 语言口语化\n- 包含过渡语\n- 时长控制在2分钟内\n\n让我构思一下内容：\n\n1. 开场过渡：引入技术架构主题\n2. 微服务架构设计：解释为什么选择微服务，优势\n3. 实时数据处理流程：数据流转的环节\n4. 模型训练与部署：MLOps相关\n5. 系统监控与告警：稳定性保障\n6. 收尾\n\n总时长2分钟，大约300-350字的中文演讲内容比较合适。\n\n让我开始写：\n</think>\n# PPT演讲备注：AI技术架构\n\n---\n\n## 【开场引入】(约10秒)\n\n好的，说完了应用场景，我们来看看背后的..."
+          },
+          {
+            "test_name": "PPT模板设计-技术分享",
+            "success": true,
+            "latency": 72.33185410499573,
+            "token_count": 2242,
+            "response_length": 5750,
+            "scores": {
+              "success": 10.0,
+              "speed": 2.0,
+              "token_efficiency": 7.694023193577163,
+              "professionalism": 8.400000000000004,
+              "creativity": 5.199999999999999,
+              "practicality": 5.0,
+              "completeness": 9.0
+            },
+            "avg_score": 6.756289027653881,
+            "response_preview": "<think>\n用户要求设计一个适用于技术分享会的PPT模板方案，需要现代、简洁、技术感强。我需要从专业PPT设计师的角度，提供详细的设计方案，包括配色、排版、字体、元素使用等。\n\n让我系统地设计这个方案：\n\n1. 整体风格定位\n- 科技感、现代感\n- 深色系为主（技术分享常用）\n- 几何元素点缀\n- 清晰的视觉层次\n\n2. 配色方案\n- 主色：深蓝/深灰系\n- 辅助色：青色/蓝色\n- 强调色：橙色/绿色\n\n3. 字体选择\n- 标题：无衬线现代字体\n- 正文：易读字体\n- 代码：等宽字体\n\n4. 各页面详细设计\n\n让我详细展开每个页面的设计方案。\n</think>\n# 🚀 技术分享会PPT模板..."
+          },
+          {
+            "test_name": "PPT动画设计-产品发布",
+            "success": true,
+            "latency": 74.03417301177979,
+            "token_count": 2241,
+            "response_length": 3170,
+            "scores": {
+              "success": 10.0,
+              "speed": 2.0,
+              "token_efficiency": 4.243641231593038,
+              "professionalism": 7.200000000000003,
+              "creativity": 4.0,
+              "practicality": 8.0,
+              "completeness": 9.0
+            },
+            "avg_score": 6.3490916045132915,
+            "response_preview": "<think>\n用户需要为产品发布PPT设计动画效果，要求专业、不花哨、增强表达力。这是一个非常具体且专业的设计咨询问题。我需要从五个维度提供系统性的建议：\n\n1. 页面切换动画\n2. 元素入场动画\n3. 数据展示动画\n4. 流程图动画\n5. 重点强调动画\n\n关键原则：\n- 专业感（避免花哨效果）\n- 服务于内容表达\n- 节奏感与韵律\n- 品牌一致性\n\n让我系统地思考每个类别的最佳实践：\n\n**1. 页面切换动画**\n产品发布场景的切换应该：\n- 保持品牌调性\n- 流畅不打断思路\n- 有方向感（暗示内容逻辑）\n推荐：淡入淡出（Fade）、推进（Push）、分割（Split）、形变（Morph）..."
+          }
+        ]
+      }
+    }
+  }
+}

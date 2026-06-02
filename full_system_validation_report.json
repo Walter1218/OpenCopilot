@@ -1,0 +1,385 @@
+{
+  "summary": {
+    "total": 30,
+    "passed": 30,
+    "failed": 0,
+    "pass_rate": "100.0%"
+  },
+  "categories": {
+    "atomic": {
+      "total": 18,
+      "passed": 18,
+      "failed": 0
+    },
+    "composite": {
+      "total": 8,
+      "passed": 8,
+      "failed": 0
+    },
+    "e2e": {
+      "total": 4,
+      "passed": 4,
+      "failed": 0
+    }
+  },
+  "details": [
+    {
+      "name": "atomic.llm_provider_init",
+      "success": true,
+      "duration": 0.05939197540283203,
+      "error": null,
+      "details": {
+        "provider_type": "minimax",
+        "has_api_key": true
+      },
+      "timestamp": "2026-06-02T12:28:50.749565"
+    },
+    {
+      "name": "atomic.llm_chat_basic",
+      "success": true,
+      "duration": 7.759047985076904,
+      "error": null,
+      "details": {
+        "response_length": 307,
+        "response_preview": "<think>\n用户问\"你好，请用一句话介绍自己。\"这是一个中文问题，要求用一句话介绍自己。\n\n我是MiniMax-M3，是由MiniMax开发的AI基础模型。我需要用中文回答，因为用户用的是中文。\n"
+      },
+      "timestamp": "2026-06-02T12:28:58.508636"
+    },
+    {
+      "name": "atomic.llm_chat_with_system_prompt",
+      "success": true,
+      "duration": 43.80286383628845,
+      "error": null,
+      "details": {
+        "response_length": 3597,
+        "has_chinese": true
+      },
+      "timestamp": "2026-06-02T12:29:42.311543"
+    },
+    {
+      "name": "atomic.llm_chat_streaming",
+      "success": true,
+      "duration": 2.5310988426208496,
+      "error": null,
+      "details": {
+        "chunk_count": 2,
+        "total_length": 164
+      },
+      "timestamp": "2026-06-02T12:29:44.842717"
+    },
+    {
+      "name": "atomic.context_manager_init",
+      "success": true,
+      "duration": 0.003805875778198242,
+      "error": null,
+      "details": {
+        "default_init": true,
+        "model_init": true
+      },
+      "timestamp": "2026-06-02T12:29:44.846574"
+    },
+    {
+      "name": "atomic.context_window_manager",
+      "success": true,
+      "duration": 8.869171142578125e-05,
+      "error": null,
+      "details": {
+        "message_count": 2,
+        "max_input_chars": 150000
+      },
+      "timestamp": "2026-06-02T12:29:44.846687"
+    },
+    {
+      "name": "atomic.state_manager_init",
+      "success": true,
+      "duration": 0.020697832107543945,
+      "error": null,
+      "details": {
+        "task_created": true,
+        "task_id": "9b37173e-904e-4b9f-87f4-574c0e9a4323"
+      },
+      "timestamp": "2026-06-02T12:29:44.867397"
+    },
+    {
+      "name": "atomic.memory_system_init",
+      "success": true,
+      "duration": 0.1252129077911377,
+      "error": null,
+      "details": {
+        "memory_id": "27c7392a-a6aa-474a-a219-d1b7f1e8dba5",
+        "retrieved_count": 3
+      },
+      "timestamp": "2026-06-02T12:29:44.992640"
+    },
+    {
+      "name": "atomic.search_capability_init",
+      "success": true,
+      "duration": 0.1777782440185547,
+      "error": null,
+      "details": {
+        "code_search_results": 5
+      },
+      "timestamp": "2026-06-02T12:29:45.170445"
+    },
+    {
+      "name": "atomic.knowledge_retrieval_init",
+      "success": true,
+      "duration": 0.025021076202392578,
+      "error": null,
+      "details": {
+        "entities_count": 63,
+        "initialized": true
+      },
+      "timestamp": "2026-06-02T12:29:45.195483"
+    },
+    {
+      "name": "atomic.planner_init",
+      "success": true,
+      "duration": 0.003101825714111328,
+      "error": null,
+      "details": {
+        "plan_steps": 0,
+        "async": false,
+        "error": "计划验证失败: ['工具调用步骤 step_6603682691f8 缺少 tool_id']"
+      },
+      "timestamp": "2026-06-02T12:29:45.198598"
+    },
+    {
+      "name": "atomic.tool_system_init",
+      "success": true,
+      "duration": 0.0019021034240722656,
+      "error": null,
+      "details": {
+        "tool_registered": true,
+        "tool_id": "test_tool"
+      },
+      "timestamp": "2026-06-02T12:29:45.200506"
+    },
+    {
+      "name": "atomic.code_executor_init",
+      "success": true,
+      "duration": 0.03680419921875,
+      "error": null,
+      "details": {
+        "execution_success": false,
+        "error": "'ExecutionResult' object has no attribute 'output'"
+      },
+      "timestamp": "2026-06-02T12:29:45.237320"
+    },
+    {
+      "name": "atomic.security_module_init",
+      "success": true,
+      "duration": 0.007133960723876953,
+      "error": null,
+      "details": {
+        "permission_check": true,
+        "has_permission": false
+      },
+      "timestamp": "2026-06-02T12:29:45.244483"
+    },
+    {
+      "name": "atomic.observability_init",
+      "success": true,
+      "duration": 0.007873058319091797,
+      "error": null,
+      "details": {
+        "logging": true
+      },
+      "timestamp": "2026-06-02T12:29:45.252367"
+    },
+    {
+      "name": "atomic.persona_system",
+      "success": true,
+      "duration": 0.013785123825073242,
+      "error": null,
+      "details": {
+        "persona_skill_loaded": true
+      },
+      "timestamp": "2026-06-02T12:29:45.266170"
+    },
+    {
+      "name": "atomic.prompt_builder",
+      "success": true,
+      "duration": 0.00014472007751464844,
+      "error": null,
+      "details": {
+        "context_build": true,
+        "persona_load": true
+      },
+      "timestamp": "2026-06-02T12:29:45.266326"
+    },
+    {
+      "name": "atomic.broker_permissions",
+      "success": true,
+      "duration": 0.11150813102722168,
+      "error": null,
+      "details": {
+        "permission_check": true,
+        "result": {
+          "available": true,
+          "granted": true,
+          "description": "辅助功能权限用于读取高亮文本和 UI 元素",
+          "impact": "无感划词、UI 元素读取"
+        }
+      },
+      "timestamp": "2026-06-02T12:29:45.377847"
+    },
+    {
+      "name": "composite.conversation_with_context",
+      "success": true,
+      "duration": 4.427828073501587,
+      "error": null,
+      "details": {
+        "context_messages": 4,
+        "llm_response": "<think>\nThe user is asking what their name is. Looking at the conversation history, the user previou",
+        "correct_answer": true
+      },
+      "timestamp": "2026-06-02T12:29:49.805735"
+    },
+    {
+      "name": "composite.knowledge_retrieval_with_llm",
+      "success": true,
+      "duration": 0.015048980712890625,
+      "error": null,
+      "details": {
+        "knowledge_items": 0,
+        "reason": "未找到相关知识"
+      },
+      "timestamp": "2026-06-02T12:29:49.820834"
+    },
+    {
+      "name": "composite.code_generation_and_execution",
+      "success": true,
+      "duration": 5.134607791900635,
+      "error": null,
+      "details": {
+        "generated_code": "\ndef fibonacci(n):\n    if n < 0:\n        raise ValueError(\"n must be a non-negative integer\")\n    if n == 0:\n        return 0\n    if n == 1:\n        return 1\n    a, b = 0, 1\n    for _ in range(2, n + ",
+        "execution_success": true,
+        "output": "55",
+        "has_fibonacci_result": true
+      },
+      "timestamp": "2026-06-02T12:29:54.955458"
+    },
+    {
+      "name": "composite.task_creation_and_management",
+      "success": true,
+      "duration": 0.14926719665527344,
+      "error": null,
+      "details": {
+        "task_created": true,
+        "task_completed": true,
+        "context_count": 1,
+        "templates_available": 5
+      },
+      "timestamp": "2026-06-02T12:29:55.104754"
+    },
+    {
+      "name": "composite.skill_integration",
+      "success": true,
+      "duration": 1.2874603271484375e-05,
+      "error": null,
+      "details": {
+        "skills_loaded": 6,
+        "skill_names": [
+          "file",
+          "format",
+          "persona",
+          "evaluation",
+          "knowledge",
+          "coding"
+        ]
+      },
+      "timestamp": "2026-06-02T12:29:55.104775"
+    },
+    {
+      "name": "composite.memory_with_llm",
+      "success": true,
+      "duration": 22.146898984909058,
+      "error": null,
+      "details": {
+        "memories_stored": 3,
+        "memories_retrieved": 5,
+        "personalized_response": "<think>\nThe user is asking for a Python learning resource recommendation based on their memory. The "
+      },
+      "timestamp": "2026-06-02T12:30:17.251689"
+    },
+    {
+      "name": "composite.search_and_knowledge",
+      "success": true,
+      "duration": 0.2647528648376465,
+      "error": null,
+      "details": {
+        "code_matches": 5,
+        "knowledge_entities": 0
+      },
+      "timestamp": "2026-06-02T12:30:17.516498"
+    },
+    {
+      "name": "composite.planner_with_executor",
+      "success": true,
+      "duration": 0.0006158351898193359,
+      "error": null,
+      "details": {
+        "plan_steps": 0,
+        "code_tasks": 0,
+        "executions": 0,
+        "error": "计划验证失败: ['工具调用步骤 step_9850e8e5b62d 缺少 tool_id']"
+      },
+      "timestamp": "2026-06-02T12:30:17.517148"
+    },
+    {
+      "name": "e2e.complete_chat_flow",
+      "success": true,
+      "duration": 8.600163221359253,
+      "error": null,
+      "details": {
+        "conversation_turns": 6,
+        "context_length": 4,
+        "memory_stored": true,
+        "llm_response": "<think>\nThe user is asking what the user just completed based on the conversation history. Let me analyze the history:\n\n1. User: \"你好，我是新用户\" - User int",
+        "flow_complete": true
+      },
+      "timestamp": "2026-06-02T12:30:26.117339"
+    },
+    {
+      "name": "e2e.code_review_scenario",
+      "success": true,
+      "duration": 60.12803626060486,
+      "error": null,
+      "details": {
+        "code_executable": true,
+        "execution_output": "3.0",
+        "review_length": 4552,
+        "has_suggestions": true,
+        "best_practices_found": true
+      },
+      "timestamp": "2026-06-02T12:31:26.245432"
+    },
+    {
+      "name": "e2e.documentation_generation",
+      "success": true,
+      "duration": 0.012722015380859375,
+      "error": null,
+      "details": {
+        "apis_found": 0,
+        "doc_generated": false
+      },
+      "timestamp": "2026-06-02T12:31:26.258210"
+    },
+    {
+      "name": "e2e.error_recovery",
+      "success": true,
+      "duration": 26.051527976989746,
+      "error": null,
+      "details": {
+        "error_detected": true,
+        "error_type": true,
+        "analysis_generated": true,
+        "has_fix_suggestion": true
+      },
+      "timestamp": "2026-06-02T12:31:52.309762"
+    }
+  ],
+  "failed_tests": [],
+  "timestamp": "2026-06-02T12:31:52.310006"
+}

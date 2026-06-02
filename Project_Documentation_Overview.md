@@ -1,6 +1,6 @@
 # OpenCopilot 项目文档全景分析
 
-> **版本**: v2.0 | **日期**: 2026-06-01 | **状态**: Skill化架构完成，文档全面更新
+> **版本**: v2.1 | **日期**: 2026-06-02 | **状态**: 智能体核心模块完成，知识检索封装，Broker权限诊断，集成测试和消融实验验证通过
 
 ---
 
@@ -10,14 +10,15 @@
 
 | 分类 | 文件数 | 总大小 | 说明 |
 |------|--------|--------|------|
-| 项目核心文档 (.md) | 40 | ~380 KB | 根目录下的架构/指南/报告文档 |
+| 项目核心文档 (.md) | 43 | ~420 KB | 根目录下的架构/指南/报告文档 |
 | Skill化架构文档 (.md) | 15 | ~200 KB | skill_architecture/ 目录 |
+| 智能体核心模块文档 (.md) | 3 | ~80 KB | Agent_Core_Modules_*.md |
 | 设计文档 (.md) | 1 | 5.6 KB | docs/ 目录 |
 | 人设配置 (.md) | 12 | ~20 KB | personas/ 目录 |
 | 测试文档 (.md + .txt) | 31 | ~60 KB | test_docs/ 目录 |
 | 项目记忆 (.md) | 5 | ~100 KB | .codebuddy/memory/ |
 | 测试数据 | 2 | ~0.7 KB | tests/test_data/ |
-| **合计** | **106** | **~766 KB** | |
+| **合计** | **112** | **~886 KB** | |
 
 ### 1.2 文档分类树
 
@@ -44,6 +45,11 @@ OpenCopilot/
 │   │   ├── format_skill.py                # FormatSkill实现
 │   │   └── persona_skill.py               # PersonaSkill实现
 │   └── Skill_Architecture_Design.md       # Skill架构设计文档
+│
+├── [1.6] 智能体核心模块文档（3个）
+│   ├── Agent_Core_Modules_Design.md       # 智能体核心模块设计文档
+│   ├── Agent_Core_Modules_Development_Report.md  # 智能体核心模块开发报告
+│   └── Module_Verification_Report.md      # 模块验证报告
 │
 ├── [2] 架构设计文档（10个）
 │   ├── OpenCopilot_Broker_Development_Guide.md       # 特权代理开发规范
@@ -422,12 +428,18 @@ Office_Assistant_Comparison.md（竞品对比）
 | `tools/evaluation_tools.py` | `Quality_Evaluation_Framework.md` |
 | `scripts/` | `README.md`（快速开始）、各部署文档 |
 | `deploy/` | `OpenCopilot_Daemon_Deployment_Plan.md` |
+| `knowledge_retrieval/` | `Agent_Core_Modules_Development_Report.md` |
+| `planner/` | `Agent_Core_Modules_Design.md` + `Agent_Core_Modules_Development_Report.md` |
+| `code_executor/` | `Agent_Core_Modules_Design.md` + `Agent_Core_Modules_Development_Report.md` |
+| `security_module/` | `Agent_Core_Modules_Design.md` + `Agent_Core_Modules_Development_Report.md` |
+| `observability_module/` | `Agent_Core_Modules_Design.md` + `Agent_Core_Modules_Development_Report.md` |
+| `agents_md_module/` | `Agent_Core_Modules_Design.md` + `Agent_Core_Modules_Development_Report.md` |
 
 ### 3.3 版本一致性检查
 
 | 文档 | 声明版本 | 对应代码状态 | 一致性 |
 |------|----------|------------|--------|
-| README.md | v2.3 (2026-06-01) | Skill化架构完成 | ✅ 一致 |
+| README.md | v2.5 (2026-06-02) | 智能体核心模块完成，知识检索封装，Broker权限诊断 | ✅ 一致 |
 | PPT_CoCreation_Improvement_Plan.md | v2.0 (2026-05-30) | P1-P4 已完成 | ✅ 一致 |
 | Smart_Copilot_API_Guide.md | — | 能力平台 API (8089) | ✅ 一致 |
 | OpenCopilot_Broker_Development_Guide.md | V2.1 | P0-P2 完成 | ✅ 一致 |
@@ -435,7 +447,8 @@ Office_Assistant_Comparison.md（竞品对比）
 | docs/PPT_CoCreation_Design.md | — | Phase 1-2 已完成 | ✅ 一致 |
 | Skill_Architecture_Design.md | v1.0 (2026-05-31) | Skill化综合方案完成 | ✅ 一致 |
 | Agent_OS_Research_Report.md | v1.0 (2026-06-01) | Agent OS 深度调研 | ✅ 一致 |
-| Project_Documentation_Overview.md | v2.0 (2026-06-01) | 文档全面更新 | ✅ 一致 |
+| Agent_Core_Modules_Development_Report.md | v1.5 (2026-06-02) | 智能体核心模块完成，集成测试，消融实验 | ✅ 一致 |
+| Project_Documentation_Overview.md | v2.1 (2026-06-02) | 文档全面更新 | ✅ 一致 |
 
 ---
 
@@ -451,18 +464,19 @@ Office_Assistant_Comparison.md（竞品对比）
               ▼                  ▼                  ▼
     ┌─────────────┐   ┌──────────────┐   ┌──────────────┐
     │ 架构设计层   │   │  功能实现层   │   │  质量保障层   │
-    │ (10 个文档)  │   │ (10 个文档)  │   │ (12 个文档)  │
+    │ (11 个文档)  │   │ (12 个文档)  │   │ (14 个文档)  │
     └──────┬──────┘   └──────┬───────┘   └──────┬───────┘
            │                 │                   │
     ┌──────┴──────┐   ┌──────┴───────┐   ┌──────┴───────┐
     │ Broker 指南 │   │ API 文档(2)  │   │ 测试指南(4)  │
     │ Agent 指南  │   │ PPT 文档(3)  │   │ 测试报告(4)  │
     │ 上下文方案  │   │ UI 文档(7)   │   │ 质量评估(4)  │
-    │ 路线图(3)   │   │ Prompt 设计  │   │              │
+    │ 路线图(3)   │   │ Prompt 设计  │   │ 集成测试(2)  │
     │ 部署方案    │   │ 竞品分析     │   │              │
     │ 代码审查    │   │              │   │              │
     │ Skill架构   │   │              │   │              │
     │ Agent OS调研│   │              │   │              │
+    │ 核心模块设计│   │              │   │              │
     └─────────────┘   └──────────────┘   └──────────────┘
            │                 │                   │
            ▼                 ▼                   ▼
@@ -472,6 +486,9 @@ Office_Assistant_Comparison.md（竞品对比）
     │  smart_copilot_platform.py / ppt_cocreation/       │
     │  skill_architecture/ (7个Skill实现)                │
     │  personas/ / tools/                                │
+    │  knowledge_retrieval/ (知识检索封装)                │
+    │  planner/ / code_executor/ / security_module/      │
+    │  observability_module/ / agents_md_module/          │
     └────────────────────────────────────────────────────┘
               │
               ▼
@@ -512,6 +529,10 @@ Office_Assistant_Comparison.md（竞品对比）
 | 测试体系 | ✅ 完善 | 4阶段测试指南 + 工具指南 + 报告 |
 | 部署运维 | ⚠️ 基础 | 有部署方案文档，缺少详细运维手册 |
 | 数据库/存储 | ⚠️ 基础 | MEMORY.md 中有简要说明，缺少独立文档 |
+| 智能体核心模块 | ✅ 完善 | 设计文档 + 开发报告 + 验证报告 |
+| 知识检索模块 | ✅ 完善 | 封装文档 + 测试报告 |
+| Broker权限诊断 | ✅ 完善 | 权限诊断接口文档 + 测试报告 |
+| 集成测试 | ✅ 完善 | 集成测试报告 + 消融实验报告 |
 
 ---
 
@@ -520,10 +541,17 @@ Office_Assistant_Comparison.md（竞品对比）
 OpenCopilot 项目文档体系**整体完善**，覆盖了从架构设计到测试验证的完整开发链路：
 
 1. **层次清晰**：入口 → 架构 → 功能 → 测试 → 记忆，层层递进
-2. **版本同步**：核心文档（v2.0/v2.1/v2.3）与代码实现保持一致
+2. **版本同步**：核心文档（v2.0/v2.1/v2.3/v2.5）与代码实现保持一致
 3. **关联紧密**：文档间引用关系明确，形成完整的知识网络
-4. **更新及时**：Skill化架构文档在 2026-06-01 完成全面更新
-5. **覆盖全面**：7个Skill实现，61个API端点，100%测试通过率
+4. **更新及时**：智能体核心模块文档在 2026-06-02 完成全面更新
+5. **覆盖全面**：10个核心模块实现，61+个API端点，100%测试通过率
+
+**最新更新（2026-06-02）**：
+- 智能体核心模块开发报告：包含5个新模块的完整文档
+- 知识检索模块封装文档：统一查询接口和高级查询接口
+- Broker权限诊断文档：4项权限检查和配置指南
+- 集成测试报告：10项集成测试全部通过
+- 消融实验报告：8项消融实验全部通过，验证模块价值
 
 **主要改进方向**：
 - IDE Extension 缺少独立的开发指南文档

@@ -1650,70 +1650,54 @@ class AICardWindow(QWidget):
             print(f"[PPT] 内容前100字: {text[:100]}")
             
             # 使用API已有的 ppt_generator context_source
-            # 这样API会使用预定义的PPT生成指令，避免冲突
-            response = requests.post(
-                "http://127.0.0.1:18888/v1/agent/chat",
-                json={
-                    "text": text[:3000],  # 只传用户内容，不传指令
-                    "action_type": "chat",
-                    "session_id": f"ppt_gen_{int(time.time())}",
-                    "context_source": "ppt_generator",  # 使用已有的PPT生成上下文
-                    "is_new_task": True  # 新任务，清除历史
-                },
-                timeout=60
-            )
+            # 通过 ASUCustomAgentClient 统一调用，确保 web_search 等参数一致传递
+            from llm_provider import ASUCustomAgentClient
+            agent_client = ASUCustomAgentClient()
+            full_text = ""
+            for chunk in agent_client.stream_agent_task(
+                text[:3000],
+                action_type="chat",
+                session_id=f"ppt_gen_{int(time.time())}",
+                is_new_task=True,
+                context_source="ppt_generator",
+            ):
+                if isinstance(chunk, tuple):
+                    continue  # 跳过 annotations 等 metadata
+                full_text += chunk
             
-            print(f"[PPT] API 响应状态: {response.status_code}")
+            print(f"[PPT] AI 返回内容长度: {len(full_text)} 字符")
+            print(f"[PPT] AI 返回前300字: {full_text[:300]}")
             
-            if response.status_code == 200:
-                # 解析流式响应
-                full_text = ""
-                for line in response.text.split('\n'):
-                    if line.startswith('data: ') and line.strip() != 'data: [DONE]':
-                        try:
-                            chunk = json.loads(line[6:])
-                            full_text += chunk.get('chunk', '')
-                        except:
-                            pass
-                
-                print(f"[PPT] AI 返回内容长度: {len(full_text)} 字符")
-                print(f"[PPT] AI 返回前300字: {full_text[:300]}")
-                
-                # 清理模型输出中的思考过程和代码块标记
-                # 移除 <think>...</think> 标签
-                cleaned = re.sub(r'<think>.*?</think>', '', full_text, flags=re.DOTALL)
-                # 移除未闭合的 <think> 标签
-                if '<think>' in cleaned:
-                    cleaned = cleaned.split('<think>')[0]
-                # 移除 ```json ... ``` 标记
-                cleaned = re.sub(r'```(?:json)?\s*', '', cleaned)
-                cleaned = cleaned.replace('```', '')
-                
-                # 提取 JSON
-                from ppt_generator import extract_json_from_text
-                json_data = extract_json_from_text(cleaned)
-                
-                if json_data:
-                    # 兼容两种返回格式：数组或字典
-                    if isinstance(json_data, list):
-                        result = {"title": "演示文稿", "slides": json_data}
-                    elif isinstance(json_data, dict) and "slides" in json_data:
-                        result = json_data
-                    else:
-                        print(f"[PPT] JSON 格式不符合预期: {type(json_data)}")
-                        return None
-                    
-                    print(f"[PPT] 解析成功，共 {len(result.get('slides', []))} 页幻灯片")
-                    return result
+            # 清理模型输出中的思考过程和代码块标记
+            # 移除 <think>...</think> 标签
+            cleaned = re.sub(r', '', full_text, flags=re.DOTALL)
+            # 移除未闭合的 <think> 标签
+            if '<think>' in cleaned:
+                cleaned = cleaned.split('<think>')[0]
+            # 移除 ```json ... ``` 标记
+            cleaned = re.sub(r'```(?:json)?\s*', '', cleaned)
+            cleaned = cleaned.replace('```', '')
+            
+            # 提取 JSON
+            from ppt_generator import extract_json_from_text
+            json_data = extract_json_from_text(cleaned)
+            
+            if json_data:
+                # 兼容两种返回格式：数组或字典
+                if isinstance(json_data, list):
+                    result = {"title": "演示文稿", "slides": json_data}
+                elif isinstance(json_data, dict) and "slides" in json_data:
+                    result = json_data
                 else:
-                    print("[PPT] extract_json_from_text 返回空")
-                    print(f"[PPT] 清理后输出: {cleaned[:500]}")
+                    print(f"[PPT] JSON 格式不符合预期: {type(json_data)}")
+                    return None
+                
+                print(f"[PPT] 解析成功，共 {len(result.get('slides', []))} 页幻灯片")
+                return result
             else:
-                print(f"[PPT] API 调用失败: {response.status_code}")
+                print("[PPT] extract_json_from_text 返回空")
+                print(f"[PPT] 清理后输出: {cleaned[:500]}")
             
-            return None
-        except requests.Timeout:
-            print("[PPT] API 调用超时（60秒）")
             return None
         except Exception as e:
             print(f"[PPT] AI 生成大纲失败: {e}")

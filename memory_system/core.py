@@ -109,6 +109,18 @@ class MemoryManager:
         """获取数据库连接"""
         return sqlite3.connect(self.db_path)
     
+    @staticmethod
+    def _migrate_sessions_table(cursor):
+        """迁移 sessions 表，添加新列"""
+        cols = {"created_at": "REAL", "is_active": "INTEGER DEFAULT 1", "metadata": "TEXT DEFAULT '{}'"}
+        existing = {row[1] for row in cursor.execute("PRAGMA table_info(sessions)").fetchall()}
+        for col_name, col_type in cols.items():
+            if col_name not in existing:
+                try:
+                    cursor.execute(f"ALTER TABLE sessions ADD COLUMN {col_name} {col_type}")
+                except Exception:
+                    pass
+    
     def _init_db(self):
         """初始化数据库表"""
         with self._get_conn() as conn:
@@ -119,13 +131,13 @@ class MemoryManager:
                 CREATE TABLE IF NOT EXISTS sessions (
                     session_id TEXT PRIMARY KEY,
                     persona TEXT DEFAULT 'default',
-                    updated_at REAL,
-                    created_at REAL,
-                    is_active INTEGER DEFAULT 1,
-                    metadata TEXT DEFAULT '{}'
+                    updated_at REAL
                 )
             ''')
             
+            # 迁移: 添加旧表缺少的列
+            self._migrate_sessions_table(cursor)
+
             # 消息表（兼容现有）
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS messages (

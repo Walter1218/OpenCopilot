@@ -21,7 +21,7 @@ import json
 import uuid
 import tempfile
 import asyncio
-import requests
+import httpx
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -33,8 +33,8 @@ from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
 import uvicorn
 
-# 导入核心模块
-from llm_provider import ProviderFactory, load_config, save_config
+# 导入核心模块（不再直接调用 LLM Provider，所有 AI 请求统一走 Agent 管线）
+from llm_provider import load_config, save_config
 from ppt_generator import generate_ppt_from_json, extract_json_from_text
 from ppt_cocreation import CoCreationDialog
 from system_probe_client import SystemProbeClient
@@ -182,8 +182,100 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# 全局实例
-provider = None
+# ==========================================
+# Agent 管线统一代理
+# ==========================================
+
+AGENT_BASE_URL = os.getenv("AGENT_BASE_URL", "http://127.0.0.1:18888")
+
+async def _call_agent_pipeline(
+    text: str,
+    action_type: str = "default",
+    session_id: Optional[str] = None,
+    context_meta: Optional[Dict[str, Any]] = None,
+    context_source: str = "chat",
+    timeout: float = 300.0,
+    enable_web_search: Optional[bool] = None,
+    web_search_force: bool = False,
+) -> str:
+    """
+    统一调用 Agent 管线，所有 AI 请求必须通过此函数。
+
+    管线提供：安全检查 → 免疫机制 → 规划器 → 状态追踪 → 能力路由 → LLM 调用。
+
+    Args:
+        enable_web_search: 是否开启联网搜索。None 时从 config.json 读取默认值。
+        web_search_force: 是否强制联网搜索（否则模型自主判断）。
+
+    Returns:
+        Agent 返回的完整文本响应
+    """
+    payload = {
+        "text": text,
+        "action_type": action_type,
+        "session_id": session_id or str(uuid.uuid4()),
+        "context_source": context_source,
+    }
+    if context_meta:
+        payload["context_meta"] = context_meta
+
+    # Web Search 参数：优先使用调用方传入值，否则从 config 读取默认值
+    config = load_config()
+    ws_config = config.get("web_search", {})
+    should_enable_ws = enable_web_search if enable_web_search is not None else ws_config.get("enabled", False)
+    if should_enable_ws:
+        payload["enable_web_search"] = True
+        payload["web_search_force"] = web_search_force or ws_config.get("force_search", False)
+        payload["web_search_max_keyword"] = ws_config.get("max_keyword", 3)
+        payload["web_search_limit"] = ws_config.get("limit", 3)
+        ws_location = ws_config.get("user_location")
+        if ws_location:
+            payload["web_search_user_location"] = ws_location
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10.0, read=timeout, write=10.0, pool=10.0)) as client:
+            async with client.stream("POST", f"{AGENT_BASE_URL}/v1/agent/chat", json=payload) as resp:
+                if resp.status_code != 200:
+                    body = await resp.aread()
+                    raise RuntimeError(f"Agent API 返回 HTTP {resp.status_code}: {body.decode()[:200]}")
+
+                full_text = ""
+                async for line in resp.aiter_lines():
+                    if not line:
+                        continue
+                    if line.startswith("data: "):
+                        data_str = line[6:]
+                        if data_str == "[DONE]":
+                            break
+                        try:
+                            data_json = json.loads(data_str)
+                            chunk = data_json.get("chunk", "")
+                            if chunk:
+                                full_text += chunk
+                        except json.JSONDecodeError:
+                            pass
+        return full_text
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail="Agent 管线响应超时")
+    except httpx.ConnectError:
+        raise HTTPException(status_code=503, detail="无法连接到 Agent 管线服务，请确保 Agent 已启动 (port 18888)")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Agent 管线调用失败: {str(e)}")
+
+
+async def _check_agent_alive() -> bool:
+    """检查 Agent 管线服务是否存活"""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{AGENT_BASE_URL}/health")
+            return resp.status_code == 200
+    except Exception:
+        return False
+
+
+# 全局实例（不再需要 provider 直接调用 LLM）
 session_manager = SessionManager()
 probe_client = SystemProbeClient()
 start_time = datetime.now()
@@ -191,12 +283,10 @@ start_time = datetime.now()
 @app.on_event("startup")
 async def startup_event():
     """应用启动时初始化"""
-    global provider
-    try:
-        provider = ProviderFactory.create_provider()
-        print("✅ LLM Provider 初始化成功")
-    except Exception as e:
-        print(f"⚠️ LLM Provider 初始化失败: {e}")
+    if await _check_agent_alive():
+        print("✅ Agent 管线服务已就绪 (port 18888)")
+    else:
+        print("⚠️ Agent 管线服务未启动，AI 功能将不可用。请先启动: python asu_custom_agent.py")
 
 # ==========================================
 # API 端点
@@ -237,52 +327,13 @@ async def chat(request: ChatRequest):
     session_manager.add_message(session_id, "user", request.message)
     
     try:
-        # 构建 Agent API 请求
-        payload = {
-            "text": request.message,
-            "context_source": request.context_source or "chat",
-            "session_id": session_id,
-        }
-        
-        # 添加 persona（如果有）
-        if request.persona:
-            payload["persona"] = request.persona
-        
-        # 添加上下文信息（如果有）
-        if request.context:
-            payload["context_meta"] = request.context
-        
-        # 调用 Agent API
-        resp = requests.post(
-            "http://127.0.0.1:18888/v1/agent/chat",
-            json=payload,
-            stream=True,
-            timeout=120.0
+        # 统一走 Agent 管线
+        response_text = await _call_agent_pipeline(
+            text=request.message,
+            session_id=session_id,
+            context_source=request.context_source or "chat",
+            context_meta=request.context,
         )
-        
-        if resp.status_code != 200:
-            raise HTTPException(
-                status_code=resp.status_code,
-                detail=f"Agent API 返回错误: {resp.status_code}"
-            )
-        
-        # 解析 SSE 流式响应
-        response_text = ""
-        for line in resp.iter_lines():
-            if not line:
-                continue
-            line_str = line.decode('utf-8')
-            if line_str.startswith("data: "):
-                data_str = line_str[6:]
-                if data_str == "[DONE]":
-                    break
-                try:
-                    data_json = json.loads(data_str)
-                    chunk = data_json.get("chunk", "")
-                    if chunk:
-                        response_text += chunk
-                except json.JSONDecodeError:
-                    pass
         
         session_manager.add_message(session_id, "assistant", response_text)
         
@@ -291,10 +342,6 @@ async def chat(request: ChatRequest):
             response=response_text,
             timestamp=datetime.now().isoformat()
         )
-    except requests.exceptions.Timeout:
-        raise HTTPException(status_code=504, detail="Agent API 响应超时")
-    except requests.exceptions.ConnectionError:
-        raise HTTPException(status_code=503, detail="无法连接到 Agent 服务，请确保 Agent 已启动")
     except HTTPException:
         raise
     except Exception as e:
@@ -327,43 +374,49 @@ async def chat_stream(request: ChatRequest):
             # 添加上下文信息（如果有）
             if request.context:
                 payload["context_meta"] = request.context
+
+            # Web Search 参数：从 config 读取默认值
+            config = load_config()
+            ws_config = config.get("web_search", {})
+            if ws_config.get("enabled", False):
+                payload["enable_web_search"] = True
+                payload["web_search_force"] = ws_config.get("force_search", False)
+                payload["web_search_max_keyword"] = ws_config.get("max_keyword", 3)
+                payload["web_search_limit"] = ws_config.get("limit", 3)
+                ws_location = ws_config.get("user_location")
+                if ws_location:
+                    payload["web_search_user_location"] = ws_location
             
-            # 调用 Agent API
-            resp = requests.post(
-                "http://127.0.0.1:18888/v1/agent/chat",
-                json=payload,
-                stream=True,
-                timeout=120.0
-            )
-            
-            if resp.status_code != 200:
-                yield f"data: {json.dumps({'error': f'Agent API 返回错误: {resp.status_code}'})}\n\n"
-                return
-            
-            # 解析 SSE 流式响应
-            full_response = ""
-            for line in resp.iter_lines():
-                if not line:
-                    continue
-                line_str = line.decode('utf-8')
-                if line_str.startswith("data: "):
-                    data_str = line_str[6:]
-                    if data_str == "[DONE]":
-                        break
-                    try:
-                        data_json = json.loads(data_str)
-                        chunk = data_json.get("chunk", "")
-                        if chunk:
-                            full_response += chunk
-                            yield f"data: {json.dumps({'chunk': chunk, 'session_id': session_id})}\n\n"
-                    except json.JSONDecodeError:
-                        pass
+            # 异步调用 Agent API（5分钟超时，兼容 web search 等耗时操作）
+            async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10.0, read=300.0, write=10.0, pool=10.0)) as client:
+                async with client.stream("POST", f"{AGENT_BASE_URL}/v1/agent/chat", json=payload) as resp:
+                    if resp.status_code != 200:
+                        yield f"data: {json.dumps({'error': f'Agent API 返回错误: {resp.status_code}'})}\n\n"
+                        return
+                    
+                    # 解析 SSE 流式响应
+                    full_response = ""
+                    async for line in resp.aiter_lines():
+                        if not line:
+                            continue
+                        if line.startswith("data: "):
+                            data_str = line[6:]
+                            if data_str == "[DONE]":
+                                break
+                            try:
+                                data_json = json.loads(data_str)
+                                chunk = data_json.get("chunk", "")
+                                if chunk:
+                                    full_response += chunk
+                                    yield f"data: {json.dumps({'chunk': chunk, 'session_id': session_id})}\n\n"
+                            except json.JSONDecodeError:
+                                pass
             
             session_manager.add_message(session_id, "assistant", full_response)
             yield f"data: {json.dumps({'done': True, 'session_id': session_id, 'full_response': full_response})}\n\n"
-        except requests.exceptions.Timeout:
+        except httpx.TimeoutException:
             yield f"data: {json.dumps({'error': 'Agent API 响应超时'})}\n\n"
-        except requests.exceptions.ConnectionError:
+        except httpx.ConnectError:
             yield f"data: {json.dumps({'error': '无法连接到 Agent 服务，请确保 Agent 已启动'})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
@@ -439,34 +492,14 @@ async def extract_ppt_from_text(text: str):
     """
     从文本中提取 PPT 结构
     
-    使用 AI 从自然语言文本中提取 PPT 大纲。
+    使用 AI 从自然语言文本中提取 PPT 大纲。通过 Agent 管线处理。
     """
-    global provider
-    
-    if not provider:
-        raise HTTPException(status_code=500, detail="LLM Provider 未初始化")
-    
     try:
-        prompt = f"""请将以下文本转换为 PPT 大纲的 JSON 格式。
-
-要求：
-1. 输出格式为 JSON 数组
-2. 每个元素代表一页幻灯片
-3. 包含以下字段：
-   - type: "title" 或 "content"
-   - title: 幻灯片标题
-   - subtitle: 副标题（仅 title 类型）
-   - items: 内容要点数组
-   - layout: 布局方式（center/text_only/image_right/image_left）
-
-文本内容：
-{text}
-
-请直接输出 JSON，不要包含其他说明文字。"""
-        
-        response = ""
-        for chunk in provider.stream_chat(prompt):
-            response += chunk
+        response = _call_agent_pipeline(
+            text=f"请将以下文本转换为 PPT 大纲的 JSON 格式。\n\n要求：\n1. 输出格式为 JSON 数组\n2. 每个元素代表一页幻灯片\n3. 包含以下字段：\n   - type: \"title\" 或 \"content\"\n   - title: 幻灯片标题\n   - subtitle: 副标题（仅 title 类型）\n   - items: 内容要点数组\n   - layout: 布局方式（center/text_only/image_right/image_left）\n\n文本内容：\n{text}\n\n请直接输出 JSON，不要包含其他说明文字。",
+            action_type="ppt",
+            context_source="ppt_editor",
+        )
         
         # 提取 JSON
         slides = extract_json_from_text(response)
@@ -494,63 +527,45 @@ async def ppt_cocreation(request: PPTCoCreationRequest):
     - {"action": "add_slide", "index": 1, "slide": {...}}
     - {"action": "remove_slide", "index": 1}
     """
-    global provider
-    
-    if not provider:
-        raise HTTPException(status_code=500, detail="LLM Provider 未初始化")
-    
     try:
         session_id = session_manager.get_or_create(request.session_id)
         
-        # 构建提示词（支持局部修改）
+        # 构建上下文
         current_slides_json = json.dumps(request.slides, ensure_ascii=False, indent=2)
         
-        system_prompt = """你是一个 PPT 编辑助手。优先进行局部修改，而不是重新生成整个PPT。
+        user_message = f"""你是一个 PPT 编辑助手。优先进行局部修改，而不是重新生成整个PPT。
 
-**重要**：不要输出思考过程、推理步骤或解释。只输出修改指令JSON，用 ```json 代码块包裹。如果需要多个操作，用多个代码块分别输出。
+**重要**：不要输出思考过程、推理步骤或解释。只输出修改指令JSON，用 ```json 代码块包裹。
 
-修改模式（按优先级排序）：
+修改模式：
+1. 局部修改：{{"action": "update", "slide_index": N, "field": "title", "value": "新标题"}}
+2. 修改要点：{{"action": "update_item", "slide_index": N, "item_index": M, "field": "text", "value": "新内容"}}
+3. 添加要点：{{"action": "add_item", "slide_index": N, "item": {{"text": "新要点"}}}}
+4. 删除要点：{{"action": "remove_item", "slide_index": N, "item_index": M}}
+5. 添加幻灯片：{{"action": "add_slide", "index": N, "slide": {{...}}}}
+6. 删除幻灯片：{{"action": "remove_slide", "index": N}}
+7. 全局修改：{{"slides": [...]}}（仅当用户要求重新生成时使用）
 
-1. **局部修改**（推荐）：只修改用户指定的部分
-   - 修改标题：{"action": "update", "slide_index": 1, "field": "title", "value": "新标题"}
-   - 修改副标题：{"action": "update", "slide_index": 0, "field": "subtitle", "value": "新副标题"}
-   - 修改版式：{"action": "update", "slide_index": 0, "field": "layout", "value": "image_right"}
-   
-2. **修改要点**：
-   - 更新要点：{"action": "update_item", "slide_index": 1, "item_index": 0, "field": "text", "value": "新内容"}
-   - 添加要点：{"action": "add_item", "slide_index": 1, "item": {"text": "新要点", "level": 0, "content_type": "text"}}
-   - 删除要点：{"action": "remove_item", "slide_index": 1, "item_index": 0}
-   
-3. **幻灯片操作**：
-   - 添加幻灯片：{"action": "add_slide", "index": 2, "slide": {"title": "新页面", "type": "content", "layout": "text_only", "items": []}}
-   - 删除幻灯片：{"action": "remove_slide", "index": 2}
-
-4. **内容转换**（当用户要求转换为图表/表格时）：
-   - 转为表格：{"action": "add_item", "slide_index": 0, "item": {"content_type": "table", "table_data": {"title": "标题", "columns": ["列1", "列2"], "rows": [["值1", "值2"]]}}}
-   - 转为柱状图：{"action": "add_item", "slide_index": 0, "item": {"content_type": "chart", "chart_type": "bar", "chart_data": {"title": "标题", "labels": ["标签1", "标签2"], "datasets": [{"label": "系列", "data": [10, 20], "color": "#007bff"}]}}}
-   - 转为折线图：同上，chart_type 改为 "line"
-   - 转为饼图：同上，chart_type 改为 "pie"
-
-5. **全局修改**（仅当用户明确要求"重新生成"时使用）：
-   - 返回 {"slides": [...]}
-
-内容类型：text / image / flowchart / icon / table / chart
-版式类型：center / text_only / image_right / image_left / three_columns / two_columns / full_image"""
-
-        user_message = f"""当前幻灯片数据：
+当前幻灯片数据：
 ```json
 {current_slides_json}
 ```
 
 用户指令：{request.instruction}
 
-请优先使用局部修改模式，只返回修改指令 JSON（不要返回完整数据）："""
+请优先使用局部修改模式，只返回修改指令 JSON："""
 
-        prompt = f"{system_prompt}\n\n{user_message}"
-        
-        response = ""
-        for chunk in provider.stream_chat(prompt):
-            response += chunk
+        response = _call_agent_pipeline(
+            text=user_message,
+            action_type="ppt",
+            session_id=session_id,
+            context_source="ppt_editor",
+            context_meta={
+                "task": "ppt_cocreation",
+                "slides_count": len(request.slides),
+                "instruction": request.instruction,
+            },
+        )
         
         # 解析 AI 响应，支持局部更新和全量更新
         update_data = _parse_cocreation_response(response)
@@ -850,7 +865,7 @@ async def convert_content(request: ContentConvertRequest):
 @app.post("/api/text/process", response_model=TextProcessResponse)
 async def process_text(request: TextProcessRequest):
     """
-    文本处理接口
+    文本处理接口（通过 Agent 管线处理）
     
     支持多种文本处理操作：
     - translate: 翻译
@@ -860,11 +875,6 @@ async def process_text(request: TextProcessRequest):
     - code: 代码解析
     - custom: 自定义处理
     """
-    global provider
-    
-    if not provider:
-        raise HTTPException(status_code=500, detail="LLM Provider 未初始化")
-    
     # 根据操作类型构建提示词
     prompts = {
         "translate": f"请将以下文本翻译成{'中文' if request.target_language == 'zh' else '英文'}：\n\n{request.text}",
@@ -882,9 +892,21 @@ async def process_text(request: TextProcessRequest):
         raise HTTPException(status_code=400, detail=f"不支持的操作类型: {request.action}")
     
     try:
-        response = ""
-        for chunk in provider.stream_chat(prompt):
-            response += chunk
+        # action_type 映射到 persona
+        action_persona_map = {
+            "translate": "translate",
+            "polish": "default",
+            "explain": "code",
+            "summarize": "default",
+            "code": "code",
+            "custom": "default",
+        }
+        response = _call_agent_pipeline(
+            text=prompt,
+            action_type=action_persona_map.get(request.action, "default"),
+            context_source="chat",
+            context_meta={"task": "text_process", "action": request.action},
+        )
         
         return TextProcessResponse(
             original=request.text,
@@ -1020,9 +1042,7 @@ async def get_config():
 
 @app.post("/api/config")
 async def update_config(request: ConfigRequest):
-    """更新配置"""
-    global provider
-    
+    """更新配置（配置会同步到 Agent 管线）"""
     config = load_config()
     
     if request.provider_type:
@@ -1038,12 +1058,8 @@ async def update_config(request: ConfigRequest):
     
     save_config(config)
     
-    # 重新初始化 Provider
-    try:
-        provider = ProviderFactory.create_provider()
-        return {"message": "配置已更新，Provider 已重新初始化"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Provider 初始化失败: {str(e)}")
+    # 配置已保存，Agent 管线会在下次启动时读取新配置
+    return {"message": "配置已更新，Agent 管线将在下次启动时生效"}
 
 @app.post("/api/config/scan-models")
 async def scan_models(api_base: str = "http://localhost:11434/v1"):
@@ -1092,9 +1108,10 @@ async def scan_models(api_base: str = "http://localhost:11434/v1"):
 @app.websocket("/ws/chat")
 async def websocket_chat(websocket: WebSocket):
     """
-    WebSocket 实时对话
+    WebSocket 实时对话（通过 Agent 管线处理）
     
     支持双向实时通信，适合需要低延迟的场景。
+    所有 AI 请求统一走 Agent 管线。
     """
     await websocket.accept()
     session_id = None
@@ -1120,7 +1137,7 @@ async def websocket_chat(websocket: WebSocket):
                 })
             
             elif action == "chat":
-                # 聊天
+                # 聊天 - 通过 Agent 管线处理
                 if not session_id:
                     session_id = session_manager.get_or_create()
                 
@@ -1131,22 +1148,37 @@ async def websocket_chat(websocket: WebSocket):
                 
                 session_manager.add_message(session_id, "user", message)
                 
-                # 流式发送响应
-                full_response = ""
-                for chunk in provider.stream_chat(message):
-                    full_response += chunk
+                try:
+                    # 通过 Agent 管线获取完整响应
+                    full_response = _call_agent_pipeline(
+                        text=message,
+                        action_type=data.get("action_type", "default"),
+                        session_id=session_id,
+                        context_source="chat",
+                    )
+                    
+                    # 逐段发送（模拟流式输出）
+                    chunk_size = 20
+                    for i in range(0, len(full_response), chunk_size):
+                        chunk = full_response[i:i + chunk_size]
+                        await websocket.send_json({
+                            "action": "chunk",
+                            "chunk": chunk,
+                            "session_id": session_id
+                        })
+                    
+                    session_manager.add_message(session_id, "assistant", full_response)
                     await websocket.send_json({
-                        "action": "chunk",
-                        "chunk": chunk,
+                        "action": "done",
+                        "session_id": session_id,
+                        "full_response": full_response
+                    })
+                except HTTPException as e:
+                    await websocket.send_json({
+                        "action": "error",
+                        "error": e.detail,
                         "session_id": session_id
                     })
-                
-                session_manager.add_message(session_id, "assistant", full_response)
-                await websocket.send_json({
-                    "action": "done",
-                    "session_id": session_id,
-                    "full_response": full_response
-                })
             
             elif action == "history":
                 # 获取历史
@@ -1301,9 +1333,6 @@ async def ppt_suggest(request: SuggestRequest):
     try:
         # 模式 2: topic 模式（无 context，仅基于主题生成建议）
         if request.context is None and request.topic:
-            if not provider:
-                return {"suggestions": [], "analysis": None, "mode": "topic", "error": "LLM Provider 未初始化"}
-            
             audience_hint = f"，目标受众为{request.audience}" if request.audience else ""
             purpose_hint = f"，用途为{request.purpose}" if request.purpose else ""
             
@@ -1311,9 +1340,12 @@ async def ppt_suggest(request: SuggestRequest):
 返回JSON格式：{{"slides":[{{"title":"幻灯片标题","content":"核心内容要点"}},...]}}
 最多{request.max_suggestions}页，每页1-2个要点。"""
             
-            response = ""
-            for chunk in provider.stream_chat(prompt):
-                response += chunk
+            response = _call_agent_pipeline(
+                text=prompt,
+                action_type="ppt",
+                context_source="ppt_editor",
+                context_meta={"task": "ppt_suggest", "mode": "topic"},
+            )
             try:
                 import re
                 json_match = re.search(r'\{[\s\S]*\}', response)
@@ -1830,10 +1862,11 @@ async def internal_self_check():
                 "error": str(e)
             }
         
-        # 检查 LLM Provider
-        modules["llm_provider"] = {
-            "status": "ok" if provider else "unavailable",
-            "version": "1.0.0",
+        # 检查 Agent 管线
+        agent_alive = await _check_agent_alive()
+        modules["agent_pipeline"] = {
+            "status": "ok" if agent_alive else "unavailable",
+            "version": "3.0.0",
             "last_check": datetime.now().isoformat()
         }
         
@@ -1845,7 +1878,7 @@ async def internal_self_check():
             "status": status,
             "modules": modules,
             "dependencies": {
-                "llm_provider": {"status": "ok" if provider else "unavailable"},
+                "agent_pipeline": {"status": "ok" if agent_alive else "unavailable"},
                 "ppt_generator": {"status": "ok"}
             },
             "performance": {
@@ -2578,11 +2611,63 @@ class EnhanceApiRequest(BaseModel):
     enhancement: str = Field(..., description="增强需求")
     language: Optional[str] = Field("python", description="编程语言")
 
-# 创建 LLM 适配器
+# 创建 LLM 适配器（仅用于 CodingSkill 内部，但 Coding 端点已改走 Agent 管线）
 llm_adapter = create_llm_adapter()
 
-# 全局 CodingSkill 实例（带 LLM 适配器）
+# 全局 CodingSkill 实例（保留用于非管线场景的向后兼容）
 coding_skill = CodingSkill(config={"llm_provider": llm_adapter})
+
+
+def _build_coding_prompt(intent: str, request_data: dict) -> str:
+    """构建 Coding 类请求的 prompt，将结构化输入转为自然语言描述
+    
+    Args:
+        intent: 意图（code_review/bug_fix/explain/refactor/enhance_api/analyze）
+        request_data: 原始请求参数
+    
+    Returns:
+        构建好的 prompt 字符串
+    """
+    code = request_data.get("code", "")
+    language = request_data.get("language", "python")
+    
+    if intent == "code_review":
+        prompt = f"请对以下 {language} 代码进行审查，指出问题并提供改进建议：\n\n```{language}\n{code}\n```"
+        ctx = request_data.get("context")
+        if ctx:
+            prompt += f"\n\n上下文信息：{ctx}"
+        return prompt
+    
+    elif intent == "bug_fix":
+        error_msg = request_data.get("error_message", "")
+        prompt = f"请分析并修复以下 {language} 代码中的Bug：\n\n```{language}\n{code}\n```"
+        if error_msg:
+            prompt += f"\n\n错误信息：{error_msg}"
+        return prompt
+    
+    elif intent == "explain":
+        detail_level = request_data.get("detail_level", "normal")
+        level_map = {"brief": "简要", "normal": "一般", "detailed": "详细"}
+        level_desc = level_map.get(detail_level, "一般")
+        return f"请{level_desc}解释以下 {language} 代码的功能和逻辑：\n\n```{language}\n{code}\n```"
+    
+    elif intent == "refactor":
+        goal = request_data.get("goal", "")
+        prompt = f"请对以下 {language} 代码进行重构优化：\n\n```{language}\n{code}\n```"
+        if goal:
+            prompt += f"\n\n重构目标：{goal}"
+        return prompt
+    
+    elif intent == "enhance_api":
+        enhancement = request_data.get("enhancement", "")
+        return f"请增强以下 {language} API代码的功能：\n\n```{language}\n{code}\n```\n\n增强需求：{enhancement}"
+    
+    elif intent == "analyze":
+        return f"请分析以下 {language} 代码的结构、复杂度和质量：\n\n```{language}\n{code}\n```"
+    
+    else:
+        return f"请处理以下 {language} 代码：\n\n```{language}\n{code}\n```"
+
 
 @app.post("/api/coding/review")
 async def code_review(request: CodeReviewRequest):
@@ -2590,27 +2675,24 @@ async def code_review(request: CodeReviewRequest):
     代码审查
     
     对代码进行审查，返回问题和改进建议。
+    所有 AI 请求统一通过 Agent 管线处理（安全检查 → 免疫机制 → 规划器 → 状态追踪 → 能力路由 → LLM）。
     """
     try:
-        # 输入验证
         if not request.code or not request.code.strip():
             raise HTTPException(status_code=400, detail="代码内容不能为空")
         
-        context = SkillContext(
-            intent="code_review",
-            input_data={
-                "action": "code_review",
-                "code": request.code,
-                "language": request.language,
-                "context": request.context
-            }
+        prompt = _build_coding_prompt("code_review", {
+            "code": request.code,
+            "language": request.language,
+            "context": request.context,
+        })
+        response = _call_agent_pipeline(
+            text=prompt,
+            action_type="coding",
+            context_source="ide",
+            context_meta={"task": "code_review", "language": request.language},
         )
-        result = await coding_skill.execute(context)
-        
-        if result.success:
-            return result.data
-        else:
-            raise HTTPException(status_code=400, detail=result.error)
+        return {"review": response, "source": "agent_pipeline"}
     except HTTPException:
         raise
     except Exception as e:
@@ -2622,23 +2704,21 @@ async def bug_fix(request: BugFixRequest):
     Bug修复
     
     分析并修复代码中的Bug。
+    所有 AI 请求统一通过 Agent 管线处理。
     """
     try:
-        context = SkillContext(
-            intent="bug_fix",
-            input_data={
-                "action": "bug_fix",
-                "code": request.code,
-                "error_message": request.error_message,
-                "language": request.language
-            }
+        prompt = _build_coding_prompt("bug_fix", {
+            "code": request.code,
+            "error_message": request.error_message,
+            "language": request.language,
+        })
+        response = _call_agent_pipeline(
+            text=prompt,
+            action_type="coding",
+            context_source="ide",
+            context_meta={"task": "bug_fix", "language": request.language},
         )
-        result = await coding_skill.execute(context)
-        
-        if result.success:
-            return result.data
-        else:
-            raise HTTPException(status_code=400, detail=result.error)
+        return {"fix": response, "source": "agent_pipeline"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Bug修复失败: {str(e)}")
 
@@ -2648,23 +2728,21 @@ async def code_explain(request: CodeExplainRequest):
     代码解释
     
     解释代码的功能和逻辑。
+    所有 AI 请求统一通过 Agent 管线处理。
     """
     try:
-        context = SkillContext(
-            intent="explain",
-            input_data={
-                "action": "explain",
-                "code": request.code,
-                "language": request.language,
-                "detail_level": request.detail_level
-            }
+        prompt = _build_coding_prompt("explain", {
+            "code": request.code,
+            "language": request.language,
+            "detail_level": request.detail_level,
+        })
+        response = _call_agent_pipeline(
+            text=prompt,
+            action_type="coding",
+            context_source="ide",
+            context_meta={"task": "explain", "language": request.language},
         )
-        result = await coding_skill.execute(context)
-        
-        if result.success:
-            return result.data
-        else:
-            raise HTTPException(status_code=400, detail=result.error)
+        return {"explanation": response, "source": "agent_pipeline"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"代码解释失败: {str(e)}")
 
@@ -2674,23 +2752,21 @@ async def code_refactor(request: RefactorRequest):
     代码重构
     
     对代码进行重构优化。
+    所有 AI 请求统一通过 Agent 管线处理。
     """
     try:
-        context = SkillContext(
-            intent="refactor",
-            input_data={
-                "action": "refactor",
-                "code": request.code,
-                "language": request.language,
-                "goal": request.goal
-            }
+        prompt = _build_coding_prompt("refactor", {
+            "code": request.code,
+            "language": request.language,
+            "goal": request.goal,
+        })
+        response = _call_agent_pipeline(
+            text=prompt,
+            action_type="coding",
+            context_source="ide",
+            context_meta={"task": "refactor", "language": request.language},
         )
-        result = await coding_skill.execute(context)
-        
-        if result.success:
-            return result.data
-        else:
-            raise HTTPException(status_code=400, detail=result.error)
+        return {"refactored_code": response, "source": "agent_pipeline"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"代码重构失败: {str(e)}")
 
@@ -2700,23 +2776,21 @@ async def enhance_api(request: EnhanceApiRequest):
     API增强
     
     增强现有API的功能。
+    所有 AI 请求统一通过 Agent 管线处理。
     """
     try:
-        context = SkillContext(
-            intent="enhance_api",
-            input_data={
-                "action": "enhance_api",
-                "code": request.code,
-                "enhancement": request.enhancement,
-                "language": request.language
-            }
+        prompt = _build_coding_prompt("enhance_api", {
+            "code": request.code,
+            "enhancement": request.enhancement,
+            "language": request.language,
+        })
+        response = _call_agent_pipeline(
+            text=prompt,
+            action_type="coding",
+            context_source="ide",
+            context_meta={"task": "enhance_api", "language": request.language},
         )
-        result = await coding_skill.execute(context)
-        
-        if result.success:
-            return result.data
-        else:
-            raise HTTPException(status_code=400, detail=result.error)
+        return {"enhanced": response, "source": "agent_pipeline"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"API增强失败: {str(e)}")
 
@@ -2726,22 +2800,20 @@ async def code_analyze(request: CodeExplainRequest):
     代码分析
     
     分析代码的结构、复杂度和质量。
+    所有 AI 请求统一通过 Agent 管线处理。
     """
     try:
-        context = SkillContext(
-            intent="analyze",
-            input_data={
-                "action": "analyze",
-                "code": request.code,
-                "language": request.language
-            }
+        prompt = _build_coding_prompt("analyze", {
+            "code": request.code,
+            "language": request.language,
+        })
+        response = _call_agent_pipeline(
+            text=prompt,
+            action_type="coding",
+            context_source="ide",
+            context_meta={"task": "analyze", "language": request.language},
         )
-        result = await coding_skill.execute(context)
-        
-        if result.success:
-            return result.data
-        else:
-            raise HTTPException(status_code=400, detail=result.error)
+        return {"analysis": response, "source": "agent_pipeline"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"代码分析失败: {str(e)}")
 

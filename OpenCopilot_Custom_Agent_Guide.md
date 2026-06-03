@@ -1,8 +1,8 @@
 # OpenCopilot 定制智能体 (Custom Agent) 开发与使用指南
 
-> **文档状态**: V2.2
-> **更新日期**: 2026-06-01
-> **状态**: P0-P2 阶段已完成，Skill化架构全部实现
+> **文档状态**: V2.3
+> **更新日期**: 2026-06-03
+> **状态**: P0-P2 阶段已完成，管线计时诊断完成，API Gateway 死锁修复
 
 ## 1. 什么是 OpenCopilot 定制智能体？
 
@@ -18,7 +18,7 @@
     *   一键安装：`bash scripts/install_daemon.sh`
     *   手动运行：`python asu_custom_agent.py`
 *   **通信协议**：标准 HTTP REST 风格接口，基于 Python 标准库 `HTTPServer`，对外提供本地回环 HTTP 服务与 SSE 流式响应。
-*   **配置读取**：Agent 启动时读取项目根目录下的 `config.json` 与环境变量，按 `provider_type` 选择 MiniMax 或本地 OpenAI-compatible Provider。
+*   **配置读取**：Agent 启动时读取项目根目录下的 `config.json` 与环境变量，按 `provider_type` 选择 MiMo（默认）、MiniMax 或本地 OpenAI-compatible Provider。
 
 ---
 
@@ -76,7 +76,7 @@ Agent 基于 **SQLite 本地持久化**（`asu_agent.db`）管理会话记忆，
 1.  **修改 Persona (角色设定)**：
     Persona 已实现**文件化管理**，存放在 `personas/` 目录下（如 `personas/code.md`、`personas/translate.md`、`personas/custom.md`、`personas/revision.md`）。直接编辑对应的 Markdown 文件即可，Agent 下次请求时自动热加载，无需修改源码。
 2.  **对接新的大模型 API**：
-    当前 Agent 通过 `llm_provider.py` 中的 `MiniMaxProvider` 与 `LocalProvider` 访问模型。在 `asu_custom_agent.py` 的 `get_base_llm()` 中配置 `provider_type`。未来需要接入更多模型时，建议继续扩展 Provider 层。
+    当前 Agent 通过 `llm_provider.py` 中的 `MiMoProvider`、`MiniMaxProvider` 与 `LocalProvider` 访问模型。在 `asu_custom_agent.py` 的 `get_base_llm()` 中配置 `provider_type`（默认 `mimo`）。MiMo 采用按量计费模式，无需 Token Plan 订阅，性价比高。接入更多模型时，继续扩展 Provider 层即可。
 3.  **独立测试**：
     可以不启动 OpenCopilot 的 GUI，直接在终端中运行：
     ```bash
@@ -99,10 +99,43 @@ Agent 基于 **SQLite 本地持久化**（`asu_agent.db`）管理会话记忆，
 - 多模态视觉感知支持 (image_base64 透传)
 - 基于 WebSocket 的主动状态推送与托盘联动
 - Skill化架构全部实现（7个Skill，61个API端点，100%测试通过率）
+- **中间件管线全部带计时诊断（2026-06-03）**：7 个中间件各耗时 <5ms，99%+ 耗时在 LLM API 调用（MiMo TTFB 1.6~2.4s）
+- **API Gateway 死锁修复（2026-06-03）**：`async def` 端点替换同步 `requests` 为异步 `httpx`，消除事件循环阻塞
 
 待推进（🔶）：
 - IDE Extension v2：补充 `/diagnostics`、`/git-diff` 端点
 - 多 Provider 故障转移
 - SSE 错误边界优化
+
+## 7. 中间件管线与性能
+
+Agent 通过 **7 层中间件管线** (`agent_pipeline/`) 处理每个请求：
+
+| 序号 | 中间件 | 功能 | 耗时 |
+|------|--------|------|------|
+| 1 | SessionSetup | 会话初始化 + Persona 加载 + Context 构建 | ~3ms |
+| 2 | SecurityGuard | 权限检查 + 频率限制 | ~1ms |
+| 3 | ImmuneSystem | AGENTS.md 规则免疫检查 | <1ms |
+| 4 | Planner | 复杂任务自动规划（仅匹配时触发） | <1ms |
+| 5 | StateTracking | 状态管理器消息记录 | ~1ms |
+| 6 | CapabilityRouter | 请求类型检测与能力路由 | <1ms |
+| 7 | LLMProvider | LLM API 调用（流式 SSE 输出） | 2~2.5s |
+
+**性能诊断结论**（2026-06-03）：前置 6 个中间件合计 <5ms，**99% 以上耗时在 LLM API 调用**（MiMo TTFB 1.6~2.4s），管线本身无性能瓶颈。
+
+### 管线计时日志
+
+计时日志同时输出到 stdout 和 `pipeline_timer.log` 文件，格式示例：
+```
+[Timer] SessionSetup: total=0.003s | norm=0.000 mem=0.002 persona=0.000 prefix=0.000 build=0.000
+[Timer] LLMProvider: total=2.063s | init=0.000 ttfb=1.918 stream=0.141 chunks=1 chars=2
+[Timer] Pipeline TOTAL: 2.068s | action=default text=请说OK
+```
+
+### API Gateway 注意事项
+
+API Gateway (`smart_copilot_api.py`) 的 `async def` 端点**必须使用 `httpx` 异步客户端**，禁止使用同步 `requests`——会导致 FastAPI 事件循环死锁，整个服务卡死。
+
+---
 
 详细路线图见 [OpenCopilot 本地专属智能体现状与开发路线建议](OpenCopilot_Local_Agent_Roadmap.md)。

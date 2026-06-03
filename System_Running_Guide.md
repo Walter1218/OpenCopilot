@@ -1,7 +1,7 @@
 # OpenCopilot 系统运行指南
 
-> **版本**：v2.2 | **日期**：2026-05-31  
-> **状态**：包含知识图谱、PPT共创模式、统一启动脚本等最新特性，P0-P2 阶段已全面落地。
+> **版本**：v2.3 | **日期**：2026-06-03  
+> **状态**：中间件管线全计时诊断完成，API Gateway async/httpx 修复，P0-P2 阶段全面落地。
 
 ---
 
@@ -94,43 +94,60 @@ pip install -r requirements.txt
 根据您的使用场景，请选择以下一种方式：
 
 ### 方式一：开发联调期 (Development)
-在开发期，为了查看实时的报错和异常栈，需要**手动开启两个终端窗口**：
 
-#### 方案 A：统一启动（推荐）
+#### 方案 A：统一后台脚本（强烈推荐）⭐
 
-使用统一启动脚本，同时启动 Broker 和知识图谱 API：
+**一条命令启动所有后台服务**（Agent + Broker + 知识图谱），自动清理端口冲突：
 
-1. **启动后端服务（Broker + 知识图谱）**
-   - **必须使用 macOS 原生的 Terminal.app 或 iTerm2**（不能用 IDE 终端）。
-   - **命令**：
-     ```bash
-     source venv/bin/activate
-     python start_broker_with_kg.py
-     ```
-   - *此命令会自动清理占用端口的旧进程，然后同时启动：*
-     - *Broker 服务（端口 18889）：系统焦点监听、无感划词提取、视觉屏幕抓取等特权操作*
-     - *知识图谱 API（端口 8090）：项目知识查询*
-   - *稳定性特性：*
-     - *自动清理占用端口的旧进程*
-     - *知识图谱 API 崩溃自动重启（最多3次）*
-     - *启动健康检查*
-     - *PID 文件管理（`.unified_services.pid`）*
-   - *可选参数：*
-     - `--kg-port 8091` - 自定义知识图谱 API 端口
-     - `--broker-port 18890` - 自定义 Broker 端口
-     - `--no-kg` - 不启动知识图谱 API
-     - `--no-cleanup` - 不自动清理占用端口的进程
-     - `--no-restart` - 不自动重启崩溃的知识图谱 API
+```bash
+# 必须在 macOS 原生 Terminal.app 或 iTerm2 中运行
+source venv/bin/activate
+python start_backend.py
+```
 
-2. **启动前端 UI 与智能中枢 (Smart Copilot)**
-   - 可以在任何终端中运行（包括 Trae/VSCode 的内置终端）。
-   - **命令**：
-     ```bash
-     source venv/bin/activate
-     python smart_copilot.py
-     ```
+或通过 shell 快捷脚本：
+```bash
+bash start_backend.sh
+```
 
-#### 方案 B：分别启动
+**启动的后台服务**：
+| 服务 | 端口 | 功能 |
+|------|------|------|
+| Agent | 18888 | AI 管线（中间件链 → MiMo LLM），SSE 流式接口 |
+| Broker | 18889 | 特权代理（系统焦点监听、无感划词、屏幕抓取） |
+| 知识图谱 | 8090 | 项目知识查询 |
+
+**鲁棒性特性**：
+- **端口冲突自动清理**：启动前自动 kill 占用端口的旧进程（SIGTERM → SIGKILL），无需手动 `lsof`
+- **启动后健康检查**：每个服务启动后最多等 10s，确认 `/health` 可达
+- **崩溃自动重启**：Agent 和 KG 崩溃后自动重启（各最多 3 次，间隔 2s）
+- **Ctrl+C 一键停服**：主进程收到 SIGINT/SIGTERM 后自动清理所有子进程
+- **PID 文件**：`.backend_services.pid`
+
+**可选参数**：
+```bash
+python start_backend.py --no-agent        # 不启动 Agent
+python start_backend.py --no-kg           # 不启动知识图谱
+python start_backend.py --no-broker       # 不启动 Broker（只启动 Agent + KG）
+python start_backend.py --no-restart      # 禁用崩溃自动重启
+python start_backend.py --no-cleanup      # 不自动清理端口占用
+python start_backend.py --agent-port 18889  # 自定义端口
+```
+
+然后**在另一个终端启动前端 UI**：
+```bash
+source venv/bin/activate
+python smart_copilot.py
+```
+
+#### 方案 B：旧版统一脚本（Broker + KG，不含 Agent）
+
+```bash
+source venv/bin/activate
+python start_broker_with_kg.py
+```
+
+#### 方案 C：分别启动（需要 3 个终端）
 
 如需单独控制各服务，可分别启动：
 
@@ -289,9 +306,9 @@ lsof -i :18889
 
 ```json
 {
-  "provider": "minimax",
+  "provider": "mimo",
   "api_key": "your-api-key",
-  "model": "MiniMax-Text-01",
+  "model": "mimo-v2.5",
   "temperature": 0.7
 }
 ```
@@ -301,9 +318,11 @@ lsof -i :18889
 创建 `.env` 文件：
 
 ```env
-# MiniMax API
-MINIMAX_API_KEY=your-api-key
-MINIMAX_GROUP_ID=your-group-id
+# MiMo API (默认，按量计费)
+XIAOMI_API_KEY=your-mimo-api-key
+
+# MiniMax API (备选)
+MINIMAX_API_KEY=your-minimax-api-key
 
 # Ollama (本地)
 OLLAMA_BASE_URL=http://localhost:11434

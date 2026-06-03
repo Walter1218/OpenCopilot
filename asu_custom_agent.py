@@ -6,13 +6,15 @@ import sqlite3
 import time
 import subprocess
 import tempfile
+import traceback
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
-from llm_provider import MiniMaxProvider, LocalProvider, load_config
+from llm_provider import MiniMaxProvider, LocalProvider, MiMoProvider, load_config
 
 # 导入记忆系统改进模块
 from memory_system.config import ConfigManager, MemoryType
 from memory_system.quota_manager import QuotaManager
+from memory_system.core import MemoryManager
 
 # 导入统一 Prompt 构建服务
 from prompt_builder import (
@@ -53,6 +55,15 @@ from agents_md_module import ImmuneSystem, RuleEngine
 
 # 导入Skill化架构模块
 from skill_architecture import SkillRegistry, IntentRouter, SkillExecutor, SkillDiscovery
+
+# 导入中间件管线
+from agent_pipeline import (
+    PipelineContext, MiddlewarePipeline,
+    SecurityGuardMiddleware, ImmuneSystemMiddleware,
+    PlannerMiddleware, StateTrackingMiddleware,
+    CapabilityRouterMiddleware, LLMProviderMiddleware,
+    SessionSetupMiddleware,
+)
 
 
 # ==========================================
@@ -300,6 +311,8 @@ def normalize_context_envelope(req, fallback_text, fallback_source, fallback_met
 
 
 class ASUAgentMemory:
+    """[DEPRECATED] 已由 memory_system.MemoryManager 替代，保留用于向后兼容。"""
+
     def __init__(self, db_path="asu_agent.db"):
         self.db_path = db_path
         self._init_db()
@@ -464,7 +477,7 @@ class ASUAgentMemory:
         }
 
 
-memory = ASUAgentMemory()
+memory = MemoryManager(db_path="asu_agent.db")
 window_manager = ContextWindowManager(
     max_input_chars=int(os.getenv("ASU_MAX_INPUT_CHARS", "120000")),  # MiniMax M2.7 支持 200K token，约 120K 字符
     reserve_output_chars=int(os.getenv("ASU_RESERVE_OUTPUT_CHARS", "30000")),  # 预留 30K 字符给输出
@@ -537,14 +550,17 @@ print(f"  - 发现 {len(discovered_skills)} 个 Skills")
 
 def get_base_llm():
     config = load_config()
-    provider_type = config.get("provider_type", "minimax")
+    provider_type = config.get("provider_type", "mimo")
     if provider_type == "local":
         return LocalProvider(
             api_base=config.get("local_api_base", "http://localhost:11434/v1"),
             model=config.get("local_model", "llama3"),
             api_key=config.get("local_api_key", "sk-local")
         )
-    return MiniMaxProvider()
+    if provider_type == "minimax":
+        return MiniMaxProvider()
+    # 默认使用 MiMo（按量计费，性价比高）
+    return MiMoProvider()
 
 
 def detect_request_type(text: str) -> str:
@@ -558,6 +574,9 @@ def detect_request_type(text: str) -> str:
         "planning" - 任务规划
         "security" - 安全相关
         "skill" - Skill执行
+        "ppt" - PPT相关
+        "coding" - 编码辅助
+        "evaluation" - 评估相关
         "chat" - 普通对话
     """
     text_lower = text.lower()
@@ -595,10 +614,24 @@ def detect_request_type(text: str) -> str:
         "访问控制", "rate limit", "速率限制"
     ]
     
-    # Skill相关关键词
-    skill_keywords = [
-        "skill", "技能", "翻译", "translate",
-        "代码审查", "code review", "生成ppt", "创建ppt"
+    # PPT相关关键词
+    ppt_keywords = [
+        "ppt", "幻灯片", "演示文稿", "大纲",
+        "ppt编辑", "ppt共创", "ppt建议", "ppt生成",
+        "slide", "presentation"
+    ]
+    
+    # 编码辅助关键词
+    coding_keywords = [
+        "代码审查", "code review", "bug修复", "代码解释",
+        "代码重构", "refactor", "代码分析", "代码增强",
+        "skill", "技能"
+    ]
+    
+    # 评估关键词
+    evaluation_keywords = [
+        "评估", "评价", "评分", "质量检查",
+        "evaluate", "score", "quality"
     ]
     
     for keyword in code_keywords:
@@ -621,309 +654,62 @@ def detect_request_type(text: str) -> str:
         if keyword in text_lower:
             return "security"
     
-    for keyword in skill_keywords:
+    for keyword in ppt_keywords:
         if keyword in text_lower:
-            return "skill"
+            return "ppt"
+    
+    for keyword in coding_keywords:
+        if keyword in text_lower:
+            return "coding"
+    
+    for keyword in evaluation_keywords:
+        if keyword in text_lower:
+            return "evaluation"
     
     return "chat"
 
 
-def generate_code_for_task(task: str) -> str:
-    """
-    根据任务描述生成代码
-    
-    Args:
-        task: 任务描述
-        
-    Returns:
-        生成的代码
-    """
-    # 使用 LLM 生成代码
-    llm = get_base_llm()
-    
-    # 获取 tushare token
-    import tushare as ts
-    tushare_token = ts.get_token() or os.getenv("TUSHARE_TOKEN", "")
-    
-    code_prompt = f"""你是一个 Python 代码生成器。请根据用户的任务描述生成可执行的 Python 代码。
+# 构建中间件管线（注入 tracer 实现自动追踪）
+from observability_module.tracer import DistributedTracer
+tracer = DistributedTracer(observability_config)
 
-要求：
-1. 只输出代码，不要输出任何解释
-2. 代码必须是完整的、可直接执行的
-3. 如果需要查询数据，请使用相应的库（如 tushare）
-4. 将结果打印出来
-5. 不要包含任何 markdown 标记或标签
-6. 如果使用 tushare，请使用以下 token: {tushare_token}
-
-用户任务：{task}
-
-请生成 Python 代码："""
-    
-    messages = [{"role": "user", "content": code_prompt}]
-    
-    code = ""
-    for chunk in llm.stream_chat_with_history(messages):
-        code += chunk
-    
-    # 清理代码（移除可能的 markdown 标记和标签）
-    code = code.strip()
-    
-    # 移除 <think>...</think> 标签
-    import re
-    code = re.sub(r'<think>.*?</think>', '', code, flags=re.DOTALL)
-    
-    # 移除 markdown 代码块标记
-    if code.startswith("```python"):
-        code = code[9:]
-    if code.startswith("```"):
-        code = code[3:]
-    if code.endswith("```"):
-        code = code[:-3]
-    
-    # 移除多余的空白行
-    code = code.strip()
-    
-    return code
+pipeline = MiddlewarePipeline(tracer=tracer)
+pipeline.use(SessionSetupMiddleware(
+    memory=memory,
+    window_manager=window_manager,
+    normalize_context_envelope=normalize_context_envelope,
+    load_persona=load_persona,
+    build_context_prefix=build_context_prefix,
+    sanitize_persona_for_context=sanitize_persona_for_context,
+))
+pipeline.use(SecurityGuardMiddleware(security_module))
+pipeline.use(ImmuneSystemMiddleware(immune_system))
+pipeline.use(PlannerMiddleware(planner))
+pipeline.use(StateTrackingMiddleware(state_manager))
+pipeline.use(CapabilityRouterMiddleware(
+    code_executor=code_executor,
+    knowledge_retrieval=knowledge_retrieval,
+    search_capability=search_capability,
+    skill_executor=skill_executor,
+    skill_registry=skill_registry,
+    skill_router=skill_router,
+    detect_request_type=detect_request_type,
+))
+pipeline.use(LLMProviderMiddleware(
+    memory=memory,
+    get_base_llm=get_base_llm,
+))
+print("✅ 中间件管线构建完成 (7层 + 追踪):")
+print("  0. DistributedTracer (自动追踪)")
+print("  1. SessionSetupMiddleware (会话初始化)")
+print("  2. SecurityGuardMiddleware (权限+限流)")
+print("  3. ImmuneSystemMiddleware (规则检查)")
+print("  4. PlannerMiddleware (任务自动规划)")
+print("  5. StateTrackingMiddleware (状态追踪)")
+print("  6. CapabilityRouterMiddleware (能力路由)")
+print("  7. LLMProviderMiddleware (LLM调用)")
 
 
-def execute_code_sync(code: str, timeout: int = 30) -> dict:
-    """
-    同步执行代码
-    
-    Args:
-        code: 要执行的代码
-        timeout: 超时时间（秒）
-        
-    Returns:
-        执行结果字典
-    """
-    import subprocess
-    import tempfile
-    
-    try:
-        # 将代码写入临时文件
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
-            f.write(code)
-            temp_file = f.name
-        
-        # 执行代码
-        result = subprocess.run(
-            ['python', temp_file],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            cwd=os.getcwd()
-        )
-        
-        # 清理临时文件
-        os.unlink(temp_file)
-        
-        return {
-            "success": result.returncode == 0,
-            "output": result.stdout,
-            "error": result.stderr if result.returncode != 0 else None,
-            "return_code": result.returncode
-        }
-    except subprocess.TimeoutExpired:
-        return {
-            "success": False,
-            "output": "",
-            "error": f"代码执行超时（{timeout}秒）",
-            "return_code": -1
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "output": "",
-            "error": str(e),
-            "return_code": -1
-        }
-
-
-def execute_with_capability(text: str, session_id: str) -> str:
-    """
-    使用能力模块执行任务
-    
-    Args:
-        text: 用户输入
-        session_id: 会话ID
-        
-    Returns:
-        执行结果
-    """
-    request_type = detect_request_type(text)
-    print(f"[DEBUG] Request type: {request_type}", flush=True)
-    
-    # 记录请求指标
-    observability.logger.info(f"Processing request", context={
-        "request_type": request_type,
-        "session_id": session_id,
-        "text_length": len(text)
-    })
-    
-    # 检查AGENTS.md规则
-    import asyncio
-    from agents_md_module import RuleContext
-    try:
-        rule_context = RuleContext(session_id=session_id)
-        rule_check = asyncio.run(immune_system.check_content(rule_context, text))
-        if rule_check and not rule_check.allowed:
-            return f"⚠️ 规则检查发现违规: {rule_check.message}\n\n请调整您的请求。"
-    except Exception as e:
-        print(f"[DEBUG] Rule check error: {e}", flush=True)
-    
-    if request_type == "code_execution":
-        # 代码执行流程
-        print(f"[DEBUG] 检测到代码执行请求: {text[:50]}...", flush=True)
-        
-        # 检查安全权限
-        import asyncio
-        try:
-            security_check = asyncio.run(security_module.check_permission(
-                user_id=session_id,
-                resource="code_execution",
-                action="execute"
-            ))
-        except:
-            security_check = True  # 如果安全检查失败，默认允许
-        if not security_check:
-            return f"❌ 安全检查未通过: 权限不足"
-        
-        # 生成代码
-        code = generate_code_for_task(text)
-        print(f"[DEBUG] 生成的代码:\n{code}", flush=True)
-        
-        # 执行代码
-        result = execute_code_sync(code, timeout=30)
-        print(f"[DEBUG] 执行结果: {result}", flush=True)
-        
-        # 记录审计日志
-        try:
-            security_module.audit_logger.log(
-                user_id=session_id,
-                action="code_execution",
-                resource="python_code",
-                parameters={"code_length": len(code)},
-                result="success" if result["success"] else "failed"
-            )
-        except Exception as e:
-            print(f"[DEBUG] Audit log error: {e}", flush=True)
-        
-        if result["success"]:
-            return f"✅ 代码执行成功\n\n生成的代码:\n```python\n{code}\n```\n\n执行结果:\n{result['output']}"
-        else:
-            return f"❌ 代码执行失败\n\n生成的代码:\n```python\n{code}\n```\n\n错误信息:\n{result['error']}"
-    
-    elif request_type == "knowledge_query":
-        # 知识检索流程
-        print(f"[DEBUG] 检测到知识检索请求: {text[:50]}...", flush=True)
-        
-        # 初始化知识图谱（如果需要）
-        if not knowledge_retrieval._initialized:
-            init_result = knowledge_retrieval.initialize()
-            if not init_result.success:
-                return f"❌ 知识图谱初始化失败: {init_result.error}"
-        
-        # 执行查询
-        result = knowledge_retrieval.query(text)
-        
-        if result.success:
-            return f"📚 知识检索结果:\n\n{json.dumps(result.data, ensure_ascii=False, indent=2)}"
-        else:
-            return f"❌ 知识检索失败: {result.error}"
-    
-    elif request_type == "search":
-        # 搜索流程
-        print(f"[DEBUG] 检测到搜索请求: {text[:50]}...", flush=True)
-        
-        # 执行搜索
-        results = search_capability.search(text, search_type=SearchType.ALL, count=5)
-        
-        if results:
-            search_output = "🔍 搜索结果:\n\n"
-            for i, result in enumerate(results, 1):
-                search_output += f"{i}. {result.title}\n"
-                search_output += f"   {result.content[:200]}...\n\n"
-            return search_output
-        else:
-            return "❌ 未找到相关搜索结果"
-    
-    elif request_type == "planning":
-        # 任务规划流程
-        print(f"[DEBUG] 检测到任务规划请求: {text[:50]}...", flush=True)
-        
-        try:
-            # 使用规划器生成计划
-            import asyncio
-            plan = asyncio.run(planner.create_plan(
-                task=text,
-                context={"session_id": session_id}
-            ))
-            
-            if plan:
-                plan_output = "📋 任务规划结果:\n\n"
-                plan_output += f"**计划ID**: {plan.plan_id}\n"
-                plan_output += f"**任务**: {plan.task}\n"
-                plan_output += f"**步骤数**: {len(plan.steps)}\n\n"
-                plan_output += "**执行步骤**:\n"
-                for i, step in enumerate(plan.steps, 1):
-                    plan_output += f"{i}. {step.description}\n"
-                    plan_output += f"   - 类型: {step.step_type.value}\n"
-                    plan_output += f"   - 预计耗时: {step.estimated_duration}秒\n"
-                return plan_output
-            else:
-                return "❌ 无法生成任务规划"
-        except Exception as e:
-            return f"❌ 任务规划失败: {str(e)}"
-    
-    elif request_type == "security":
-        # 安全相关流程
-        print(f"[DEBUG] 检测到安全相关请求: {text[:50]}...", flush=True)
-        
-        # 返回安全模块状态
-        import asyncio
-        try:
-            security_status = asyncio.run(security_module.get_status())
-        except:
-            security_status = {"status": "ready", "note": "async call failed, showing basic status"}
-        return f"🔒 安全模块状态:\n\n{json.dumps(security_status, ensure_ascii=False, indent=2)}"
-    
-    elif request_type == "skill":
-        # Skill执行流程
-        print(f"[DEBUG] 检测到Skill请求: {text[:50]}...", flush=True)
-        
-        try:
-            # 使用意图路由器识别Skill
-            from skill_architecture import SkillContext
-            import asyncio
-            
-            # 创建Skill上下文
-            skill_context = SkillContext(
-                intent=text,
-                input_data={"text": text, "session_id": session_id},
-                session_id=session_id
-            )
-            
-            # 路由到合适的Skill
-            skill_name = asyncio.run(skill_router.route(skill_context))
-            
-            if skill_name:
-                # 执行Skill
-                skill_result = asyncio.run(skill_executor.execute(skill_context, skill_name=skill_name))
-                
-                if skill_result and skill_result.success:
-                    return f"🎯 Skill执行结果 (识别为: {skill_name}):\n\n{json.dumps(skill_result.data, ensure_ascii=False, indent=2)}"
-                else:
-                    return f"❌ Skill执行失败: {skill_result.error if skill_result else '未知错误'}"
-            else:
-                return "❌ 无法识别合适的Skill"
-        except Exception as e:
-            return f"❌ Skill执行异常: {str(e)}"
-    
-    else:
-        # 普通对话，返回 None 让调用者处理
-        print(f"[DEBUG] 普通对话，返回None", flush=True)
-        return None
 
 
 class AgentHTTPRequestHandler(BaseHTTPRequestHandler):
@@ -1040,6 +826,9 @@ class AgentHTTPRequestHandler(BaseHTTPRequestHandler):
                     "planning": "任务规划、计划生成",
                     "security": "安全检查、权限管理",
                     "skill": "Skill执行、意图路由",
+                    "ppt": "PPT生成、共创、建议、分析",
+                    "coding": "代码审查、Bug修复、代码解释、重构",
+                    "evaluation": "评估、评分、质量检查",
                     "chat": "普通对话"
                 },
                 "modules_status": {
@@ -1049,6 +838,72 @@ class AgentHTTPRequestHandler(BaseHTTPRequestHandler):
                 }
             }
             self.wfile.write(json.dumps(capabilities, ensure_ascii=False, indent=2).encode('utf-8'))
+        elif self.path == '/traces':
+            # 追踪查询端点
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            traces = tracer.get_traces(limit=50)
+            resp = {
+                "status": "ok",
+                "count": len(traces),
+                "traces": [
+                    {
+                        "trace_id": t.trace_id,
+                        "status": t.status,
+                        "duration_ms": t.duration_ms,
+                        "spans": [
+                            {
+                                "span_id": s.span_id,
+                                "operation": s.operation,
+                                "status": s.status,
+                                "duration_ms": s.duration_ms,
+                                "tags": s.tags,
+                            }
+                            for s in t.spans
+                        ],
+                        "tags": t.tags,
+                    }
+                    for t in traces
+                ],
+            }
+            self.wfile.write(json.dumps(resp, ensure_ascii=False, indent=2).encode('utf-8'))
+        elif self.path == '/traces/stats':
+            # 追踪统计端点（必须在 startswith('/traces/') 之前）
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(tracer.get_stats(), ensure_ascii=False, indent=2).encode('utf-8'))
+        elif self.path.startswith('/traces/'):
+            # 单条追踪查询
+            trace_id = self.path[len('/traces/'):]
+            t = tracer.get_trace(trace_id)
+            if t:
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                resp = {
+                    "trace_id": t.trace_id,
+                    "status": t.status,
+                    "duration_ms": t.duration_ms,
+                    "spans": [
+                        {
+                            "span_id": s.span_id,
+                            "parent_id": s.parent_id,
+                            "operation": s.operation,
+                            "status": s.status,
+                            "duration_ms": s.duration_ms,
+                            "tags": s.tags,
+                            "logs": s.logs,
+                        }
+                        for s in t.spans
+                    ],
+                    "tags": t.tags,
+                }
+                self.wfile.write(json.dumps(resp, ensure_ascii=False, indent=2).encode('utf-8'))
+            else:
+                self.send_response(404)
+                self.end_headers()
         else:
             self.send_response(404)
             self.end_headers()
@@ -1064,68 +919,29 @@ class AgentHTTPRequestHandler(BaseHTTPRequestHandler):
             session_id = req.get('session_id', str(uuid.uuid4()))
             is_new_task = req.get('is_new_task', False)
 
-            # 兼容层：支持新 context_envelope 与旧字段共存
-            context_source = req.get('context_source', 'drag')
-            context_meta = req.get('context_meta', {})
-            envelope = normalize_context_envelope(req, text, context_source, context_meta)
+            # Web Search 参数
+            enable_web_search = req.get('enable_web_search', False)
+            web_search_force = req.get('web_search_force', False)
+            web_search_max_keyword = req.get('web_search_max_keyword', 3)
+            web_search_limit = req.get('web_search_limit', 3)
+            web_search_user_location = req.get('web_search_user_location', None)
 
-            if is_new_task:
-                memory.clear(session_id)
-                memory.set_persona(session_id, action_type)
-
-            ctx = memory.get_context(session_id)
-            current_persona = ctx["persona"]
-            persona_prompt = load_persona(current_persona)
-
-            # 构建上下文前缀
-            context_source = envelope.get("source", "drag")
-            context_prefix = build_context_prefix(context_source, envelope.get("meta", {}))
-
-            # 根据 context_source 优先级清理 persona 中可能冲突的指令
-            persona_prompt = sanitize_persona_for_context(persona_prompt, context_source)
-
-            # 将上下文前缀注入 system prompt
-            if context_prefix:
-                enriched_system = f"{context_prefix}\n\n{persona_prompt}"
-            else:
-                enriched_system = persona_prompt
-
-            # P0: 用预算驱动的窗口管理替换"全量历史 + 全量正文"
-            messages = window_manager.build_messages(
-                system_prompt=enriched_system,
-                envelope=envelope,
-                history_messages=ctx["messages"],
+            ctx = PipelineContext(
+                request=req,
+                session_id=session_id,
+                text=text,
+                action_type=action_type,
+                is_new_task=is_new_task,
+                enable_web_search=enable_web_search,
+                web_search_force=web_search_force,
+                web_search_max_keyword=web_search_max_keyword,
+                web_search_limit=web_search_limit,
+                web_search_user_location=web_search_user_location,
             )
+            ctx.metadata["_handler"] = self
+            ctx.stream_writer = self.wfile
 
-            image_base64 = req.get("image_base64")
-            
-            if image_base64:
-                last_msg_content = messages[-1]["content"]
-                messages[-1]["content"] = [
-                    {"type": "text", "text": last_msg_content},
-                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}}
-                ]
-
-            # 持久化原始用户输入，避免丢信息
-            user_message_content = []
-            user_content = envelope.get("content", text)
-            
-            if user_content:
-                user_message_content.append({"type": "text", "text": user_content})
-                
-            if image_base64:
-                user_message_content.append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/png;base64,{image_base64}"
-                    }
-                })
-
-            if not user_message_content:
-                user_message_content.append({"type": "text", "text": "你好"})
-
-            # 将多模态结构直接传入 memory
-            memory.add_message(session_id, "user", json.dumps(user_message_content, ensure_ascii=False) if len(user_message_content) > 1 else user_message_content[0]["text"])
+            print(f"[DEBUG] Pipeline processing: {text[:50]}...", flush=True)
 
             self.send_response(200)
             self.send_header('Content-Type', 'text/event-stream')
@@ -1134,40 +950,24 @@ class AgentHTTPRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
             try:
-                print(f"[DEBUG] Processing request: {text[:50]}...")
-                
-                # 尝试使用能力模块执行
-                capability_result = execute_with_capability(text, session_id)
-                
-                if capability_result:
-                    # 能力模块处理了请求
-                    print(f"[DEBUG] Capability result: {capability_result[:100]}...")
-                    memory.add_message(session_id, "assistant", capability_result)
-                    resp = {"chunk": capability_result}
-                    self.wfile.write(f"data: {json.dumps(resp, ensure_ascii=False)}\n\n".encode('utf-8'))
-                    self.wfile.flush()
-                else:
-                    # 普通对话，使用 LLM
-                    print(f"[DEBUG] Calling LLM...")
-                    llm = get_base_llm()
-                    full_reply = ""
-                    for chunk in llm.stream_chat_with_history(messages):
-                        full_reply += chunk
-                        resp = {"chunk": chunk}
-                        self.wfile.write(f"data: {json.dumps(resp, ensure_ascii=False)}\n\n".encode('utf-8'))
-                        self.wfile.flush()
-                    print(f"[DEBUG] LLM response complete: {full_reply[:100]}...")
-
-                    memory.add_message(session_id, "assistant", full_reply)
-
-                self.wfile.write(b"data: [DONE]\n\n")
-                self.wfile.flush()
-                print(f"[DEBUG] Request complete")
+                pipeline.execute(ctx)
             except Exception as e:
-                print(f"[DEBUG] Error: {e}")
-                resp = {"chunk": f"\n[Agent Error]: {str(e)}"}
-                self.wfile.write(f"data: {json.dumps(resp, ensure_ascii=False)}\n\n".encode('utf-8'))
-                self.wfile.flush()
+                print(f"[DEBUG] Pipeline fatal error: {e}", flush=True)
+                traceback.print_exc()
+                ctx.write_sse(f"\n[Agent Error]: {str(e)}")
+                ctx.write_sse_done()
+                if hasattr(self.wfile, 'flush'):
+                    self.wfile.flush()
+                return
+
+            if ctx.should_short_circuit and ctx.response_content:
+                ctx.write_sse(ctx.response_content)
+                ctx.write_sse_done()
+                if hasattr(self.wfile, 'flush'):
+                    self.wfile.flush()
+                memory.add_message(session_id, "assistant", ctx.response_content)
+
+            print(f"[DEBUG] Pipeline complete", flush=True)
         else:
             self.send_response(404)
             self.end_headers()

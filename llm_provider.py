@@ -16,7 +16,8 @@ def load_config():
         except:
             pass
     return {
-        "provider_type": "minimax", # 'minimax' 或 'local'
+        "provider_type": "mimo",  # 'mimo', 'minimax' 或 'local'
+        "mimo_model": "mimo-v2.5",
         "local_api_base": "http://localhost:11434/v1",
         "local_model": "llama3"
     }
@@ -80,6 +81,191 @@ class MiniMaxProvider(BaseProvider):
         yield from self._do_stream(messages)
 
 
+class MiMoProvider(BaseProvider):
+    """小米 MiMo 模型 Provider
+
+    支持 MiMo-V2.5 系列（mimo-v2.5, mimo-v2.5-pro, mimo-v2-flash）。
+    API 兼容 OpenAI 格式，Base URL: https://api.xiaomimimo.com/v1
+    支持按量计费（非 Token Plan），无需订阅即可使用。
+    """
+
+    # 按量计费单价（元/千 tokens），参考官方定价页
+    PRICING = {
+        "mimo-v2.5-pro":   {"input": 0.024, "output": 0.060},
+        "mimo-v2.5":       {"input": 0.012, "output": 0.030},
+        "mimo-v2-flash":   {"input": 0.002, "output": 0.006},
+    }
+
+    def __init__(self, api_key: str = None, model: str = None):
+        config = load_config()
+        self.api_key = api_key or config.get("mimo_api_key") or os.environ.get("XIAOMI_API_KEY") or os.environ.get("xiaomi_api_key") or os.environ.get("MIMO_API_KEY")
+        if not self.api_key:
+            print("警告: 未找到 XIAOMI_API_KEY / MIMO_API_KEY 环境变量或配置，请在 .env 文件中设置。")
+        self.default_model = model or config.get("mimo_model", "mimo-v2.5")
+        self.base_url = "https://api.xiaomimimo.com/v1/chat/completions"
+        self._usage_stats = {"total_requests": 0, "total_input_tokens": 0, "total_output_tokens": 0, "total_cost_cny": 0.0}
+
+        # Web Search 配置
+        ws_config = config.get("web_search", {})
+        self.web_search_enabled = ws_config.get("enabled", False)
+        self.web_search_force = ws_config.get("force_search", False)
+        self.web_search_max_keyword = ws_config.get("max_keyword", 3)
+        self.web_search_limit = ws_config.get("limit", 3)
+        self.web_search_location = ws_config.get("user_location", None)
+
+    def _build_tools(self, enable_web_search: bool = None, force_search: bool = None,
+                      max_keyword: int = None, limit: int = None,
+                      user_location: dict = None) -> list:
+        """构建 tools 参数（含 web_search）"""
+        should_enable = enable_web_search if enable_web_search is not None else self.web_search_enabled
+        if not should_enable:
+            return []
+
+        tool = {
+            "type": "web_search",
+            "max_keyword": max_keyword or self.web_search_max_keyword,
+            "force_search": force_search if force_search is not None else self.web_search_force,
+            "limit": limit or self.web_search_limit,
+        }
+        loc = user_location or self.web_search_location
+        if loc:
+            tool["user_location"] = loc
+        return [tool]
+
+    def _do_stream(self, messages: list, tools: list = None):
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+        }
+        payload = {
+            "model": self.default_model,
+            "messages": messages,
+            "stream": True,
+            "max_completion_tokens": 4096,
+            "temperature": 0.7,
+            "thinking": {"type": "disabled"},  # 关闭深度思考，直接输出内容
+        }
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
+        try:
+            with httpx.Client() as client:
+                with client.stream("POST", self.base_url, headers=headers, json=payload, timeout=300.0) as response:
+                    if response.status_code != 200:
+                        error_body = ""
+                        for chunk in response.iter_text():
+                            error_body += chunk
+                        yield f"\n[MiMo API Error]: HTTP {response.status_code} - {error_body[:200]}"
+                        return
+                    for line in response.iter_lines():
+                        if line.startswith("data: ") and line != "data: [DONE]":
+                            try:
+                                data = json.loads(line[6:])
+                                # 记录 usage（非流式最后一条或流式中的 usage）
+                                if "usage" in data:
+                                    self._update_usage(data["usage"])
+                                choices = data.get("choices", [])
+                                if choices:
+                                    delta = choices[0].get("delta", {})
+                                    content = delta.get("content", "")
+                                    if content:
+                                        yield content
+                                    # 流式模式下 annotations 在首包的 delta 中
+                                    annotations = delta.get("annotations")
+                                    if annotations:
+                                        yield ("__annotations__", annotations)
+                            except Exception:
+                                pass
+        except Exception as e:
+            yield f"\n[MiMo 连接失败]: {str(e)}"
+
+    def _do_non_stream(self, messages: list, tools: list = None) -> dict:
+        """非流式调用，返回 {"content": str, "annotations": list}"""
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+        }
+        payload = {
+            "model": self.default_model,
+            "messages": messages,
+            "stream": False,
+            "max_completion_tokens": 4096,
+            "temperature": 0.7,
+            "thinking": {"type": "disabled"},
+        }
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
+        try:
+            with httpx.Client() as client:
+                resp = client.post(self.base_url, headers=headers, json=payload, timeout=300.0)
+                if resp.status_code != 200:
+                    return {"content": f"[MiMo API Error]: HTTP {resp.status_code} - {resp.text[:200]}", "annotations": []}
+                data = resp.json()
+                if "usage" in data:
+                    self._update_usage(data["usage"])
+                choices = data.get("choices", [])
+                if choices:
+                    msg = choices[0].get("message", {})
+                    return {
+                        "content": msg.get("content", ""),
+                        "annotations": msg.get("annotations", []),
+                    }
+                return {"content": "", "annotations": []}
+        except Exception as e:
+            return {"content": f"[MiMo 连接失败]: {str(e)}", "annotations": []}
+
+    # Web Search 联网搜索计费（元/千次调用）
+    WEB_SEARCH_PRICING = {
+        "domestic": 0.016,   # ¥16 / 1000次
+        "overseas": 0.035,   # ~$5 / 1000次
+    }
+
+    def _update_usage(self, usage: dict):
+        """更新按量计费统计"""
+        input_tokens = usage.get("prompt_tokens", 0)
+        output_tokens = usage.get("completion_tokens", 0)
+        self._usage_stats["total_requests"] += 1
+        self._usage_stats["total_input_tokens"] += input_tokens
+        self._usage_stats["total_output_tokens"] += output_tokens
+
+        model_pricing = self.PRICING.get(self.default_model, self.PRICING["mimo-v2.5"])
+        cost = (input_tokens / 1000 * model_pricing["input"]) + (output_tokens / 1000 * model_pricing["output"])
+        self._usage_stats["total_cost_cny"] += cost
+
+        # Web Search 计费
+        ws_usage = usage.get("web_search_usage")
+        if ws_usage:
+            tool_usage = ws_usage.get("tool_usage", 0)
+            self._usage_stats.setdefault("web_search_tool_usage", 0)
+            self._usage_stats["web_search_tool_usage"] += tool_usage
+            ws_cost = tool_usage / 1000 * self.WEB_SEARCH_PRICING["domestic"]
+            self._usage_stats.setdefault("web_search_cost_cny", 0.0)
+            self._usage_stats["web_search_cost_cny"] += ws_cost
+
+    def get_usage_stats(self) -> dict:
+        """获取按量计费统计"""
+        return {
+            "model": self.default_model,
+            "billing_mode": "pay_as_you_go",
+            **self._usage_stats,
+        }
+
+    def stream_chat(self, prompt: str, system_prompt: str = "", enable_web_search: bool = None):
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+        tools = self._build_tools(enable_web_search) if enable_web_search else None
+        yield from self._do_stream(messages, tools=tools)
+
+    def stream_chat_with_history(self, messages: list, enable_web_search: bool = None,
+                                  force_search: bool = None, max_keyword: int = None,
+                                  limit: int = None, user_location: dict = None):
+        tools = self._build_tools(enable_web_search, force_search, max_keyword, limit, user_location) if (enable_web_search or self.web_search_enabled) else None
+        yield from self._do_stream(messages, tools=tools)
+
+
 class LocalProvider(BaseProvider):
     def __init__(self, api_base: str, model: str, api_key: str = "sk-local"):
         self.api_base = api_base.rstrip("/") + "/chat/completions"
@@ -131,7 +317,8 @@ class ASUCustomAgentClient(BaseProvider):
     def stream_agent_task(self, text: str, action_type: str = "default", session_id: str = "default",
                           is_new_task: bool = False, context_source: str = "drag",
                           context_meta: dict = None, context_envelope: dict = None,
-                          image_base64: str = None):
+                          image_base64: str = None, enable_web_search: bool = None,
+                          web_search_force: bool = False):
         payload = {
             "text": text,
             "action_type": action_type,
@@ -144,9 +331,23 @@ class ASUCustomAgentClient(BaseProvider):
             payload["context_envelope"] = context_envelope
         if image_base64:
             payload["image_base64"] = image_base64
+
+        # Web Search 参数：从 config 读取默认值，调用方可覆盖
+        config = load_config()
+        ws_config = config.get("web_search", {})
+        should_enable_ws = enable_web_search if enable_web_search is not None else ws_config.get("enabled", False)
+        if should_enable_ws:
+            payload["enable_web_search"] = True
+            payload["web_search_force"] = web_search_force or ws_config.get("force_search", False)
+            payload["web_search_max_keyword"] = ws_config.get("max_keyword", 3)
+            payload["web_search_limit"] = ws_config.get("limit", 3)
+            ws_location = ws_config.get("user_location")
+            if ws_location:
+                payload["web_search_user_location"] = ws_location
+
         try:
-            # timeout: connect=5s, read=120s（AI 思考可能较慢），write=10s, pool=5s
-            timeout = httpx.Timeout(connect=5.0, read=120.0, write=10.0, pool=5.0)
+            # timeout: connect=10s, read=300s（5分钟，兼容 web search 等耗时操作）
+            timeout = httpx.Timeout(connect=10.0, read=300.0, write=10.0, pool=10.0)
             with httpx.Client(verify=False, timeout=timeout) as client:
                 with client.stream("POST", self.api_base, json=payload) as response:
                     if response.status_code != 200:
@@ -161,6 +362,10 @@ class ASUCustomAgentClient(BaseProvider):
                                 chunk = data.get("chunk", "")
                                 if chunk:
                                     yield chunk
+                                # Web search annotations（搜索来源引用）
+                                annotations = data.get("annotations")
+                                if annotations:
+                                    yield ("__annotations__", annotations)
                             except Exception:
                                 pass
         except Exception as e:
@@ -213,7 +418,11 @@ class FailoverProvider(BaseProvider):
         config = load_config()
         providers = []
         
-        # 优先使用云端 Provider
+        # 优先使用 MiMo（按量计费，性价比高）
+        if config.get("mimo_api_key") or os.environ.get("XIAOMI_API_KEY") or os.environ.get("xiaomi_api_key") or os.environ.get("MIMO_API_KEY"):
+            providers.append(("mimo", MiMoProvider()))
+        
+        # 备选 MiniMax
         if config.get("minimax_api_key") or os.environ.get("MINIMAX_API_KEY"):
             providers.append(("minimax", MiniMaxProvider()))
         

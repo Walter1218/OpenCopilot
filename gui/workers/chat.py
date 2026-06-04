@@ -1,5 +1,6 @@
 """gui/workers/chat.py module"""
 import re
+import threading
 from PyQt6.QtCore import pyqtSignal, QThread
 from opencopilot.agent.caller import call_agent_pipeline_sync
 import json
@@ -16,6 +17,7 @@ class ChatWorker(QThread):
         self.context_source = context_source
         self.context_meta = context_meta or {}
         self._is_running = True
+        self._cancel_event = threading.Event()
 
     def run(self):
         try:
@@ -27,7 +29,8 @@ class ChatWorker(QThread):
             for chunk in call_agent_pipeline_sync(
                 self.text, action_type="chat", session_id=self.session_id,
                 is_new_task=False, context_source=self.context_source,
-                context_meta=self.context_meta
+                context_meta=self.context_meta,
+                cancel_event=self._cancel_event
             ):
                 if not self._is_running:
                     print(f"[ASU] ChatWorker被中断 | chunks={chunk_count}")
@@ -54,6 +57,8 @@ class ChatWorker(QThread):
         self.finished_signal.emit()
 
     def stop(self):
+        """停止 worker 并取消管线"""
         self._is_running = False
+        self._cancel_event.set()
 
 

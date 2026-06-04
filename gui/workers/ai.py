@@ -1,5 +1,6 @@
 """gui/workers/ai.py module"""
 import re
+import threading
 from PyQt6.QtCore import pyqtSignal, QThread
 from opencopilot.agent.caller import call_agent_pipeline_sync
 from llm_provider import load_config
@@ -21,6 +22,7 @@ class AIWorker(QThread):
         self.context_envelope = context_envelope
         self.image_base64 = image_base64
         self._is_running = True
+        self._cancel_event = threading.Event()
 
     def run(self):
         try:
@@ -34,7 +36,8 @@ class AIWorker(QThread):
                 context_source=self.context_source,
                 context_meta=self.context_meta,
                 context_envelope=self.context_envelope,
-                image_base64=self.image_base64
+                image_base64=self.image_base64,
+                cancel_event=self._cancel_event
             ):
                 if not self._is_running:
                     print(f"[ASU] AIWorker被中断 | chunks={chunk_count}")
@@ -61,5 +64,7 @@ class AIWorker(QThread):
         self.finished_signal.emit()
 
     def stop(self):
+        """停止 worker 并取消管线"""
         self._is_running = False
+        self._cancel_event.set()
 

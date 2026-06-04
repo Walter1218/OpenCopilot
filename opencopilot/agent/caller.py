@@ -106,6 +106,7 @@ def call_agent_pipeline_sync(
     enable_web_search: Optional[bool] = None,
     web_search_force: bool = False,
     timeout: float = 120.0,
+    cancel_event: Optional[threading.Event] = None,
 ) -> Generator[str, None, None]:
     """
     同步生成器版 Agent Pipeline 调用器。
@@ -125,11 +126,14 @@ def call_agent_pipeline_sync(
         enable_web_search: 是否开启联网搜索，None 从 config 读取
         web_search_force: 是否强制搜索
         timeout: 超时秒数
+        cancel_event: 取消事件，设置后立即终止管线
 
     Yields:
         str: SSE chunk 文本内容
     """
     chunk_queue: SyncQueue = SyncQueue()
+    _cancelled = cancel_event if cancel_event else threading.Event()
+    _pipeline_task_ref = [None]  # 用于在外部取消 pipeline task
 
     async def _run_pipeline():
         try:
@@ -151,16 +155,31 @@ def call_agent_pipeline_sync(
 
             pipeline = _get_pipeline()
             pipeline_task = asyncio.create_task(pipeline.execute(ctx))
+            _pipeline_task_ref[0] = pipeline_task
 
             done_received = False
             _start_time = time.time()
             while not done_received:
+                # 检查取消信号
+                if _cancelled.is_set():
+                    pipeline_task.cancel()
+                    chunk_queue.put(("done", None))
+                    done_received = True
+                    break
+
                 try:
-                    # 使用较短的超时，以便能及时检查 pipeline_task 是否已完成
-                    line = await asyncio.wait_for(async_queue.get(), timeout=min(timeout, 5.0))
+                    # 使用较短的超时，以便能及时检查取消信号和 pipeline 状态
+                    line = await asyncio.wait_for(async_queue.get(), timeout=1.0)
                 except asyncio.TimeoutError:
+                    # 检查取消信号
+                    if _cancelled.is_set():
+                        pipeline_task.cancel()
+                        chunk_queue.put(("done", None))
+                        done_received = True
+                        break
                     # 检查总超时
                     if time.time() - _start_time > timeout:
+                        pipeline_task.cancel()
                         chunk_queue.put(("error", "Agent 管线响应超时"))
                         chunk_queue.put(("done", None))
                         done_received = True
@@ -192,11 +211,15 @@ def call_agent_pipeline_sync(
                     except json.JSONDecodeError:
                         pass
 
-            try:
-                await asyncio.wait_for(pipeline_task, timeout=5.0)
-            except (asyncio.TimeoutError, Exception):
-                pass
+            # 等待 pipeline 完成（带超时）
+            if not pipeline_task.done():
+                try:
+                    await asyncio.wait_for(pipeline_task, timeout=3.0)
+                except (asyncio.TimeoutError, asyncio.CancelledError, Exception):
+                    pass
 
+        except asyncio.CancelledError:
+            chunk_queue.put(("done", None))
         except Exception as e:
             chunk_queue.put(("error", str(e)))
             chunk_queue.put(("done", None))
@@ -205,11 +228,20 @@ def call_agent_pipeline_sync(
     thread.start()
 
     while True:
-        try:
-            msg_type, msg = chunk_queue.get(timeout=timeout + 10)
-        except Empty:
-            yield "\n[错误]: Agent 管线无响应（消费者超时）"
+        # 检查取消信号
+        if _cancelled.is_set():
+            # 等待线程清理
+            thread.join(timeout=3.0)
             break
+
+        try:
+            msg_type, msg = chunk_queue.get(timeout=0.5)
+        except Empty:
+            # 检查总超时
+            if not thread.is_alive():
+                break
+            continue
+
         if msg_type == "done":
             break
         elif msg_type == "error":
@@ -218,7 +250,13 @@ def call_agent_pipeline_sync(
         elif msg_type == "chunk":
             yield msg
 
-    thread.join(timeout=10)
+    # 确保线程完全退出
+    if thread.is_alive():
+        _cancelled.set()
+        # 取消 pipeline task
+        if _pipeline_task_ref[0] and not _pipeline_task_ref[0].done():
+            _pipeline_task_ref[0].cancel()
+        thread.join(timeout=5.0)
 
 
 async def call_agent_pipeline_async(

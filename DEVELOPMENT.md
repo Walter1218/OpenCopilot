@@ -13,22 +13,22 @@
 | OS | macOS 12+ |
 | Python | 3.10+ |
 | 权限 | 辅助功能 + 屏幕录制 |
-| 依赖 | `pip install -r requirements.txt` 或 `pip install -e ".[all]"` |
+| 依赖 | `pip install -e .` 或 `pip install -e ".[all]"` |
 
 ### 1.2 启动开发环境
 
 ```bash
 # 终端 1：API Gateway（内嵌 Agent Pipeline，支持热重载）
-uvicorn smart_copilot_api:app --host 0.0.0.0 --port 8000 --reload
+python3 -m uvicorn smart_copilot_api:app --host 0.0.0.0 --port 8000 --reload
 
 # 终端 2：Broker（需要 macOS 原生终端）
-python opencopilot/broker/run.py
+python3 opencopilot/broker/run.py
 
 # 终端 3：UI
-python smart_copilot.py
+python3 smart_copilot.py
 
 # 终端 4：运行测试
-python -m pytest tests/ -v
+python3 -m pytest tests/ -v
 ```
 
 ---

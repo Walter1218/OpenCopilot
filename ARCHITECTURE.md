@@ -216,7 +216,7 @@ UI (smart_copilot.py)  按需启动，唤出时探活
 ```
 
 **生产部署**: `bash scripts/install_unified_daemon.sh`
-**开发模式**: `uvicorn smart_copilot_api:app --port 8000` + `python asu_broker/run.py` + `python smart_copilot.py`
+**开发模式**: `python3 -m uvicorn smart_copilot_api:app --port 8000` + `python3 opencopilot/broker/run.py` + `python3 smart_copilot.py`
 
 ---
 

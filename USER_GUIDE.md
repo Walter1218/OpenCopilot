@@ -52,8 +52,8 @@ OpenCopilot 需要后台服务支持 AI 能力：
 
 | 服务 | 端口 | 启动方式 |
 |------|------|----------|
-| API Gateway（AI 管线） | 8000 | `uvicorn smart_copilot_api:app --port 8000` |
-| Broker 特权代理 | 18889 | `python opencopilot/broker/run.py`（⚠️ 需在**原生终端**运行） |
+| API Gateway（AI 管线） | 8000 | `python3 -m uvicorn smart_copilot_api:app --port 8000` |
+| Broker 特权代理 | 18889 | `python3 opencopilot/broker/run.py`（⚠️ 需在**原生终端**运行） |
 
 > **启动方式**：API Gateway 一键启动（自动带起知识图谱），Broker 需单独启动（原生终端权限）。
 >

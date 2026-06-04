@@ -1622,7 +1622,26 @@ async def delete_task(task_id: str):
 # ==========================================
 
 if __name__ == "__main__":
-    port = int(os.environ.get("API_PORT", 8088))
+    port = int(os.environ.get("API_PORT", 8000))
+    
+    # 自动处理端口占用：杀掉旧进程
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["lsof", "-ti", f":{port}"], capture_output=True, text=True
+        )
+        if result.stdout.strip():
+            old_pids = result.stdout.strip().split('\n')
+            print(f"⚠️ 端口 {port} 被占用 (PID: {', '.join(old_pids)})，自动释放...")
+            for pid in old_pids:
+                try:
+                    subprocess.run(["kill", "-9", pid], capture_output=True)
+                except: pass
+            import time; time.sleep(0.5)
+            print(f"✅ 端口 {port} 已释放")
+    except Exception:
+        pass
+    
     print(f"🚀 启动 Smart Copilot API 服务...")
     print(f"📖 API 文档: http://localhost:{port}/docs")
     print(f"📖 ReDoc 文档: http://localhost:{port}/redoc")

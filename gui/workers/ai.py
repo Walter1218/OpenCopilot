@@ -27,7 +27,8 @@ class AIWorker(QThread):
             full_text = ""
             chunk_count = 0
             print(f"[ASU] AIWorker开始 | action={self.action_type} | session={self.session_id[:8]}... | source={self.context_source} | meta_keys={list(self.context_meta.keys())}")
-            for chunk in self.provider.stream_agent_task(
+            # 使用统一的 Agent Pipeline 调用器（provider.stream_agent_task 已废弃）
+            for chunk in call_agent_pipeline_sync(
                 self.prompt, action_type=self.action_type,
                 session_id=self.session_id, is_new_task=True,
                 context_source=self.context_source,

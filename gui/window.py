@@ -967,12 +967,10 @@ class AICardWindow(QWidget):
             print(f"[PPT] 开始生成大纲，内容长度: {len(text)} 字符")
             print(f"[PPT] 内容前100字: {text[:100]}")
             
-            # 使用API已有的 ppt_generator context_source
-            # 通过 ASUCustomAgentClient 统一调用，确保 web_search 等参数一致传递
-            from llm_provider import ASUCustomAgentClient
-            agent_client = ASUCustomAgentClient()
+            # 使用统一的 Agent Pipeline 调用器
+            from opencopilot.agent.caller import call_agent_pipeline_sync
             full_text = ""
-            for chunk in agent_client.stream_agent_task(
+            for chunk in call_agent_pipeline_sync(
                 text[:3000],
                 action_type="chat",
                 session_id=f"ppt_gen_{int(time.time())}",
@@ -1615,7 +1613,15 @@ class AICardWindow(QWidget):
         scrollbar.setValue(scrollbar.maximum())
 
     def on_chat_finished(self):
-        pass
+        # 检查 ChatWorker 是否有输出，如果没有则清除 "正在思考..." 占位符
+        worker = self.sender()
+        if worker and hasattr(worker, 'full_text') and not worker.full_text:
+            # Worker 没有任何输出，更新占位符为提示信息
+            cursor = self.chat_display.textCursor()
+            cursor.setPosition(self._temp_chat_pos)
+            cursor.movePosition(cursor.MoveOperation.End, cursor.MoveMode.KeepAnchor)
+            cursor.removeSelectedText()
+            cursor.insertHtml('<span style="color:#999;">AI 未返回响应，请重试。</span>')
 
     # ---- 新增UI组件处理方法 ----
 

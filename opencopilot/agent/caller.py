@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
+import time
 import uuid
 from queue import Queue as SyncQueue, Empty
 from typing import Dict, Any, Optional, Generator, AsyncGenerator
@@ -151,15 +152,35 @@ def call_agent_pipeline_sync(
             pipeline = _get_pipeline()
             pipeline_task = asyncio.create_task(pipeline.execute(ctx))
 
-            while True:
+            done_received = False
+            _start_time = time.time()
+            while not done_received:
                 try:
-                    line = await asyncio.wait_for(async_queue.get(), timeout=timeout)
+                    # 使用较短的超时，以便能及时检查 pipeline_task 是否已完成
+                    line = await asyncio.wait_for(async_queue.get(), timeout=min(timeout, 5.0))
                 except asyncio.TimeoutError:
-                    chunk_queue.put(("error", "Agent 管线响应超时"))
-                    break
+                    # 检查总超时
+                    if time.time() - _start_time > timeout:
+                        chunk_queue.put(("error", "Agent 管线响应超时"))
+                        chunk_queue.put(("done", None))
+                        done_received = True
+                        break
+                    # 检查 pipeline 是否已经结束（例如 short_circuit 或异常）
+                    if pipeline_task.done():
+                        # Pipeline 已结束但队列没有 DONE 信号，处理 short_circuit
+                        if ctx.should_short_circuit and ctx.response_content:
+                            chunk_queue.put(("chunk", ctx.response_content))
+                        elif pipeline_task.exception():
+                            chunk_queue.put(("error", str(pipeline_task.exception())))
+                        chunk_queue.put(("done", None))
+                        done_received = True
+                        break
+                    # Pipeline 仍在运行，继续等待
+                    continue
 
                 if line == "data: [DONE]\n\n":
                     chunk_queue.put(("done", None))
+                    done_received = True
                     break
                 if line.startswith("data: "):
                     data_str = line[6:]
@@ -171,16 +192,24 @@ def call_agent_pipeline_sync(
                     except json.JSONDecodeError:
                         pass
 
-            await pipeline_task
+            try:
+                await asyncio.wait_for(pipeline_task, timeout=5.0)
+            except (asyncio.TimeoutError, Exception):
+                pass
 
         except Exception as e:
             chunk_queue.put(("error", str(e)))
+            chunk_queue.put(("done", None))
 
     thread = threading.Thread(target=lambda: asyncio.run(_run_pipeline()), daemon=True)
     thread.start()
 
     while True:
-        msg_type, msg = chunk_queue.get()
+        try:
+            msg_type, msg = chunk_queue.get(timeout=timeout + 10)
+        except Empty:
+            yield "\n[错误]: Agent 管线无响应（消费者超时）"
+            break
         if msg_type == "done":
             break
         elif msg_type == "error":
@@ -267,6 +296,10 @@ async def call_agent_pipeline_async(
                     pass
 
         await pipeline_task
+
+        # 修复：short_circuit 时 awrite_sse_done() 不会被调用，导致消费者永久阻塞
+        if ctx.should_short_circuit and ctx.response_content:
+            yield ctx.response_content
 
     except Exception as e:
         yield f"\n[错误]: {str(e)}"

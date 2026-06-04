@@ -23,7 +23,8 @@ class ChatWorker(QThread):
             chunk_count = 0
             has_source = "source_text" in self.context_meta
             print(f"[ASU] ChatWorker开始 | session={self.session_id[:8]}... | has_source_text={has_source} | meta_keys={list(self.context_meta.keys())}")
-            for chunk in self.provider.stream_agent_task(
+            # 使用统一的 Agent Pipeline 调用器（provider.stream_agent_task 已废弃）
+            for chunk in call_agent_pipeline_sync(
                 self.text, action_type="chat", session_id=self.session_id,
                 is_new_task=False, context_source=self.context_source,
                 context_meta=self.context_meta

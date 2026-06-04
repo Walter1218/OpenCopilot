@@ -4,6 +4,7 @@ import json
 import uuid
 import sqlite3
 import time
+import asyncio
 import subprocess
 import tempfile
 import traceback
@@ -949,8 +950,12 @@ class AgentHTTPRequestHandler(BaseHTTPRequestHandler):
             self.send_header('Connection', 'keep-alive')
             self.end_headers()
 
+            # 创建异步队列，桥接 async Pipeline → sync HTTP wfile
+            _async_queue = asyncio.Queue()
+            ctx.use_async_queue(_async_queue)
+
             try:
-                pipeline.execute(ctx)
+                asyncio.run(pipeline.execute(ctx))
             except Exception as e:
                 print(f"[DEBUG] Pipeline fatal error: {e}", flush=True)
                 traceback.print_exc()
@@ -959,6 +964,16 @@ class AgentHTTPRequestHandler(BaseHTTPRequestHandler):
                 if hasattr(self.wfile, 'flush'):
                     self.wfile.flush()
                 return
+
+            # 从异步队列中取出所有 SSE 数据，写入 HTTP 响应流
+            while not _async_queue.empty():
+                try:
+                    line = _async_queue.get_nowait()
+                    self.wfile.write(line.encode('utf-8'))
+                except asyncio.QueueEmpty:
+                    break
+            if hasattr(self.wfile, 'flush'):
+                self.wfile.flush()
 
             if ctx.should_short_circuit and ctx.response_content:
                 ctx.write_sse(ctx.response_content)

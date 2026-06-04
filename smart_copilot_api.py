@@ -360,7 +360,7 @@ async def ppt_cocreation(request: PPTCoCreationRequest):
 
 请优先使用局部修改模式，只返回修改指令 JSON："""
 
-        response = _call_agent_pipeline(
+        response = await _call_agent_pipeline(
             text=user_message,
             action_type="ppt",
             session_id=session_id,

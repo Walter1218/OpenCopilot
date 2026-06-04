@@ -1,4 +1,5 @@
 """gui/workers/ai.py module"""
+import re
 from PyQt6.QtCore import pyqtSignal, QThread
 from opencopilot.agent.caller import call_agent_pipeline_sync
 from llm_provider import load_config

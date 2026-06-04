@@ -12,6 +12,7 @@ from system_probe_client import SystemProbeClient
 from ppt_generator import generate_ppt_from_json, extract_json_from_text
 from opencopilot.capabilities.ppt import CoCreationDialog
 from core.theme_manager import ThemeManager
+import subprocess
 from core.shortcut_manager import ShortcutManager
 from widgets.file_drop_zone import FileDropZone
 from widgets.progress_widget import ProgressWidget, MultiStepProgressWidget

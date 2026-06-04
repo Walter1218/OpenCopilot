@@ -1,4 +1,5 @@
 """gui/workers/mouse.py module"""
+import traceback
 from PyQt6.QtCore import pyqtSignal, QThread
 from pynput import mouse
 import sys as _sys

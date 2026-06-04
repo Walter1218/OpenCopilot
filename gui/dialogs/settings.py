@@ -1,6 +1,7 @@
 """gui/dialogs/settings.py module"""
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox, QSpinBox, QCheckBox, QGroupBox, QFormLayout, QLineEdit, QFileDialog, QMessageBox
 from PyQt6.QtCore import pyqtSignal, Qt, QTimer
+import os
 from llm_provider import load_config, save_config
 class SettingsDialog(QDialog):
     config_updated = pyqtSignal()

@@ -1,5 +1,6 @@
 """AgentWorkspace - 任务工作台"""
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QLabel, QPushButton, QHBoxLayout, QTabWidget, QRadioButton, QFrame, QLineEdit, QDialog, QGroupBox, QMessageBox
+import uuid
 from PyQt6.QtCore import Qt, pyqtSignal
 from gui.workers.chat import ChatWorker
 from llm_provider import ProviderFactory

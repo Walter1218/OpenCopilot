@@ -1,4 +1,5 @@
 """gui/workers/chat.py module"""
+import re
 from PyQt6.QtCore import pyqtSignal, QThread
 from opencopilot.agent.caller import call_agent_pipeline_sync
 import json

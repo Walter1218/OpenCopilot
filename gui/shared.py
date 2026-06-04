@@ -1,3 +1,5 @@
+from PyQt6.QtCore import *
+from PyQt6.QtGui import *
 """GUI shared"""
 import os
 import re

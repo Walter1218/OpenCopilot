@@ -1,3 +1,5 @@
+from PyQt6.QtCore import *
+from PyQt6.QtGui import *
 """AgentWorkspace - 任务工作台"""
 from PyQt6.QtWidgets import *
 import uuid

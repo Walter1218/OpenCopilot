@@ -1,3 +1,6 @@
+from PyQt6.QtCore import *
+from PyQt6.QtGui import *
+from PyQt6.QtWidgets import *
 """AICardWindow - 核心悬浮卡片"""
 import os, sys, json, uuid, time, tempfile, re, traceback
 from typing import Dict, Any, Optional, List
@@ -24,6 +27,7 @@ from widgets.skill_panel import SkillPanel, SkillSearchWidget, SkillCommandParse
 from widgets.skill_context_menu import SkillContextMenu, SkillCommandWidget
 from widgets.skill_search_dialog import SkillSearchDialog, SkillQuickAccessWidget
 from opencopilot.capabilities.skill import SkillRegistry, SkillContext, IntentRouter, SkillExecutor
+from opencopilot.capabilities.skill import CodingSkill, KnowledgeSkill, PPTSkill, EvaluationSkill, FileSkill, FormatSkill, PersonaSkill
 from gui.shared import check_accessibility_permission, make_panel_persistent
 from gui.workers.ai import AIWorker
 from gui.workers.chat import ChatWorker

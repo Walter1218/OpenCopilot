@@ -1,3 +1,6 @@
+from PyQt6.QtCore import *
+from PyQt6.QtGui import *
+from PyQt6.QtWidgets import *
 """
 技能面板组件
 提供技能搜索、浏览、执行的统一界面

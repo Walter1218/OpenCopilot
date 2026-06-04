@@ -1,3 +1,5 @@
+from PyQt6.QtCore import *
+from PyQt6.QtGui import *
 """
 翻译专用界面
 支持多语言翻译、语言切换、翻译历史等功能

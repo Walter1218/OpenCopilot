@@ -1,3 +1,5 @@
+from PyQt6.QtCore import *
+from PyQt6.QtGui import *
 """
 技能搜索对话框组件
 支持在对话中搜索和调用技能，参考 WorkBuddy 设计

@@ -1,3 +1,6 @@
+from PyQt6.QtCore import *
+from PyQt6.QtGui import *
+from PyQt6.QtWidgets import *
 """
 技能增强版右键菜单组件
 集成 Skill 功能，支持上下文动态显示

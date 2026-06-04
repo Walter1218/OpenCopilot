@@ -29,7 +29,7 @@ class EvaluationSkill(BaseSkill):
             version="1.0.0",
             description="内容质量评价技能，支持多场景质量评估",
             author="OpenCopilot",
-            tags=["evaluation", "quality", "score", "review"],
+            category="evaluation",            tags=["evaluation", "quality", "score", "review"],
             intents=[
                 "evaluate",
                 "quality_check",

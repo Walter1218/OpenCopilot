@@ -31,7 +31,7 @@ class PPTSkill(BaseSkill):
             version="1.0.0",
             description="PPT 共创技能，支持 PPT 生成、建议、检查、分析等功能",
             author="OpenCopilot",
-            tags=["ppt", "presentation", "generate", "suggest", "check", "analyze", "convert"],
+            category="ppt",            tags=["ppt", "presentation", "generate", "suggest", "check", "analyze", "convert"],
             intents=[
                 "ppt_generate",
                 "ppt_suggest",

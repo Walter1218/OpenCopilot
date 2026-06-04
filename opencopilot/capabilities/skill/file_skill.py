@@ -29,7 +29,7 @@ class FileSkill(BaseSkill):
             version="1.0.0",
             description="文件处理技能，支持文件读取、写入、格式转换等功能",
             author="OpenCopilot",
-            tags=["file", "read", "write", "convert", "format"],
+            category="file",            tags=["file", "read", "write", "convert", "format"],
             intents=[
                 "file_read",
                 "file_write",

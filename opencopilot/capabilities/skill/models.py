@@ -29,6 +29,7 @@ class SkillMetadata:
     version: str                     # 版本号
     description: str                 # 描述
     author: str = ""                 # 作者
+    category: str = ""               # 类别 (coding/knowledge/ppt/evaluation/file/format/persona)
     tags: List[str] = field(default_factory=list)  # 标签
     intents: List[str] = field(default_factory=list)  # 支持的意图
     dependencies: List[str] = field(default_factory=list)  # 依赖的其他 Skill

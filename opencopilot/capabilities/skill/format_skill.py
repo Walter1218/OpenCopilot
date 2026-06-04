@@ -26,6 +26,7 @@ class FormatSkill(BaseSkill):
             description="格式转换技能，支持Markdown转Word、Markdown转PPT、文本转表格等多种格式转换",
             version="1.0.0",
             author="OpenCopilot",
+            category="format",
             intents=[
                 "format_convert",
                 "md_to_docx",

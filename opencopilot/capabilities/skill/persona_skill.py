@@ -26,6 +26,7 @@ class PersonaSkill(BaseSkill):
             description="人设管理技能，支持人设的列表、获取、保存、删除等操作",
             version="1.0.0",
             author="OpenCopilot",
+            category="persona",
             intents=[
                 "persona",
                 "persona_list",

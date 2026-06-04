@@ -41,7 +41,7 @@ class CodingSkill(BaseSkill):
             version="1.0.0",
             description="编码助手，支持 Bug 修复、API 结果增强、代码分析等",
             author="OpenCopilot",
-            tags=["coding", "bug-fix", "code-review", "analysis", "refactor"],
+            category="coding",            tags=["coding", "bug-fix", "code-review", "analysis", "refactor"],
             intents=[
                 "bug_fix",
                 "code_review",

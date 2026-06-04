@@ -43,7 +43,7 @@ class KnowledgeSkill(BaseSkill):
             version="1.0.0",
             description="知识图谱查询、构建和导出",
             author="OpenCopilot",
-            tags=["knowledge", "graph", "query", "search"],
+            category="knowledge",            tags=["knowledge", "graph", "query", "search"],
             intents=[
                 "knowledge_query",
                 "knowledge_build", 

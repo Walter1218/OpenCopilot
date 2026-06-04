@@ -26,10 +26,12 @@ class ExecutionMode(Enum):
 class SkillMetadata:
     """Skill 元数据"""
     name: str                        # Skill 名称
+    display_name: str = ""           # 显示名称（可中文）
     version: str                     # 版本号
     description: str                 # 描述
     author: str = ""                 # 作者
     category: str = ""               # 类别 (coding/knowledge/ppt/evaluation/file/format/persona)
+    shortcut: str = ""               # 快捷键
     tags: List[str] = field(default_factory=list)  # 标签
     intents: List[str] = field(default_factory=list)  # 支持的意图
     dependencies: List[str] = field(default_factory=list)  # 依赖的其他 Skill

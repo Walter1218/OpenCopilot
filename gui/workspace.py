@@ -2,6 +2,7 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QLabel, QPushButton, QHBoxLayout
 from PyQt6.QtCore import Qt, pyqtSignal
 from gui.workers.chat import ChatWorker
+from llm_provider import ProviderFactory
 class AgentWorkspace(QWidget):
     """独立智能体工作台 —— 三连击右键唤出。
 

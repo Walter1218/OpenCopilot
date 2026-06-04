@@ -10,6 +10,7 @@ from gui.workspace import AgentWorkspace
 from gui.workers.mouse import MouseListenerWorker
 from gui.workers.health import AgentHealthWorker
 from gui.shared import check_accessibility_permission
+from llm_provider import ProviderFactory
 class CopilotManager:
     def __init__(self):
         # UI 与 Agent 生命周期完全解耦：

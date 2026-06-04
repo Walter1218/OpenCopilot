@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLabe
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtGui import QCursor, QColor
 import httpx
-from llm_provider import load_config, save_config
+from llm_provider import load_config, save_config, ProviderFactory
 from opencopilot.agent.caller import call_agent_pipeline_sync
 from markdown_renderer import render as md_render
 from system_probe_client import SystemProbeClient

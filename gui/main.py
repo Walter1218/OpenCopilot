@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
 from PyQt6.QtGui import QIcon, QCursor, QAction
 from typing import Dict, Any
 from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QStyle
 from cursor_effects import CursorOverlay
 from gui.window import AICardWindow
 from gui.workspace import AgentWorkspace

@@ -179,7 +179,7 @@ class SkillSearchDialog(QDialog):
                 background-color: #2980b9;
             }
         """)
-        search_btn.clicked.connect(self._on_search)
+        search_btn.clicked.connect(self._perform_search)
         search_layout.addWidget(search_btn)
         
         layout.addLayout(search_layout)

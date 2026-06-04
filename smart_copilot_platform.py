@@ -43,8 +43,8 @@ from opencopilot.capabilities.tools.mcp_client import get_mcp_client
 from opencopilot.capabilities.tools.symbol_analyzer import get_symbol_analyzer
 
 # ==========================================
-# v4.0: 模型从 platform.models 导入
-from platform.models import (
+# v4.0: 模型从 platform.models 导入（避免与 stdlib platform 冲突）  
+from .platform.models import (
     ContextSource, ActionType, Context, ActionResult,
     ExecuteRequest, ExecuteResponse, ContextResponse,
     ProbeStatusResponse, EventMessage, PPTGenerateRequest,

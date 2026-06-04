@@ -4,8 +4,19 @@ import sys
 import signal
 import subprocess
 import time
+import secrets
+from pathlib import Path
 
-from core.auth import TOKEN_FILE, EXPECTED_TOKEN
+TOKEN_FILE = str(Path.home() / ".asu_broker_token")
+try:
+    with open(TOKEN_FILE) as f:
+        EXPECTED_TOKEN = f.read().strip()
+except FileNotFoundError:
+    EXPECTED_TOKEN = secrets.token_hex(32)
+    os.makedirs(os.path.dirname(TOKEN_FILE), exist_ok=True)
+    with open(TOKEN_FILE, "w") as f:
+        f.write(EXPECTED_TOKEN)
+    os.chmod(TOKEN_FILE, 0o600)
 
 if __name__ == "__main__":
     MASKED = f"{EXPECTED_TOKEN[:8]}...{EXPECTED_TOKEN[-8:]}" if len(EXPECTED_TOKEN) > 16 else "***"

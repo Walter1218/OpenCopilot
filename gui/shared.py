@@ -14,12 +14,6 @@ import httpx
 from pynput import mouse
 
 from PyQt6.QtWidgets import *
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
-    QLabel, QFrame, QGraphicsDropShadowEffect, QPushButton, QDialog,
-    QRadioButton, QLineEdit, QMessageBox, QTabWidget, QComboBox,
-    QFileDialog, QSystemTrayIcon, QMenu, QStyle, QGroupBox,
-    QSplitter, QListWidget, QListWidgetItem, QFormLayout
-)
 from ppt_generator import generate_ppt_from_json, extract_json_from_text
 from opencopilot.capabilities.ppt import CoCreationDialog
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QTimer

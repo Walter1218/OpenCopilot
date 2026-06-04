@@ -6,10 +6,6 @@
 import asyncio
 from typing import Dict, List, Optional, Any
 from PyQt6.QtWidgets import *
-    QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
-    QLabel, QFrame, QListWidget, QListWidgetItem, QTabWidget,
-    QWidget, QTextEdit, QSplitter, QApplication
-)
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QSize, QThread, QObject
 from PyQt6.QtGui import QFont, QColor, QPalette, QKeySequence, QIcon, QShortcut
 

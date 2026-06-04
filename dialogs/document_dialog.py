@@ -4,9 +4,6 @@
 """
 import os
 from PyQt6.QtWidgets import *
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit,
-    QPushButton, QFileDialog, QMessageBox, QComboBox, QGroupBox
-)
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 

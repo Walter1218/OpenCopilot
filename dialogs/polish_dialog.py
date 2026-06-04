@@ -3,9 +3,6 @@
 支持文本润色、风格选择、对比查看等功能
 """
 from PyQt6.QtWidgets import *
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit,
-    QPushButton, QComboBox, QGroupBox, QApplication, QSplitter
-)
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont
 

@@ -11,12 +11,6 @@ from typing import List, Optional, Dict, Set
 from datetime import datetime
 
 from PyQt6.QtWidgets import *
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit,
-    QComboBox, QGroupBox, QFormLayout, QTextEdit, QMessageBox,
-    QFileDialog, QTabWidget, QWidget, QSplitter, QListWidget,
-    QListWidgetItem, QCheckBox, QSpinBox
-)
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor
 

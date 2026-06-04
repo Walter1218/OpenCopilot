@@ -11,12 +11,6 @@ from datetime import datetime
 from difflib import SequenceMatcher
 
 from PyQt6.QtWidgets import *
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit,
-    QComboBox, QGroupBox, QFormLayout, QTextEdit, QMessageBox,
-    QFileDialog, QSpinBox, QDoubleSpinBox, QCheckBox, QSplitter,
-    QWidget, QProgressBar
-)
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor
 

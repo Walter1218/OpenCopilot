@@ -681,8 +681,8 @@ class AnalyzeRequest(BaseModel):
     content: str = Field(..., description="待分析内容")
     context: Optional[PPTContext] = Field(None, description="PPT 上下文")
 
-class ChatRequest(BaseModel):
-    """多轮对话请求"""
+class PPTChatRequest(BaseModel):
+    """PPT 多轮对话请求"""
     session_id: Optional[str] = Field(None, description="会话 ID")
     message: str = Field(..., description="用户消息")
     context: Optional[PPTContext] = Field(None, description="PPT 上下文")

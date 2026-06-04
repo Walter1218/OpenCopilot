@@ -240,6 +240,7 @@ class AICopilotChatWidget(QWidget):
     def __init__(self, agent_url: str = None, parent=None):
         super().__init__(parent)
         # agent_url 参数保留用于向后兼容，不再使用（统一走 Pipeline）
+        self.agent_url = agent_url
         self.slides_data = []
         self.current_index = -1
         self.worker = None

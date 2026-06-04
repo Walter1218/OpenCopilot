@@ -49,35 +49,23 @@ all = [
 opencopilot-api = "smart_copilot_api:app"
 
 [tool.setuptools.packages.find]
-include = ["opencopilot*", "api*", "gui*"]
-exclude = [
-    "ppt_cocreation*",
-    "code_executor*",
-    "memory_system*",
-    "tools*",
-    "search_capability*",
-    "knowledge_retrieval*",
-    "skill_architecture*",
-    "state_manager*",
-    "agents_md_module*",
-    "asu_broker*",
-    "planner*",
-    "security_module*",
-    "observability_module*",
-    "agent_pipeline*",
-    "widgets*",
-    "context_manager*",
-    "coding_agent*",
-    "knowledge_graph*",
-    "core*",
-    "config*",
-    "dialogs*",
-    "deploy*",
-    "personas*",
-    "platform*",
-    "prompts*",
-    "skills*",
-    "test_docs*",
+include = ["opencopilot*", "api*", "gui*", "knowledge_graph*", "dialogs*", "widgets*", "platform*"]
+
+[tool.setuptools]
+py-modules = [
+    "smart_copilot_api",
+    "smart_copilot",
+    "smart_copilot_platform",
+    "asu_custom_agent",
+    "config_manager",
+    "llm_provider",
+    "llm_adapter",
+    "ppt_generator",
+    "cursor_effects",
+    "markdown_renderer",
+    "prompt_builder",
+    "system_probe_client",
+    "api_registry",
 ]
 
 [build-system]

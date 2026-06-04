@@ -26,7 +26,7 @@ class MouseListenerWorker(QThread):
             try:
                 self.mouse_moved.emit(int(x), int(y))
             except Exception:
-                pass  # 回调异常不能向外抛，否则 pynput 会静默终止 listener
+                self.listener_error.emit(f"[on_move] {traceback.format_exc()}")
             
         def on_click(x, y, button, pressed):
             try:
@@ -41,7 +41,7 @@ class MouseListenerWorker(QThread):
                         self.last_right_click_time = current_time
                         self.right_clicked.emit(int(x), int(y), self._right_click_count)
             except Exception:
-                pass  # 同上
+                self.listener_error.emit(f"[on_click] {traceback.format_exc()}")
 
         try:
             self._listener = mouse.Listener(on_move=on_move, on_click=on_click)

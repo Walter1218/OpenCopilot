@@ -2,7 +2,7 @@
 翻译专用界面
 支持多语言翻译、语言切换、翻译历史等功能
 """
-from PyQt6.QtWidgets import (
+from PyQt6.QtWidgets import *
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit,
     QPushButton, QComboBox, QGroupBox, QApplication
 )

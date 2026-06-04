@@ -13,7 +13,7 @@ import websockets
 import httpx
 from pynput import mouse
 
-from PyQt6.QtWidgets import (
+from PyQt6.QtWidgets import *
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
     QLabel, QFrame, QGraphicsDropShadowEffect, QPushButton, QDialog,
     QRadioButton, QLineEdit, QMessageBox, QTabWidget, QComboBox,

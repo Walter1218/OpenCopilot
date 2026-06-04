@@ -5,7 +5,7 @@
 
 import asyncio
 from typing import Dict, List, Optional, Any
-from PyQt6.QtWidgets import (
+from PyQt6.QtWidgets import *
     QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
     QLabel, QFrame, QListWidget, QListWidgetItem, QTabWidget,
     QWidget, QTextEdit, QSplitter, QApplication
@@ -865,7 +865,7 @@ class SkillQuickAccessWidget(QWidget):
 # 测试代码
 if __name__ == "__main__":
     import sys
-    from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtWidgets import *
     
     app = QApplication(sys.argv)
     

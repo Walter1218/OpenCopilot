@@ -3,7 +3,7 @@
 支持文档加载、内容提取、格式转换等功能
 """
 import os
-from PyQt6.QtWidgets import (
+from PyQt6.QtWidgets import *
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit,
     QPushButton, QFileDialog, QMessageBox, QComboBox, QGroupBox
 )

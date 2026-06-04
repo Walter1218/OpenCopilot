@@ -10,7 +10,7 @@ from typing import List, Optional, Dict, Tuple
 from datetime import datetime
 from difflib import SequenceMatcher
 
-from PyQt6.QtWidgets import (
+from PyQt6.QtWidgets import *
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit,
     QComboBox, QGroupBox, QFormLayout, QTextEdit, QMessageBox,

@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Set
 from datetime import datetime
 
-from PyQt6.QtWidgets import (
+from PyQt6.QtWidgets import *
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit,
     QComboBox, QGroupBox, QFormLayout, QTextEdit, QMessageBox,

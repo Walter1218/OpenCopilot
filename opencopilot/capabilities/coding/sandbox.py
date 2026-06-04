@@ -11,7 +11,12 @@ import os
 import sys
 import tempfile
 import shutil
-import psutil
+try:
+    import psutil
+    _HAS_PSUTIL = True
+except ImportError:
+    psutil = None
+    _HAS_PSUTIL = False
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 import logging
@@ -194,6 +199,9 @@ class SandboxManager:
         Returns:
             bool: 是否在限制内
         """
+        if not _HAS_PSUTIL:
+            return True  # psutil 不可用时跳过资源限制
+        
         try:
             # 获取进程信息
             p = psutil.Process(process.pid)
@@ -215,9 +223,6 @@ class SandboxManager:
             
             return True
             
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            # 进程已结束或无权限
-            return True
         except Exception as e:
             logger.error(f"Failed to enforce limits: {e}")
             return True

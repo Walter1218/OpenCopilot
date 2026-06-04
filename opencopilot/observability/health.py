@@ -9,7 +9,12 @@
 import time
 import asyncio
 import logging
-import psutil
+try:
+    import psutil
+    _HAS_PSUTIL = True
+except ImportError:
+    psutil = None
+    _HAS_PSUTIL = False
 from typing import Dict, List, Optional, Any, Callable, Awaitable
 
 from .models import (
@@ -254,6 +259,14 @@ class HealthChecker:
             PerformanceMetrics: 性能指标
         """
         try:
+            if not _HAS_PSUTIL:
+                return PerformanceMetrics(
+                    cpu_usage_percent=0.0,
+                    memory_usage_mb=0.0,
+                    memory_total_mb=0.0,
+                    disk_usage_percent=0.0
+                )
+            
             # 获取 CPU 使用率
             cpu_percent = psutil.cpu_percent(interval=0.1)
             

@@ -1,4 +1,6 @@
 """gui/workers/health.py module"""
+import httpx
+import traceback
 from PyQt6.QtCore import pyqtSignal, QThread
 class AgentHealthWorker(QThread):
     """异步探活 Agent 后台服务，不阻塞主线程。"""
@@ -13,8 +15,8 @@ class AgentHealthWorker(QThread):
                 data = resp.json()
                 self.health_result.emit(True, data.get("active_sessions", 0))
                 return
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[HealthWorker] 探活失败: {e}")
         self.health_result.emit(False, 0)
 
 

@@ -18,8 +18,7 @@ from PyQt6.QtGui import QIcon, QFont, QColor, QPalette, QAction, QKeySequence
 # 导入 Skill 架构
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from skill_architecture import SkillRegistry, SkillContext, SkillMetadata
+from opencopilot.capabilities.skill import SkillRegistry, SkillContext, SkillMetadata
 
 
 class SkillCard(QFrame):
@@ -936,8 +935,8 @@ if __name__ == "__main__":
     registry = SkillRegistry()
     
     # 创建测试技能
-    from skill_architecture.coding_skill import CodingSkill
-    from skill_architecture.knowledge_skill import KnowledgeSkill
+    from opencopilot.capabilities.skill.coding_skill import CodingSkill
+    from opencopilot.capabilities.skill.knowledge_skill import KnowledgeSkill
     
     coding_skill = CodingSkill()
     knowledge_skill = KnowledgeSkill()

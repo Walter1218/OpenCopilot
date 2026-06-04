@@ -1,0 +1,90 @@
+[project]
+name = "opencopilot"
+version = "4.0.0"
+description = "macOS 系统级 AI 操作员 — 右键唤出悬浮卡片，Agent Loop 动态范式"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "OpenCopilot Team" }]
+keywords = ["ai", "copilot", "macos", "agent", "pipeline"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: MacOS X",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "pynput>=1.8.2",
+    "PyQt6>=6.7.0",
+    "httpx>=0.24.0",
+    "python-dotenv>=1.0.1",
+    "markdown>=3.5",
+    "Pygments>=2.17",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+    "python-pptx>=0.6.23",
+    "websockets>=12.0",
+    "pydantic>=2.0",
+    "psutil>=5.9",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.4",
+    "pytest-asyncio>=0.21",
+]
+macos = [
+    "pyobjc-framework-Cocoa>=10.0",
+    "pyobjc-framework-Quartz>=10.0",
+    "pyobjc-framework-ApplicationServices>=10.0",
+]
+all = [
+    "opencopilot[test,macos]",
+]
+
+[project.scripts]
+opencopilot-api = "smart_copilot_api:app"
+
+[tool.setuptools.packages.find]
+include = ["opencopilot*", "api*", "gui*"]
+exclude = [
+    "ppt_cocreation*",
+    "code_executor*",
+    "memory_system*",
+    "tools*",
+    "search_capability*",
+    "knowledge_retrieval*",
+    "skill_architecture*",
+    "state_manager*",
+    "agents_md_module*",
+    "asu_broker*",
+    "planner*",
+    "security_module*",
+    "observability_module*",
+    "agent_pipeline*",
+    "widgets*",
+    "context_manager*",
+    "coding_agent*",
+    "knowledge_graph*",
+    "core*",
+    "config*",
+    "dialogs*",
+    "deploy*",
+    "personas*",
+    "platform*",
+    "prompts*",
+    "skills*",
+    "test_docs*",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-v --tb=short"

@@ -36,8 +36,8 @@ if [ ! -f "$PLIST_TEMPLATE" ]; then
 fi
 
 # ---- 检查启动脚本 ----
-if [ ! -f "$PROJECT_DIR/start_broker_with_kg.py" ]; then
-    echo "❌ 找不到 start_broker_with_kg.py，请确认项目结构正确。"
+if [ ! -f "$PROJECT_DIR/smart_copilot_api.py" ]; then
+    echo "❌ 找不到 smart_copilot_api.py，请确认项目结构正确。"
     exit 1
 fi
 

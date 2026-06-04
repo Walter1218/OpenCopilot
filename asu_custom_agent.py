@@ -12,9 +12,9 @@ from socketserver import ThreadingMixIn
 from llm_provider import MiniMaxProvider, LocalProvider, MiMoProvider, load_config
 
 # 导入记忆系统改进模块
-from memory_system.config import ConfigManager, MemoryType
-from memory_system.quota_manager import QuotaManager
-from memory_system.core import MemoryManager
+from opencopilot.capabilities.memory.config import ConfigManager, MemoryType
+from opencopilot.capabilities.memory.quota_manager import QuotaManager
+from opencopilot.capabilities.memory.core import MemoryManager
 
 # 导入统一 Prompt 构建服务
 from prompt_builder import (
@@ -27,37 +27,37 @@ from prompt_builder import (
 )
 
 # 导入代码执行引擎模块
-from code_executor import CodeExecutor, ExecutorConfig
+from opencopilot.capabilities.coding import CodeExecutor, ExecutorConfig
 
 # 导入上下文管理模块
 from context_manager import ContextWindowManager as ContextWindowManagerModule
 
 # 导入知识检索模块
-from knowledge_retrieval import KnowledgeRetrieval
+from opencopilot.capabilities.knowledge import KnowledgeRetrieval
 
 # 导入搜索能力模块
-from search_capability import SearchCapability, SearchType
+from opencopilot.capabilities.search import SearchCapability, SearchType
 
 # 导入状态管理模块
-from state_manager import StateManager, get_default_manager as get_state_manager
+from opencopilot.capabilities.state import StateManager, get_default_manager as get_state_manager
 
 # 导入规划器模块
-from planner import Planner, PlanRequest
+from opencopilot.safety.planner import Planner, PlanRequest
 
 # 导入安全模块
-from security_module import SecurityModule, SecurityConfig
+from opencopilot.safety.security import SecurityModule, SecurityConfig
 
 # 导入可观测性模块
-from observability_module import ObservabilityModule, ObservabilityConfig, LogLevel
+from opencopilot.observability import ObservabilityModule, ObservabilityConfig, LogLevel
 
 # 导入AGENTS.md免疫机制模块
-from agents_md_module import ImmuneSystem, RuleEngine
+from opencopilot.safety.immune import ImmuneSystem, RuleEngine
 
 # 导入Skill化架构模块
-from skill_architecture import SkillRegistry, IntentRouter, SkillExecutor, SkillDiscovery
+from opencopilot.capabilities.skill import SkillRegistry, IntentRouter, SkillExecutor, SkillDiscovery
 
 # 导入中间件管线
-from agent_pipeline import (
+from opencopilot.agent import (
     PipelineContext, MiddlewarePipeline,
     SecurityGuardMiddleware, ImmuneSystemMiddleware,
     PlannerMiddleware, StateTrackingMiddleware,
@@ -670,7 +670,7 @@ def detect_request_type(text: str) -> str:
 
 
 # 构建中间件管线（注入 tracer 实现自动追踪）
-from observability_module.tracer import DistributedTracer
+from opencopilot.observability.tracer import DistributedTracer
 tracer = DistributedTracer(observability_config)
 
 pipeline = MiddlewarePipeline(tracer=tracer)

@@ -8,16 +8,15 @@ from typing import Dict, List, Optional, Any
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
     QLabel, QFrame, QListWidget, QListWidgetItem, QTabWidget,
-    QWidget, QTextEdit, QSplitter, QApplication, QShortcut
+    QWidget, QTextEdit, QSplitter, QApplication
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QSize, QThread, QObject
-from PyQt6.QtGui import QFont, QColor, QPalette, QKeySequence, QIcon
+from PyQt6.QtGui import QFont, QColor, QPalette, QKeySequence, QIcon, QShortcut
 
 # 导入 Skill 架构
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from skill_architecture import SkillRegistry, SkillContext, IntentRouter
+from opencopilot.capabilities.skill import SkillRegistry, SkillContext, IntentRouter
 
 
 class SkillSearchWorker(QObject):
@@ -874,8 +873,8 @@ if __name__ == "__main__":
     registry = SkillRegistry()
     
     # 创建测试技能
-    from skill_architecture.coding_skill import CodingSkill
-    from skill_architecture.knowledge_skill import KnowledgeSkill
+    from opencopilot.capabilities.skill.coding_skill import CodingSkill
+    from opencopilot.capabilities.skill.knowledge_skill import KnowledgeSkill
     
     coding_skill = CodingSkill()
     knowledge_skill = KnowledgeSkill()

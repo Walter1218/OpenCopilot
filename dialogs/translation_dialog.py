@@ -169,7 +169,7 @@ class TranslationDialog(QWidget):
             self.target_lang_combo.setCurrentIndex(target_index)
     
     def translate(self):
-        """执行翻译"""
+        """执行翻译（通过 Agent Pipeline 调用 LLM）"""
         self.source_text = self.source_edit.toPlainText().strip()
         
         if not self.source_text:
@@ -179,29 +179,22 @@ class TranslationDialog(QWidget):
         # 更新状态
         self.status_label.setText("正在翻译...")
         self.translate_btn.setEnabled(False)
+        QApplication.processEvents()
         
         try:
-            # 这里应该调用实际的翻译API
-            # 暂时使用模拟翻译
-            self.translated_text = self._simulate_translation(
-                self.source_text, 
-                self.source_lang, 
+            self.translated_text = self._do_translate(
+                self.source_text,
+                self.source_lang,
                 self.target_lang
             )
             
             # 显示翻译结果
             self.target_edit.setPlainText(self.translated_text)
-            
-            # 启用复制按钮
             self.copy_btn.setEnabled(True)
-            
-            # 更新状态
             self.status_label.setText("翻译完成")
             
             # 保存到历史记录
             self._save_to_history()
-            
-            # 发送信号
             self.translation_completed.emit(self.source_text, self.translated_text)
             
             return True
@@ -213,38 +206,41 @@ class TranslationDialog(QWidget):
         finally:
             self.translate_btn.setEnabled(True)
     
-    def _simulate_translation(self, text, source_lang, target_lang):
-        """模拟翻译（实际应用中应替换为真实API调用）"""
-        # 简单的模拟翻译逻辑
-        if source_lang == "zh" and target_lang == "en":
-            # 中文到英文
-            if "人工智能" in text:
-                return "Artificial intelligence is changing our lifestyle."
-            elif "你好" in text:
-                return "Hello"
-            else:
-                return f"Translation: {text}"
+    def _do_translate(self, text, source_lang, target_lang):
+        """通过 Agent Pipeline 执行真实翻译"""
+        # 构建翻译 prompt（与 API /api/text/translate 保持一致）
+        lang_map = {
+            "zh": "中文", "en": "英文", "ja": "日文",
+            "ko": "韩文", "fr": "法文", "de": "德文",
+            "es": "西班牙文", "ru": "俄文",
+        }
+        target_name = lang_map.get(target_lang, target_lang)
+        prompt = f"请将以下文本翻译成{target_name}：\n\n{text}"
         
-        elif source_lang == "en" and target_lang == "zh":
-            # 英文到中文
-            if "artificial intelligence" in text.lower():
-                return "人工智能正在改变我们的生活方式。"
-            elif "hello" in text.lower():
-                return "你好"
-            else:
-                return f"翻译: {text}"
+        # 调用 Agent Pipeline（同步生成器，内部 daemon 线程跑 async）
+        from opencopilot.agent.caller import call_agent_pipeline_sync
         
-        elif source_lang == "zh" and target_lang == "ja":
-            # 中文到日文
-            return f"翻訳: {text}"
+        chunks = []
+        try:
+            for chunk in call_agent_pipeline_sync(
+                text=prompt,
+                action_type="translate",
+                context_source="chat",
+                context_meta={"task": "translate", "source_lang": source_lang, "target_lang": target_lang},
+                timeout=60.0,
+            ):
+                chunks.append(chunk)
+        except Exception:
+            # Pipeline 失败时回退到简单提示
+            return f"[翻译失败] 请检查 Agent 服务是否正常运行。\n原文: {text}"
         
-        elif source_lang == "ja" and target_lang == "zh":
-            # 日文到中文
-            return f"翻译: {text}"
+        result = "".join(chunks).strip()
         
-        else:
-            # 其他语言组合
-            return f"[{source_lang} -> {target_lang}] {text}"
+        # 如果 LLM 不可用，返回明确提示
+        if not result:
+            return f"[翻译服务暂不可用]\n原文: {text}"
+        
+        return result
     
     def swap_languages(self):
         """交换语言和文本"""

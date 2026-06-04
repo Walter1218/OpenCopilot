@@ -1,0 +1,754 @@
+{
+  "id": "bd12c336-728e-4f5a-a043-a1c5642674f0",
+  "name": "OpenCopilot Knowledge Graph",
+  "description": "OpenCopilot 项目知识图谱",
+  "version": "1.0.0",
+  "entities": {
+    "eb1c4802-ee85-4063-9907-e0d3e1c46556": {
+      "id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "name": "knowledge/export/knowledge_graph_report.md",
+      "entity_type": "document",
+      "description": "其他文档: OpenCopilot 知识图谱报告",
+      "properties": {
+        "file_path": "knowledge/export/knowledge_graph_report.md",
+        "doc_type": "其他",
+        "title": "OpenCopilot 知识图谱报告",
+        "version": "",
+        "status": "",
+        "size_bytes": 1599,
+        "line_count": 84
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.263725",
+      "updated_at": "2026-06-04T17:37:15.263727"
+    },
+    "e300b8fa-b00a-4e4f-ae4a-b9ba9465c20b": {
+      "id": "e300b8fa-b00a-4e4f-ae4a-b9ba9465c20b",
+      "name": "Persona System",
+      "entity_type": "component",
+      "description": "角色人设系统",
+      "properties": {},
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.263975",
+      "updated_at": "2026-06-04T17:37:15.263976"
+    },
+    "71e25639-0fbb-4948-97b2-5b8221601696": {
+      "id": "71e25639-0fbb-4948-97b2-5b8221601696",
+      "name": "/api/execute",
+      "entity_type": "api",
+      "description": "REST API: /api/execute",
+      "properties": {
+        "endpoint": "/api/execute",
+        "api_type": "REST API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264124",
+      "updated_at": "2026-06-04T17:37:15.264126"
+    },
+    "33da97e1-bc67-4c9e-b699-b09a634d1228": {
+      "id": "33da97e1-bc67-4c9e-b699-b09a634d1228",
+      "name": "/health",
+      "entity_type": "api",
+      "description": "REST API: /health",
+      "properties": {
+        "endpoint": "/health",
+        "api_type": "REST API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264133",
+      "updated_at": "2026-06-04T17:37:15.264133"
+    },
+    "29e128dc-2ff1-40f1-acf7-e57ffa5a3e8b": {
+      "id": "29e128dc-2ff1-40f1-acf7-e57ffa5a3e8b",
+      "name": "/api/execute/stream",
+      "entity_type": "api",
+      "description": "REST API: /api/execute/stream",
+      "properties": {
+        "endpoint": "/api/execute/stream",
+        "api_type": "REST API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264139",
+      "updated_at": "2026-06-04T17:37:15.264140"
+    },
+    "b816b187-011e-4909-94d3-1011a5707ed3": {
+      "id": "b816b187-011e-4909-94d3-1011a5707ed3",
+      "name": "/api/probe/status",
+      "entity_type": "api",
+      "description": "REST API: /api/probe/status",
+      "properties": {
+        "endpoint": "/api/probe/status",
+        "api_type": "REST API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264144",
+      "updated_at": "2026-06-04T17:37:15.264145"
+    },
+    "d4446c74-fec3-454d-9be7-68c7b8dccbd5": {
+      "id": "d4446c74-fec3-454d-9be7-68c7b8dccbd5",
+      "name": "/api/probe/clipboard",
+      "entity_type": "api",
+      "description": "REST API: /api/probe/clipboard",
+      "properties": {
+        "endpoint": "/api/probe/clipboard",
+        "api_type": "REST API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264149",
+      "updated_at": "2026-06-04T17:37:15.264150"
+    },
+    "27029e26-54b9-4985-946c-f081c391666a": {
+      "id": "27029e26-54b9-4985-946c-f081c391666a",
+      "name": "/api/context/current",
+      "entity_type": "api",
+      "description": "Context API: /api/context/current",
+      "properties": {
+        "endpoint": "/api/context/current",
+        "api_type": "Context API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264155",
+      "updated_at": "2026-06-04T17:37:15.264155"
+    },
+    "b098671c-67bf-4525-af22-f8d46a14a458": {
+      "id": "b098671c-67bf-4525-af22-f8d46a14a458",
+      "name": "/api/context/inject",
+      "entity_type": "api",
+      "description": "Context API: /api/context/inject",
+      "properties": {
+        "endpoint": "/api/context/inject",
+        "api_type": "Context API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264160",
+      "updated_at": "2026-06-04T17:37:15.264160"
+    },
+    "e8165d61-e71e-41aa-9834-2a28139bb8dc": {
+      "id": "e8165d61-e71e-41aa-9834-2a28139bb8dc",
+      "name": "/api/context/history",
+      "entity_type": "api",
+      "description": "Context API: /api/context/history",
+      "properties": {
+        "endpoint": "/api/context/history",
+        "api_type": "Context API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264165",
+      "updated_at": "2026-06-04T17:37:15.264165"
+    },
+    "7326af63-d512-4bd6-a583-2f4db145011f": {
+      "id": "7326af63-d512-4bd6-a583-2f4db145011f",
+      "name": "/api/context/history?limit=10",
+      "entity_type": "api",
+      "description": "Context API: /api/context/history?limit=10",
+      "properties": {
+        "endpoint": "/api/context/history?limit=10",
+        "api_type": "Context API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264169",
+      "updated_at": "2026-06-04T17:37:15.264170"
+    },
+    "a16f6dfc-1994-4cfc-9c54-aa16c1323ada": {
+      "id": "a16f6dfc-1994-4cfc-9c54-aa16c1323ada",
+      "name": "/api/ppt/generate",
+      "entity_type": "api",
+      "description": "PPT API: /api/ppt/generate",
+      "properties": {
+        "endpoint": "/api/ppt/generate",
+        "api_type": "PPT API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264174",
+      "updated_at": "2026-06-04T17:37:15.264175"
+    },
+    "56ed0620-ba19-4805-9d61-f07cf5de028a": {
+      "id": "56ed0620-ba19-4805-9d61-f07cf5de028a",
+      "name": "/api/ppt/from-context",
+      "entity_type": "api",
+      "description": "PPT API: /api/ppt/from-context",
+      "properties": {
+        "endpoint": "/api/ppt/from-context",
+        "api_type": "PPT API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264179",
+      "updated_at": "2026-06-04T17:37:15.264180"
+    },
+    "a66bc75f-4559-4ffa-9f8d-6615b7bed654": {
+      "id": "a66bc75f-4559-4ffa-9f8d-6615b7bed654",
+      "name": "/api/ppt/analyze",
+      "entity_type": "api",
+      "description": "PPT API: /api/ppt/analyze",
+      "properties": {
+        "endpoint": "/api/ppt/analyze",
+        "api_type": "PPT API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264184",
+      "updated_at": "2026-06-04T17:37:15.264184"
+    },
+    "831261ed-a23b-4278-a319-e06c46ce3731": {
+      "id": "831261ed-a23b-4278-a319-e06c46ce3731",
+      "name": "/api/ppt/style/check",
+      "entity_type": "api",
+      "description": "PPT API: /api/ppt/style/check",
+      "properties": {
+        "endpoint": "/api/ppt/style/check",
+        "api_type": "PPT API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264189",
+      "updated_at": "2026-06-04T17:37:15.264189"
+    },
+    "93c644ea-b038-4e22-aa24-500f1151dfee": {
+      "id": "93c644ea-b038-4e22-aa24-500f1151dfee",
+      "name": "/api/ppt/suggest",
+      "entity_type": "api",
+      "description": "PPT API: /api/ppt/suggest",
+      "properties": {
+        "endpoint": "/api/ppt/suggest",
+        "api_type": "PPT API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264193",
+      "updated_at": "2026-06-04T17:37:15.264194"
+    },
+    "1536ccb0-910e-4041-85c1-2d81e182c5b6": {
+      "id": "1536ccb0-910e-4041-85c1-2d81e182c5b6",
+      "name": "/v1/agent/chat",
+      "entity_type": "api",
+      "description": "Agent API: /v1/agent/chat",
+      "properties": {
+        "endpoint": "/v1/agent/chat",
+        "api_type": "Agent API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264198",
+      "updated_at": "2026-06-04T17:37:15.264198"
+    },
+    "59284834-409f-4853-9c1e-8c787e93804e": {
+      "id": "59284834-409f-4853-9c1e-8c787e93804e",
+      "name": "/v1/agent/session/clear",
+      "entity_type": "api",
+      "description": "Agent API: /v1/agent/session/clear",
+      "properties": {
+        "endpoint": "/v1/agent/session/clear",
+        "api_type": "Agent API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264202",
+      "updated_at": "2026-06-04T17:37:15.264203"
+    },
+    "4335fb62-382f-4a32-8df5-02e912efcebc": {
+      "id": "4335fb62-382f-4a32-8df5-02e912efcebc",
+      "name": "/v1/agent/sessions",
+      "entity_type": "api",
+      "description": "Agent API: /v1/agent/sessions",
+      "properties": {
+        "endpoint": "/v1/agent/sessions",
+        "api_type": "Agent API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264207",
+      "updated_at": "2026-06-04T17:37:15.264208"
+    },
+    "4f483f60-ecec-47a4-9a6b-42bdfc880680": {
+      "id": "4f483f60-ecec-47a4-9a6b-42bdfc880680",
+      "name": "/v1/agent/personas",
+      "entity_type": "api",
+      "description": "Agent API: /v1/agent/personas",
+      "properties": {
+        "endpoint": "/v1/agent/personas",
+        "api_type": "Agent API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264212",
+      "updated_at": "2026-06-04T17:37:15.264212"
+    },
+    "90071028-d140-49c5-9a76-41b49b52322d": {
+      "id": "90071028-d140-49c5-9a76-41b49b52322d",
+      "name": "/v1/agent/personas/reload",
+      "entity_type": "api",
+      "description": "Agent API: /v1/agent/personas/reload",
+      "properties": {
+        "endpoint": "/v1/agent/personas/reload",
+        "api_type": "Agent API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264216",
+      "updated_at": "2026-06-04T17:37:15.264217"
+    },
+    "9bc90f53-8c05-4c77-b79d-3c6885665abd": {
+      "id": "9bc90f53-8c05-4c77-b79d-3c6885665abd",
+      "name": "/api/v1/system/frontmost",
+      "entity_type": "api",
+      "description": "Broker API: /api/v1/system/frontmost",
+      "properties": {
+        "endpoint": "/api/v1/system/frontmost",
+        "api_type": "Broker API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264221",
+      "updated_at": "2026-06-04T17:37:15.264222"
+    },
+    "32a336dc-b25a-4b7b-9029-e9e620eaf945": {
+      "id": "32a336dc-b25a-4b7b-9029-e9e620eaf945",
+      "name": "/api/v1/system/clipboard",
+      "entity_type": "api",
+      "description": "Broker API: /api/v1/system/clipboard",
+      "properties": {
+        "endpoint": "/api/v1/system/clipboard",
+        "api_type": "Broker API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264226",
+      "updated_at": "2026-06-04T17:37:15.264226"
+    },
+    "a832cc91-bc66-42c0-85e5-482a902f50a0": {
+      "id": "a832cc91-bc66-42c0-85e5-482a902f50a0",
+      "name": "/api/v1/system/selection",
+      "entity_type": "api",
+      "description": "Broker API: /api/v1/system/selection",
+      "properties": {
+        "endpoint": "/api/v1/system/selection",
+        "api_type": "Broker API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264231",
+      "updated_at": "2026-06-04T17:37:15.264231"
+    },
+    "14247ca5-aa76-47d6-a734-cbf029730811": {
+      "id": "14247ca5-aa76-47d6-a734-cbf029730811",
+      "name": "/api/v1/system/screen/front",
+      "entity_type": "api",
+      "description": "Broker API: /api/v1/system/screen/front",
+      "properties": {
+        "endpoint": "/api/v1/system/screen/front",
+        "api_type": "Broker API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264235",
+      "updated_at": "2026-06-04T17:37:15.264236"
+    },
+    "7d89fef9-f0c3-456f-8bf6-abe7f0a6cbcc": {
+      "id": "7d89fef9-f0c3-456f-8bf6-abe7f0a6cbcc",
+      "name": "/api/v1/system/fs/read",
+      "entity_type": "api",
+      "description": "Broker API: /api/v1/system/fs/read",
+      "properties": {
+        "endpoint": "/api/v1/system/fs/read",
+        "api_type": "Broker API"
+      },
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264240",
+      "updated_at": "2026-06-04T17:37:15.264240"
+    },
+    "230fb177-28ea-43a1-8cbd-3d386ae0c72b": {
+      "id": "230fb177-28ea-43a1-8cbd-3d386ae0c72b",
+      "name": "Context Management",
+      "entity_type": "feature",
+      "description": "上下文管理",
+      "properties": {},
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264383",
+      "updated_at": "2026-06-04T17:37:15.264384"
+    }
+  },
+  "relations": {
+    "5cd245a1-323b-42b6-a66b-b95d27e2ec48": {
+      "id": "5cd245a1-323b-42b6-a66b-b95d27e2ec48",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "e300b8fa-b00a-4e4f-ae4a-b9ba9465c20b",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 Persona System",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264461"
+    },
+    "9cd8165e-52a1-46b0-863d-98c6a29720ce": {
+      "id": "9cd8165e-52a1-46b0-863d-98c6a29720ce",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "71e25639-0fbb-4948-97b2-5b8221601696",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /api/execute",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264465"
+    },
+    "64a14738-0e47-4961-a1b0-88c7afad4881": {
+      "id": "64a14738-0e47-4961-a1b0-88c7afad4881",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "33da97e1-bc67-4c9e-b699-b09a634d1228",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /health",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264472"
+    },
+    "7a3267e4-e30a-4fd0-9b0a-2235e2972ca1": {
+      "id": "7a3267e4-e30a-4fd0-9b0a-2235e2972ca1",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "29e128dc-2ff1-40f1-acf7-e57ffa5a3e8b",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /api/execute/stream",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264476"
+    },
+    "fd7a3229-e570-4179-b465-15bd859e3089": {
+      "id": "fd7a3229-e570-4179-b465-15bd859e3089",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "b816b187-011e-4909-94d3-1011a5707ed3",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /api/probe/status",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264479"
+    },
+    "b339de8e-93da-4f75-834b-0c1341039a86": {
+      "id": "b339de8e-93da-4f75-834b-0c1341039a86",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "d4446c74-fec3-454d-9be7-68c7b8dccbd5",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /api/probe/clipboard",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264483"
+    },
+    "4501bd07-b3f3-4202-96bb-0ad191ab3fe3": {
+      "id": "4501bd07-b3f3-4202-96bb-0ad191ab3fe3",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "27029e26-54b9-4985-946c-f081c391666a",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /api/context/current",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264486"
+    },
+    "501bf81f-2777-4f4b-a2b4-874c0b1543bd": {
+      "id": "501bf81f-2777-4f4b-a2b4-874c0b1543bd",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "b098671c-67bf-4525-af22-f8d46a14a458",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /api/context/inject",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264490"
+    },
+    "491f38bd-eaef-4bac-816c-25e42cc36ad5": {
+      "id": "491f38bd-eaef-4bac-816c-25e42cc36ad5",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "e8165d61-e71e-41aa-9834-2a28139bb8dc",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /api/context/history",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264493"
+    },
+    "311fe6ef-8c51-45f1-994b-15460cedcacc": {
+      "id": "311fe6ef-8c51-45f1-994b-15460cedcacc",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "7326af63-d512-4bd6-a583-2f4db145011f",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /api/context/history?limit=10",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264496"
+    },
+    "0b872787-6655-4d0b-9996-06f7e64e235b": {
+      "id": "0b872787-6655-4d0b-9996-06f7e64e235b",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "a16f6dfc-1994-4cfc-9c54-aa16c1323ada",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /api/ppt/generate",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264500"
+    },
+    "d1d5b8cc-a252-4cb4-b902-7d92293a0eef": {
+      "id": "d1d5b8cc-a252-4cb4-b902-7d92293a0eef",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "56ed0620-ba19-4805-9d61-f07cf5de028a",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /api/ppt/from-context",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264503"
+    },
+    "efbce3b3-7ac4-4212-896a-812710e39d3c": {
+      "id": "efbce3b3-7ac4-4212-896a-812710e39d3c",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "a66bc75f-4559-4ffa-9f8d-6615b7bed654",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /api/ppt/analyze",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264507"
+    },
+    "9eff3bce-1352-4d4e-b127-a08d997761ab": {
+      "id": "9eff3bce-1352-4d4e-b127-a08d997761ab",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "831261ed-a23b-4278-a319-e06c46ce3731",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /api/ppt/style/check",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264510"
+    },
+    "339b7247-7c08-4c64-8cca-34717ecfe79c": {
+      "id": "339b7247-7c08-4c64-8cca-34717ecfe79c",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "93c644ea-b038-4e22-aa24-500f1151dfee",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /api/ppt/suggest",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264513"
+    },
+    "f063cdd1-0344-4dac-8dc1-464f4f2b9f99": {
+      "id": "f063cdd1-0344-4dac-8dc1-464f4f2b9f99",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "1536ccb0-910e-4041-85c1-2d81e182c5b6",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /v1/agent/chat",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264517"
+    },
+    "2d37922d-6f56-4287-ae17-d46d218d4d99": {
+      "id": "2d37922d-6f56-4287-ae17-d46d218d4d99",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "59284834-409f-4853-9c1e-8c787e93804e",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /v1/agent/session/clear",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264520"
+    },
+    "956a3aeb-3bde-4fad-8acb-7db9e58092ed": {
+      "id": "956a3aeb-3bde-4fad-8acb-7db9e58092ed",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "4335fb62-382f-4a32-8df5-02e912efcebc",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /v1/agent/sessions",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264523"
+    },
+    "3a72cbfb-6285-4fd1-a4f2-a16b484fd425": {
+      "id": "3a72cbfb-6285-4fd1-a4f2-a16b484fd425",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "4f483f60-ecec-47a4-9a6b-42bdfc880680",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /v1/agent/personas",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264527"
+    },
+    "5961292b-8ff9-423f-9917-4c6dea589c91": {
+      "id": "5961292b-8ff9-423f-9917-4c6dea589c91",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "90071028-d140-49c5-9a76-41b49b52322d",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /v1/agent/personas/reload",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264530"
+    },
+    "e0e04cd5-e18b-426a-b07b-4a29835a82c7": {
+      "id": "e0e04cd5-e18b-426a-b07b-4a29835a82c7",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "9bc90f53-8c05-4c77-b79d-3c6885665abd",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /api/v1/system/frontmost",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264534"
+    },
+    "9519e12f-41cb-45ad-bc85-8c7eaf550022": {
+      "id": "9519e12f-41cb-45ad-bc85-8c7eaf550022",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "32a336dc-b25a-4b7b-9029-e9e620eaf945",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /api/v1/system/clipboard",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264537"
+    },
+    "42a27539-1a53-497e-be4b-0ab6eabfcc74": {
+      "id": "42a27539-1a53-497e-be4b-0ab6eabfcc74",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "a832cc91-bc66-42c0-85e5-482a902f50a0",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /api/v1/system/selection",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264539"
+    },
+    "23daf466-7a7d-42e1-85de-04d18836b866": {
+      "id": "23daf466-7a7d-42e1-85de-04d18836b866",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "14247ca5-aa76-47d6-a734-cbf029730811",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /api/v1/system/screen/front",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264541"
+    },
+    "9d4c190f-f97c-4083-8908-4f6f76bf5494": {
+      "id": "9d4c190f-f97c-4083-8908-4f6f76bf5494",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "7d89fef9-f0c3-456f-8bf6-abe7f0a6cbcc",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 /api/v1/system/fs/read",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264544"
+    },
+    "9ac296ad-a8ea-48e8-994a-1a7bc72052d8": {
+      "id": "9ac296ad-a8ea-48e8-994a-1a7bc72052d8",
+      "source_id": "eb1c4802-ee85-4063-9907-e0d3e1c46556",
+      "target_id": "230fb177-28ea-43a1-8cbd-3d386ae0c72b",
+      "relation_type": "documents",
+      "description": "文档 knowledge/export/knowledge_graph_report.md 描述了 Context Management",
+      "properties": {},
+      "weight": 1.0,
+      "source_documents": [
+        "knowledge/export/knowledge_graph_report.md"
+      ],
+      "created_at": "2026-06-04T17:37:15.264551"
+    }
+  },
+  "created_at": "2026-06-04T17:37:15.262593",
+  "updated_at": "2026-06-04T17:37:15.264603"
+}

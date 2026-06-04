@@ -1,7 +1,7 @@
 # OpenCopilot 用户说明书
 
-> **版本**：v2.1 | **适用平台**：macOS 15+ | **最后更新**：2026-05-28  
-> **状态**：P0-P2 阶段（主动感知、多模态、无感划词、Persona 工作坊）已全面完成
+> **版本**：v4.0 | **适用平台**：macOS 12+ | **最后更新**：2026-06-04  
+> **状态**：分层架构，Agent Loop 混合范式，14 项质量提升已完成
 
 ---
 
@@ -19,8 +19,8 @@ OpenCopilot 是一款 macOS 桌面级 AI 智能协驾工具。它在后台静默
 
 | 项目 | 要求 |
 |------|------|
-| 操作系统 | macOS 15 (Sequoia) 或更高 |
-| Python | 3.10 ~ 3.12（勿使用 3.13+） |
+| 操作系统 | macOS 12 (Monterey) 或更高 |
+| Python | 3.11 ~ 3.13 |
 | 依赖 | `pip install -r requirements.txt` |
 
 ### 2.2 授予权限（一次性，首次运行前完成）
@@ -46,16 +46,18 @@ cd OpenCopilot
 pip install -r requirements.txt
 ```
 
-### 3.2 注册守护进程（一次性，实现开机自启）
+### 3.2 启动后台服务
 
-OpenCopilot 有两个后台服务需要常驻运行：
+OpenCopilot 需要后台服务支持 AI 能力：
 
-| 服务 | 端口 | 注册命令 |
+| 服务 | 端口 | 启动方式 |
 |------|------|----------|
-| Agent 智能体 | 18888 | `bash scripts/install_daemon.sh` |
-| Broker 特权代理 | 18889 | `bash scripts/install_broker_daemon.sh` ⚠️ 需在**原生终端**运行 |
+| API Gateway（AI 管线） | 8000 | `uvicorn smart_copilot_api:app --port 8000` |
+| Broker 特权代理 | 18889 | `python opencopilot/broker/run.py`（⚠️ 需在**原生终端**运行） |
 
-> ⚠️ Broker 安装脚本**必须在 macOS 原生 Terminal.app 中运行**，不要在 IDE 内置终端执行，否则会继承沙盒限制。
+> **启动方式**：API Gateway 一键启动（自动带起知识图谱），Broker 需单独启动（原生终端权限）。
+>
+> ⚠️ Broker 必须在 macOS 原生 Terminal.app 中运行，IDE 内置终端会继承沙盒限制。
 
 ### 3.3 启动 UI
 
@@ -254,16 +256,12 @@ AI 回复完成后，卡片底部会出现：
 | 操作 | 命令 |
 |------|------|
 | 启动 UI | `bash scripts/start_ui.sh` |
-| 安装 Agent 守护进程 | `bash scripts/install_daemon.sh` |
-| 安装 Broker 守护进程 | `bash scripts/install_broker_daemon.sh` |
-| 卸载 Agent 守护进程 | `bash scripts/uninstall_daemon.sh` |
-| 卸载 Broker 守护进程 | `bash scripts/uninstall_broker_daemon.sh` |
-| 查看 Agent 实时日志 | `bash scripts/tail_logs.sh` 或 `tail -f ~/Library/Logs/ASU/agent_out.log` |
-| 查看 Broker 实时日志 | `tail -f ~/Library/Logs/ASU/broker_out.log` |
-| 检查 Agent 是否在线 | `curl http://127.0.0.1:18888/health` |
-| 检查 Broker 是否在线 | `curl -H "Authorization: Bearer $(cat ~/.asu_broker_token)" http://127.0.0.1:18889/health` |
-| 手动启动 Agent（调试） | `python asu_custom_agent.py` |
-| 手动启动 Broker（调试） | `cd asu_broker && python run.py` |
+| 启动 API Gateway | `uvicorn smart_copilot_api:app --host 0.0.0.0 --port 8000 --reload` |
+| 启动 Broker | `python asu_broker/run.py`（⚠️ 原生终端） |
+| 启动知识图谱 | 随 API Gateway 自动启动 |
+| 查看日志 | `tail -f ~/Library/Logs/ASU/agent_out.log` |
+| 检查 API 是否在线 | `curl http://127.0.0.1:8000/health` |
+| 检查 Broker 是否在线 | `curl http://127.0.0.1:18889/health` |
 
 ---
 
@@ -273,8 +271,8 @@ OpenCopilot 卡片标题栏有一个状态圆点：
 
 | 指示灯 | 含义 | 说明 |
 |:---:|---|---|
-| 🟢 绿色 | 正常 | Agent 在线，所有功能可用 |
-| 🔴 红色 | 离线 | Agent 未启动，UI 仍可打开但无法调用 AI。请检查守护进程是否安装并运行 |
+| 🟢 绿色 | 正常 | API Gateway + Broker 在线，所有功能可用 |
+| 🔴 红色 | 离线 | API Gateway 未启动，UI 仍可打开但无法调用 AI |
 
 ---
 
@@ -283,8 +281,8 @@ OpenCopilot 卡片标题栏有一个状态圆点：
 ### Q1：双击右键没反应？
 → 检查 **系统设置 → 隐私与安全性 → 辅助功能**，确认终端程序已被授权。
 
-### Q2：按钮显示红色/"OpenCopilot 核心守护服务未启动"？
-→ Agent 守护进程未运行。执行 `bash scripts/install_daemon.sh` 安装并启动。
+### Q2：按钮显示红色/"OpenCopilot 核心服务未启动"？
+→ API Gateway 未运行。启动命令：`uvicorn smart_copilot_api:app --port 8000`
 
 ### Q3：浏览器读取按钮不出现？
 → 确保 Broker 已安装且在**原生终端**中运行。执行 `bash scripts/install_broker_daemon.sh`。

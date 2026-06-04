@@ -1,7 +1,7 @@
 """AICardWindow - 核心悬浮卡片"""
 import os, sys, json, uuid, time, tempfile, re, traceback
 from typing import Dict, Any, Optional, List
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLabel, QPushButton, QFrame, QGraphicsDropShadowEffect, QFileDialog, QMessageBox, QComboBox, QGroupBox, QFormLayout, QSplitter, QListWidget, QListWidgetItem)
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLabel, QPushButton, QFrame, QGraphicsDropShadowEffect, QFileDialog, QMessageBox, QComboBox, QGroupBox, QFormLayout, QSplitter, QListWidget, QListWidgetItem, QTabWidget, QDialog, QLineEdit)
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtGui import QCursor, QColor
 import httpx

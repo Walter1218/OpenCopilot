@@ -13,7 +13,7 @@ class SettingsDialog(QDialog):
         self.setup_ui()
         
     def setup_ui(self):
-        from PyQt6.QtWidgets import QGroupBox, QStackedWidget, QFormLayout
+        from PyQt6.QtWidgets import QGroupBox, QStackedWidget, QFormLayout, QRadioButton
         layout = QVBoxLayout(self)
         
         # 1. 引擎后端选择 (QButtonGroup)

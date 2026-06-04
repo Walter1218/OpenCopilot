@@ -1,5 +1,5 @@
 """gui/dialogs/ppt_preview.py module"""
-from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, QLabel
+from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, QLabel, QSplitter, QWidget, QListWidget, QFormLayout, QLineEdit, QComboBox
 from PyQt6.QtCore import Qt
 class PPTPreviewDialog(QDialog):
     def __init__(self, json_data, parent=None):

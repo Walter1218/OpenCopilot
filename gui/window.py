@@ -69,7 +69,7 @@ class AICardWindow(QWidget):
         
         # 初始化 Skill 架构
         self.skill_registry = SkillRegistry()
-        self.skill_router = IntentRouter()
+        self.skill_router = IntentRouter(self.skill_registry)
         self.skill_executor = SkillExecutor(self.skill_registry, self.skill_router)
         self._init_skills()
         

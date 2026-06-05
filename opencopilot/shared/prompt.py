@@ -159,14 +159,17 @@ def load_persona(persona_name: str, base_dir: str = None) -> str:
     动态加载 Persona 文件，支持热更新
     
     Args:
-        persona_name: persona 名称（如 "default", "code", "translate"）
+        persona_name: persona 名称（如 "default", "code", "translate", "chat"）
         base_dir: personas 目录路径，默认为项目根目录下的 personas/
     
     Returns:
         persona 内容字符串
     """
     if base_dir is None:
-        base_dir = os.path.join(os.path.dirname(__file__), "personas")
+        # 向上导航到项目根目录（opencopilot/shared/ -> opencopilot/ -> 项目根目录）
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(os.path.dirname(current_dir))
+        base_dir = os.path.join(project_root, "personas")
     
     filepath = os.path.join(base_dir, f"{persona_name}.md")
     if not os.path.exists(filepath):

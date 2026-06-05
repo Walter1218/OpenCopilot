@@ -57,7 +57,7 @@ class CheckpointManager:
         """
         self.db_path = db_path
         self.max_checkpoints_per_task = max_checkpoints_per_task
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._cache: Dict[str, Checkpoint] = {}
         
         # 确保表存在

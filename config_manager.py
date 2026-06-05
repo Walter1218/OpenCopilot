@@ -36,6 +36,7 @@ DEFAULT_LLM_CONFIG = {
     "max_completion_tokens": 4096,
     "thinking_enabled": False,
     "failover_max_failures": 3,
+    "repetition_penalty": 1.05,
 }
 
 DEFAULT_CONCURRENCY_CONFIG = {

@@ -109,7 +109,7 @@ class StateManager:
         """
         self.db_path = db_path
         self.auto_checkpoint = auto_checkpoint
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         
         # 初始化数据库
         self._init_db()

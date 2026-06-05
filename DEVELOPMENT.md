@@ -41,7 +41,14 @@ python3 -m pytest tests/ -v
 用户交互 (PyQt6 GUI)
     │
     ├── smart_copilot.py
-    │   └── AIWorker.run() → call_agent_pipeline_sync()
+    │   ├── AIWorker.run()    → call_agent_pipeline_sync()  ← 快捷指令（选中文本后 AI 分析）
+    │   └── ChatWorker.run()  → call_agent_pipeline_sync()  ← 连续对话
+    │
+    ├── gui/window.py (AICardWindow)
+    │   └── send_chat_message() → ChatWorker → on_chat_updated() → 流式渲染
+    │
+    ├── gui/workspace.py (AgentWorkspace)
+    │   └── _send_message() → ChatWorker → _on_chat_update() → 流式渲染
     │
     ▼
 opencopilot/agent/caller.py  ← 唯一 AI 调用入口
@@ -59,6 +66,13 @@ opencopilot/agent/middlewares.py (7 层)
     ├── CapabilityRouterMiddleware   → 能力路由
     └── LLMProviderMiddleware        → Agent Loop + LLM 调用
 ```
+
+**流式渲染机制**：
+
+- `ChatWorker` (QThread) 逐 chunk 发送 `text_updated` 信号
+- `on_chat_updated` 使用绝对光标位置 `_chat_stream_start` 标记流式区间
+- 每次更新：选中从起点到文档末尾的全部内容 → 删除 → 重新插入 `md_render()` 渲染的 HTML
+- 用位置标记替代 `StartOfBlock`，避免多段落 Markdown（`\n\n` 生成多个 `<p>` block）残留重复显示
 
 **关键规则**：所有模块通过 `call_agent_pipeline_sync()` / `call_agent_pipeline_async()` 调用 AI，不允许绕过 Pipeline 直接调用 Provider。
 

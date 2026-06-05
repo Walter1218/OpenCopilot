@@ -48,6 +48,10 @@ class MiniMaxProvider(BaseProvider):
             print("警告: 未找到 MINIMAX_API_KEY 环境变量或配置，请在 .env 文件中或设置面板中设置。")
         self.base_url = "https://api.minimax.chat/v1/chat/completions"
         self.default_model = "MiniMax-M3"
+        # LLM 可配置参数（从 ConfigManager 读取）
+        llm_cfg = _get_config_manager().get_llm()
+        self._temperature = llm_cfg.get("temperature", 0.7)
+        self._repetition_penalty = llm_cfg.get("repetition_penalty", 1.05)
 
     def _do_stream(self, messages: list):
         headers = {
@@ -57,7 +61,9 @@ class MiniMaxProvider(BaseProvider):
         payload = {
             "model": self.default_model,
             "messages": messages,
-            "stream": True
+            "stream": True,
+            "temperature": self._temperature,
+            "repetition_penalty": self._repetition_penalty,
         }
         try:
             with httpx.Client() as client:
@@ -96,7 +102,9 @@ class MiniMaxProvider(BaseProvider):
         payload = {
             "model": self.default_model,
             "messages": messages,
-            "stream": True
+            "stream": True,
+            "temperature": self._temperature,
+            "repetition_penalty": self._repetition_penalty,
         }
         try:
             async with httpx.AsyncClient() as client:
@@ -157,6 +165,7 @@ class MiMoProvider(BaseProvider):
         self._temperature = llm_cfg.get("temperature", 0.7)
         self._max_completion_tokens = llm_cfg.get("max_completion_tokens", 4096)
         self._thinking = llm_cfg.get("thinking_enabled", False)
+        self._repetition_penalty = llm_cfg.get("repetition_penalty", 1.05)
 
         # Web Search 配置
         ws_config = config.get("web_search", {})
@@ -174,6 +183,7 @@ class MiMoProvider(BaseProvider):
             "stream": stream,
             "max_completion_tokens": self._max_completion_tokens,
             "temperature": self._temperature,
+            "repetition_penalty": self._repetition_penalty,
             "thinking": {"type": "enabled"} if self._thinking else {"type": "disabled"},
         }
         if tools:
@@ -398,9 +408,10 @@ class LocalProvider(BaseProvider):
         self.api_base = api_base.rstrip("/") + "/chat/completions"
         self.model = model
         self.api_key = api_key
-        # 从 ConfigManager 读取 temperature（P0 参数）
+        # 从 ConfigManager 读取 LLM 参数
         llm_cfg = _get_config_manager().get_llm()
         self._temperature = llm_cfg.get("temperature", 0.7)
+        self._repetition_penalty = llm_cfg.get("repetition_penalty", 1.05)
 
     def _do_stream(self, messages: list):
         headers = {
@@ -411,7 +422,8 @@ class LocalProvider(BaseProvider):
             "model": self.model,
             "messages": messages,
             "stream": True,
-            "temperature": self._temperature
+            "temperature": self._temperature,
+            "repetition_penalty": self._repetition_penalty,
         }
         try:
             with httpx.Client(verify=False) as client:
@@ -451,7 +463,8 @@ class LocalProvider(BaseProvider):
             "model": self.model,
             "messages": messages,
             "stream": True,
-            "temperature": self._temperature
+            "temperature": self._temperature,
+            "repetition_penalty": self._repetition_penalty,
         }
         try:
             async with httpx.AsyncClient(verify=False) as client:

@@ -21,7 +21,6 @@ class AgentWorkspace(QWidget):
         self.chat_worker = None
         self.current_task = ""
         self.session_id = str(uuid.uuid4())
-        self._temp_chat_pos = 0
         self._pending_hide = False
         self._allow_close = False
         self._user_initiated_hide = False  # 区分用户主动隐藏 vs 系统自动隐藏
@@ -216,16 +215,38 @@ class AgentWorkspace(QWidget):
             self._append_message("系统", "任务已清除。")
 
     def _send_message(self):
+        from opencopilot.agent.observability import PipelineObservability
+        from PyQt6.QtCore import QCoreApplication
+        obs = PipelineObservability.get_instance()
+        
         text = self.chat_input.text().strip()
         if not text:
             return
         self.chat_input.clear()
         self._append_message("你", text)
         self._append_message("AI", "思考中...", is_temp=True)
+        # 保存流式内容的起始光标位置，用于后续精确替换
+        self._chat_stream_start = self.chat_display.textCursor().position()
 
+        # 先 disconnect 旧 worker 信号
+        if self.chat_worker is not None:
+            old_wid = getattr(self.chat_worker, '_wid', '?')
+            obs.gui_log(f"[Workspace] disconnect old Worker#{old_wid}")
+            try:
+                self.chat_worker.text_updated.disconnect(self._on_chat_update)
+            except TypeError:
+                pass
+            try:
+                self.chat_worker.finished_signal.disconnect(self._on_chat_finish)
+            except TypeError:
+                pass
+        
         if self.chat_worker and self.chat_worker.isRunning():
+            old_wid = getattr(self.chat_worker, '_wid', '?')
+            obs.gui_log(f"[Workspace] stop old Worker#{old_wid}", session_id=self.session_id)
             self.chat_worker.stop()
-            self.chat_worker.wait()
+            # 不等待旧 Worker——cancel_event.set() 让旧 pipeline 在全局持久化 event loop 中自然消亡。
+            QCoreApplication.processEvents()
 
         # 聊天模式，带当前任务上下文 + 任务描述作为 source_text
         meta = {}
@@ -244,28 +265,46 @@ class AgentWorkspace(QWidget):
             self.provider, text, self.session_id,
             context_source="chat", context_meta=meta
         )
+        obs.gui_log(f"[Workspace] created Worker#{self.chat_worker._wid} | text={text[:30]}",
+                     session_id=self.session_id)
         self.chat_worker.text_updated.connect(self._on_chat_update)
-        self.chat_worker.finished_signal.connect(lambda: None)
+        self.chat_worker.finished_signal.connect(self._on_chat_finish)
         self.chat_worker.start()
 
+    def _on_chat_finish(self):
+        """对话完成。"""
+        sender = self.sender()
+        if sender is not self.chat_worker:
+            return
+        from opencopilot.agent.observability import PipelineObservability
+        obs = PipelineObservability.get_instance()
+        wid = getattr(sender, '_wid', '?')
+        empty = hasattr(sender, 'full_text') and not sender.full_text
+        obs.gui_log(f"[Workspace] on_chat_finished | worker=#{wid} | empty_output={empty}",
+                     session_id=self.session_id)
+
     def _append_message(self, role, text, is_temp=False):
+        """使用 append() 添加消息，Qt 自动处理段落分割。"""
         color = "#4da6ff" if role == "你" else "#42f554" if role == "AI" else "#aaaaaa"
-        cursor = self.chat_display.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        self.chat_display.setTextCursor(cursor)
-
-        if is_temp:
-            self._temp_chat_pos = cursor.position()
-
-        self.chat_display.insertHtml(
-            f'<b style="color:{color};">{role}:</b> {text}<br><br>'
-        )
-        scrollbar = self.chat_display.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+        safe_text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        safe_text = safe_text.replace('\n', '<br>')
+        html = f'<b style="color:{color};">{role}:</b> {safe_text}'
+        self.chat_display.append(html)
 
     def _on_chat_update(self, text):
+        """流式更新：替换最后一个 block。"""
+        sender = self.sender()
+        if sender is not self.chat_worker:
+            return
+        from opencopilot.agent.observability import PipelineObservability
+        obs = PipelineObservability.get_instance()
+        wid = getattr(sender, '_wid', '?')
+        obs.gui_log(f"[Workspace] on_chat_update | worker=#{wid} | len={len(text)}",
+                     session_id=self.session_id)
+        
         cursor = self.chat_display.textCursor()
-        cursor.setPosition(self._temp_chat_pos)
+        # 选中从 stream_start 到文档末尾的全部内容（避免多 block 残留）
+        cursor.setPosition(self._chat_stream_start)
         cursor.movePosition(cursor.MoveOperation.End, cursor.MoveMode.KeepAnchor)
         cursor.removeSelectedText()
         cursor.insertHtml(md_render(text))

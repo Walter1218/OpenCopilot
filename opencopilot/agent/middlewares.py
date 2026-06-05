@@ -44,6 +44,17 @@ class SessionSetupMiddleware(BaseMiddleware):
             session_id = ctx.session_id
             is_new_task = ctx.is_new_task
 
+            # ── 诊断埋点: 入口参数 ──
+            PipelineObservability.get_instance().log(
+                "SessionSetup", "ENTRY",
+                session_id=session_id, level="DEBUG",
+                event="SESSION_ENTRY",
+                chunk_count=1 if is_new_task else 0,
+                elapsed_ms=None,
+                extra_data={"is_new_task": is_new_task, "action_type": ctx.action_type,
+                            "text_len": len(text), "text_preview": text[:80]},
+            )
+
             _t1 = time.time()
             context_source = req.get("context_source", "drag")
             context_meta = req.get("context_meta", {})
@@ -54,13 +65,52 @@ class SessionSetupMiddleware(BaseMiddleware):
             if is_new_task:
                 self._memory.clear(session_id)
                 self._memory.set_persona(session_id, ctx.action_type)
+                # ── 诊断埋点: 新建任务触发 clear ──
+                PipelineObservability.get_instance().log(
+                    "SessionSetup", "CLEAR triggered by is_new_task=True",
+                    session_id=session_id, level="DEBUG",
+                    event="SESSION_CLEAR",
+                    extra_data={"trigger": "is_new_task", "new_persona": ctx.action_type},
+                )
 
             # 当 action_type 非 default 时，更新 persona 以确保正确的角色切换
             chat_ctx = self._memory.get_context(session_id)
             if ctx.action_type != "default" and chat_ctx.get("persona") != ctx.action_type:
+                old_persona = chat_ctx.get("persona", "")
                 self._memory.set_persona(session_id, ctx.action_type)
                 chat_ctx = self._memory.get_context(session_id)
+                # ── 诊断埋点: persona 切换 ──
+                PipelineObservability.get_instance().log(
+                    "SessionSetup", f"Persona switch: {old_persona} → {ctx.action_type}",
+                    session_id=session_id, level="DEBUG",
+                    event="PERSONA_SWITCH",
+                    extra_data={"old_persona": old_persona, "new_persona": ctx.action_type},
+                )
             _t_mem = time.time() - _t2
+
+            # ── 诊断埋点: 历史消息摘要 ──
+            history_msgs = chat_ctx.get("messages", [])
+            history_roles = [m.get("role", "?") for m in history_msgs] if history_msgs else []
+            # 截取最后 2 条消息的内容预览（每条最多 60 字符）
+            recent_previews = []
+            for m in history_msgs[-2:]:
+                content = m.get("content", "")
+                if isinstance(content, str):
+                    recent_previews.append(f"[{m.get('role','?')}]: {content[:60]}")
+                else:
+                    recent_previews.append(f"[{m.get('role','?')}]: <non-str content>")
+            PipelineObservability.get_instance().log(
+                "SessionSetup",
+                f"History summary: count={len(history_msgs)} roles={'→'.join(history_roles) if history_roles else 'EMPTY'}",
+                session_id=session_id, level="DEBUG",
+                event="HISTORY_DUMP",
+                extra_data={
+                    "history_count": len(history_msgs),
+                    "history_roles": history_roles,
+                    "recent_previews": recent_previews,
+                    "persona": chat_ctx.get("persona", ""),
+                },
+            )
 
             _t3 = time.time()
             ctx.persona = chat_ctx["persona"]
@@ -85,6 +135,25 @@ class SessionSetupMiddleware(BaseMiddleware):
                 history_messages=chat_ctx["messages"],
             )
             _t_build = time.time() - _t5
+
+            # ── 诊断埋点: 构建后的 messages 摘要 ──
+            built_roles = [m.get("role", "?") for m in ctx.messages] if ctx.messages else []
+            total_chars = sum(len(str(m.get("content", ""))) for m in ctx.messages)
+            # system prompt 长度
+            system_msg = next((m for m in ctx.messages if m.get("role") == "system"), None)
+            sys_len = len(str(system_msg.get("content", ""))) if system_msg else 0
+            PipelineObservability.get_instance().log(
+                "SessionSetup",
+                f"Built messages: count={len(ctx.messages)} total_chars={total_chars} sys_len={sys_len} roles={'→'.join(built_roles)}",
+                session_id=session_id, level="DEBUG",
+                event="MESSAGES_BUILT",
+                extra_data={
+                    "msg_count": len(ctx.messages),
+                    "total_chars": total_chars,
+                    "system_prompt_len": sys_len,
+                    "roles": built_roles,
+                },
+            )
 
             image_base64 = req.get("image_base64")
             if image_base64:
@@ -289,7 +358,7 @@ class StateTrackingMiddleware(BaseMiddleware):
     async def process(self, ctx: PipelineContext, next_fn: Callable[[], object]) -> None:
         _t0 = time.time()
         try:
-            self._state.add_message(ctx.session_id, "user", ctx.user_message_content)
+            # 用户消息已在 SessionSetupMiddleware 中添加，此处不再重复添加
             if ctx.metadata.get("plan"):
                 await self._state.create_task(
                     session_id=ctx.session_id,
@@ -487,7 +556,21 @@ class LLMProviderMiddleware(BaseMiddleware):
             self._memory.add_message(ctx.session_id, "assistant", full_reply)
             await ctx.awrite_sse_done()
 
+            _elapsed = (time.time() - _t0) * 1000
+            PipelineObservability.get_instance().ai_response(
+                ctx.session_id, full_reply, paradigm="llm",
+                chunk_count=_chunk_count, elapsed_ms=_elapsed,
+            )
             PipelineObservability.get_instance().timer(f"[Timer] LLMProvider: total={time.time()-_t0:.3f}s | init={_t_init:.3f} ttfb={_t_ttfb:.3f} stream={_t_llm-_t_ttfb:.3f} chunks={_chunk_count} chars={len(full_reply)}")
+        except asyncio.CancelledError:
+            # Pipeline 被取消（通常是用户发新消息中断旧请求），加速清理
+            # 不再 raise——由 caller.py 的 cancel_event 机制负责通知消费者
+            print(f"[Pipeline] LLMProvider cancelled after {time.time()-_t0:.1f}s", flush=True)
+            PipelineObservability.get_instance().timer(f"[Timer] LLMProvider: total={time.time()-_t0:.3f}s (CANCELLED)")
+            try:
+                await asyncio.wait_for(ctx.awrite_sse_done(), timeout=0.5)
+            except Exception:
+                pass
         except Exception as e:
             print(f"[Pipeline] LLM error: {e}", flush=True)
             traceback.print_exc()
@@ -626,6 +709,8 @@ class LLMAgentMiddleware(BaseMiddleware):
         _t_total = time.time() - _t0
         _t_ttfb = (_t_first_chunk - _t1) if _t_first_chunk else 0
         obs = PipelineObservability.get_instance()
+        obs.ai_response(ctx.session_id, full_reply, paradigm="one_shot",
+                        chunk_count=_chunk_count, elapsed_ms=_t_total * 1000)
         obs.timer(f"[Timer] LLMAgent(One-Shot): total={_t_total:.3f}s | ttfb={_t_ttfb:.3f}s chunks={_chunk_count} chars={len(full_reply)}",
                   action_type=ctx.action_type)
         obs.agent_turn(ctx, paradigm="one_shot", turns=1, tool_calls=0)
@@ -676,7 +761,10 @@ class LLMAgentMiddleware(BaseMiddleware):
         await ctx.awrite_sse_done()
 
         _t_total = time.time() - _t0
-        PipelineObservability.get_instance().timer(
+        obs = PipelineObservability.get_instance()
+        obs.ai_response(ctx.session_id, final, paradigm="plan_solve",
+                        chunk_count=0, elapsed_ms=_t_total * 1000)
+        obs.timer(
             f"[Timer] LLMAgent(Plan-Solve): total={_t_total:.3f}s turns={plan.total_turns} steps={len(plan.steps)}",
             action_type=ctx.action_type,
         )
@@ -735,7 +823,10 @@ class LLMAgentMiddleware(BaseMiddleware):
         await ctx.awrite_sse_done()
 
         _t_total = time.time() - _t0
-        PipelineObservability.get_instance().timer(
+        obs = PipelineObservability.get_instance()
+        obs.ai_response(ctx.session_id, final, paradigm="plan_react",
+                        chunk_count=0, elapsed_ms=_t_total * 1000)
+        obs.timer(
             f"[Timer] LLMAgent(Plan+ReAct): total={_t_total:.3f}s turns={plan.total_turns} steps={len(plan.steps)}",
             action_type=ctx.action_type,
         )

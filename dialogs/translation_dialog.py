@@ -216,10 +216,12 @@ class TranslationDialog(QWidget):
         target_name = lang_map.get(target_lang, target_lang)
         prompt = f"请将以下文本翻译成{target_name}：\n\n{text}"
         
-        # 调用 Agent Pipeline（同步生成器，内部 daemon 线程跑 async）
+        # 调用 Agent Pipeline（同步生成器，通过全局持久化 event loop 桥接 async）
         from opencopilot.agent.caller import call_agent_pipeline_sync
+        import threading
         
         chunks = []
+        t_cancel = threading.Event()
         try:
             for chunk in call_agent_pipeline_sync(
                 text=prompt,
@@ -227,6 +229,7 @@ class TranslationDialog(QWidget):
                 context_source="chat",
                 context_meta={"task": "translate", "source_lang": source_lang, "target_lang": target_lang},
                 timeout=60.0,
+                cancel_event=t_cancel,
             ):
                 chunks.append(chunk)
         except Exception:

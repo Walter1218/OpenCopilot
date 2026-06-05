@@ -58,7 +58,7 @@ class SQLiteMemoryStorage(MemoryStorage):
             db_path: 数据库路径
         """
         self.db_path = db_path
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._init_db()
     
     def _get_conn(self) -> sqlite3.Connection:

@@ -89,7 +89,7 @@ class MemoryManager:
         self.db_path = db_path
         self.embedding_model = embedding_model
         self.auto_compress = auto_compress
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()  # RLock 防止 add_message → store_memory 同一线程重入死锁
         
         # 初始化数据库
         self._init_db()
@@ -927,22 +927,23 @@ class MemoryManager:
     
     def _is_important_message(self, content: str) -> bool:
         """
-        判断消息是否重要
-        
+        判断消息是否重要（避免每条 AI 回复都触发同步 SQLite 存储）
+
         Args:
             content: 消息内容
-            
+
         Returns:
             是否重要
         """
-        # 简单实现：基于关键词判断
-        # 实际实现应该使用更复杂的NLP分析
+        # 太短的消息不存储（过滤"你好"、"谢谢"等简单问候）
+        if len(content) < 30:
+            return False
+        # 只有明确意图的消息才存储为记忆
         important_keywords = [
-            "重要", "关键", "核心", "主要", "必须", "需要", "应该",
-            "important", "key", "core", "main", "must", "need", "should",
-            "bug", "error", "fix", "issue", "problem", "solution"
+            "记住这个", "保存下来", "别忘了", "记住",
+            "bug", "error", "fix", "issue", "problem", "solution",
         ]
-        
+
         content_lower = content.lower()
         return any(keyword in content_lower for keyword in important_keywords)
 

@@ -97,6 +97,8 @@ def _is_complex(text, action_type):
 
 ```python
 # 同步版（供 QThread / CLI 使用）
+# 通过全局持久化 event loop + asyncio.run_coroutine_threadsafe 桥接异步 Pipeline
+# 取消通过 task.cancel() 传播 CancelledError，无需硬超时
 from opencopilot.agent import call_agent_pipeline_sync
 for chunk in call_agent_pipeline_sync(text, action_type="chat"):
     print(chunk)
@@ -105,6 +107,20 @@ for chunk in call_agent_pipeline_sync(text, action_type="chat"):
 from opencopilot.agent.caller import call_agent_pipeline_async
 async for chunk in call_agent_pipeline_async(text, action_type="coding"):
     await response.write(chunk)
+```
+
+**同步桥接架构**（参考 OpenClaw 单进程持久化 loop）：
+
+```
+QThread (sync) ──→ call_agent_pipeline_sync()
+                       ↓
+              _EventLoopBridge (全局单例 loop, run_forever)
+                       ↓
+              asyncio.run_coroutine_threadsafe(_run_pipeline)
+                       ↓
+              Pipeline.execute(ctx) [在全局 loop 中 asyncio 并发]
+                       ↓
+              asyncio.Queue → queue.Queue → Generator[yield chunk]
 ```
 
 **调用关系**:
@@ -176,7 +192,7 @@ MiMo (默认) → MiniMax → Ollama (本地)
 
 ## 四、数据流示例
 
-### 用户选中文本 → AI 分析
+### 用户选中文本 → 快捷 AI 分析
 
 ```
 1. 用户选中文本 → 双击右键
@@ -187,8 +203,26 @@ MiMo (默认) → MiniMax → Ollama (本地)
 6. LLMAgentMiddleware:
    - _is_complex() → SIMPLE
    - One-Shot: 直接 LLM 流式输出
-7. SSE chunk → UI 逐字渲染 Markdown
+7. SSE chunk → AIWorker.text_updated → GUI 流式渲染
 ```
+
+### 连续对话（AICardWindow / AgentWorkspace）
+
+```
+1. 用户输入文本 → send_chat_message()
+2. append_chat_message("AI", "正在思考...") 写入占位符
+3. 记录 _chat_stream_start = cursor.position()  ← 流式起点
+4. ChatWorker.run() → call_agent_pipeline_sync(text, "chat")
+5. 每个 chunk: ChatWorker.text_updated.emit(display_text)
+6. on_chat_updated(text):
+   - cursor.setPosition(_chat_stream_start)    ← 定位到流式起点
+   - movePosition(End, KeepAnchor)             ← 选中区间
+   - removeSelectedText()                      ← 删除旧内容
+   - insertHtml(md_render(text))               ← 写入 Markdown 渲染结果
+7. 完成: on_chat_finished() — 无输出时清除占位符
+```
+
+> **关键设计**：使用绝对光标位置 `_chat_stream_start` 而非 `StartOfBlock`，因为 `md_render()` 可能生成多个 `<p>` block（多段落 Markdown），`StartOfBlock` 只能删除最后一个 block，导致多段落内容重复显示。
 
 ### 复杂任务：代码审查
 

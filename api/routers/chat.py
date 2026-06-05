@@ -56,36 +56,21 @@ async def chat_stream(request: ChatRequest):
         try:
             config = load_config()
             ws = config.get("web_search", {})
-            ctx = PipelineContext(
-                request={"text": request.message, "context_source": request.context_source or "chat",
-                         "context_meta": request.context or {}, "persona": request.persona},
-                session_id=session_id, text=request.message,
+            from opencopilot.agent.caller import call_agent_pipeline_async
+            full = ""
+            async for chunk in call_agent_pipeline_async(
+                text=request.message,
                 action_type=request.persona or "default",
+                session_id=session_id,
+                context_source=request.context_source or "chat",
+                context_meta=request.context or {},
+                is_new_task=False,
                 enable_web_search=ws.get("enabled", False),
                 web_search_force=ws.get("force_search", False),
-            )
-            import asu_custom_agent
-            queue = asyncio.Queue()
-            ctx.use_async_queue(queue)
-            task = asyncio.create_task(asu_custom_agent.pipeline.execute(ctx))
-            full = ""
-            while True:
-                try:
-                    line = await asyncio.wait_for(queue.get(), timeout=300)
-                except asyncio.TimeoutError:
-                    yield f"data: {json.dumps({'error': '管线响应超时'})}\n\n"
-                    return
-                if line == "data: [DONE]\n\n":
-                    break
-                if line.startswith("data: "):
-                    try:
-                        d = json.loads(line[6:])
-                        if chunk := d.get("chunk", ""):
-                            full += chunk
-                            yield f"data: {json.dumps({'chunk': chunk, 'session_id': session_id})}\n\n"
-                    except json.JSONDecodeError:
-                        pass
-            await task
+                timeout=300,
+            ):
+                full += chunk
+                yield f"data: {json.dumps({'chunk': chunk, 'session_id': session_id})}\n\n"
             session_manager.add_message(session_id, "assistant", full)
             yield f"data: {json.dumps({'done': True, 'session_id': session_id, 'full_response': full})}\n\n"
         except Exception as e:

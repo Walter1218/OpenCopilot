@@ -951,27 +951,57 @@ class AgentHTTPRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
             # 创建异步队列，桥接 async Pipeline → sync HTTP wfile
+            # 通过线程安全队列 + 全局持久化 event loop 实现跨线程桥接
+            import queue as thread_queue
             _async_queue = asyncio.Queue()
             ctx.use_async_queue(_async_queue)
+            result_queue = thread_queue.Queue()
+
+            async def _run_and_bridge():
+                """在全局 loop 中运行管线，将结果桥接到线程安全队列"""
+                try:
+                    await pipeline.execute(ctx)
+                except Exception as e:
+                    result_queue.put(("error", str(e)))
+                    return
+                # 将 asyncio.Queue 转移到 thread-safe Queue
+                while True:
+                    try:
+                        line = _async_queue.get_nowait()
+                        result_queue.put(("sse", line))
+                    except asyncio.QueueEmpty:
+                        break
+                result_queue.put(("done", None))
+
+            from opencopilot.agent.caller import _EventLoopBridge
+            loop = _EventLoopBridge.get_loop()
+            future = asyncio.run_coroutine_threadsafe(_run_and_bridge(), loop)
 
             try:
-                asyncio.run(pipeline.execute(ctx))
+                future.result(timeout=120)
             except Exception as e:
                 print(f"[DEBUG] Pipeline fatal error: {e}", flush=True)
                 traceback.print_exc()
-                ctx.write_sse(f"\n[Agent Error]: {str(e)}")
-                ctx.write_sse_done()
+                self.wfile.write(f"data: {json.dumps({'chunk': f'\\n[Agent Error]: {str(e)}'})}\n\n".encode())
+                self.wfile.write(b"data: [DONE]\n\n")
                 if hasattr(self.wfile, 'flush'):
                     self.wfile.flush()
                 return
 
-            # 从异步队列中取出所有 SSE 数据，写入 HTTP 响应流
-            while not _async_queue.empty():
+            # 从线程安全队列中取出所有 SSE 数据，写入 HTTP 响应流
+            while True:
                 try:
-                    line = _async_queue.get_nowait()
-                    self.wfile.write(line.encode('utf-8'))
-                except asyncio.QueueEmpty:
+                    msg_type, msg = result_queue.get_nowait()
+                except thread_queue.Empty:
                     break
+                if msg_type == "done":
+                    break
+                elif msg_type == "error":
+                    self.wfile.write(f"data: {json.dumps({'chunk': f'\\n[Agent Error]: {msg}'})}\n\n".encode())
+                    self.wfile.write(b"data: [DONE]\n\n")
+                    break
+                elif msg_type == "sse":
+                    self.wfile.write(msg.encode('utf-8'))
             if hasattr(self.wfile, 'flush'):
                 self.wfile.flush()
 

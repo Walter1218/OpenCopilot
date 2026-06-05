@@ -49,7 +49,6 @@ class AICardWindow(QWidget):
         self.chat_history = []
         self.session_id = str(uuid.uuid4())
         self.active_browser = None
-        self._temp_chat_pos = 0
         self._pending_hide = False
         self._user_initiated_hide = False  # 区分用户主动隐藏 vs 系统自动隐藏
         # 上下文感知
@@ -543,8 +542,25 @@ class AICardWindow(QWidget):
         self.chat_display = QTextEdit(self.tab_chat)
         self.chat_display.setReadOnly(True)
         self.chat_display.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.chat_display.setStyleSheet(self.text_edit.styleSheet())
-        chat_layout.addWidget(self.chat_display)
+        self.chat_display.setStyleSheet("""
+            QTextEdit {
+                background-color: transparent;
+                color: #eeeeee;
+                font-size: 13px;
+                border: none;
+                line-height: 1.6;
+            }
+            QScrollBar:vertical {
+                width: 6px;
+                background: transparent;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(255, 255, 255, 60);
+                border-radius: 3px;
+            }
+        """)
+
+        chat_layout.addWidget(self.chat_display, 1)  # stretch=1 占据所有可用空间
 
         input_layout = QHBoxLayout()
         self.chat_input = QLineEdit(self.tab_chat)
@@ -812,8 +828,9 @@ class AICardWindow(QWidget):
             # 在对话中显示执行信息
             self.append_chat_message("系统", f"正在执行技能: {skill.metadata.display_name}...")
             
-            # 异步执行技能
-            import asyncio
+            # 异步执行技能（通过全局持久化 event loop）
+            from concurrent.futures import Future as ThreadFuture
+            from PyQt6.QtCore import QMetaObject, Qt
             
             async def execute_skill():
                 try:
@@ -823,38 +840,35 @@ class AICardWindow(QWidget):
                     print(f"[技能执行异常] {e}")
                     return None
             
-            # 在新线程中执行异步任务
-            def run_async():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                result = loop.run_until_complete(execute_skill())
-                loop.close()
-                
-                # 在主线程中更新UI
-                from PyQt6.QtCore import QMetaObject, Qt
-                
+            def _on_skill_done(fut: ThreadFuture):
+                """技能执行完成回调（在事件循环线程中触发，通过 invokeMethod 回主线程）"""
+                try:
+                    result = fut.result()
+                except Exception as e:
+                    QMetaObject.invokeMethod(
+                        self, "_on_skill_error",
+                        Qt.ConnectionType.QueuedConnection,
+                        skill_name, str(e),
+                    )
+                    return
                 if result and result.success:
                     QMetaObject.invokeMethod(
-                        self, 
-                        "_on_skill_result",
+                        self, "_on_skill_result",
                         Qt.ConnectionType.QueuedConnection,
-                        skill_name,
-                        result.output
+                        skill_name, result.output,
                     )
                 else:
                     QMetaObject.invokeMethod(
-                        self,
-                        "_on_skill_error", 
+                        self, "_on_skill_error",
                         Qt.ConnectionType.QueuedConnection,
                         skill_name,
-                        str(result.error) if result else "执行失败"
+                        str(result.error) if result else "执行失败",
                     )
             
-            # 启动执行线程
-            import threading
-            thread = threading.Thread(target=run_async)
-            thread.daemon = True
-            thread.start()
+            from opencopilot.agent.caller import _EventLoopBridge
+            loop = _EventLoopBridge.get_loop()
+            future = asyncio.run_coroutine_threadsafe(execute_skill(), loop)
+            future.add_done_callback(_on_skill_done)
             
         except Exception as e:
             print(f"[技能执行失败] {e}")
@@ -969,6 +983,8 @@ class AICardWindow(QWidget):
             
             # 使用统一的 Agent Pipeline 调用器
             from opencopilot.agent.caller import call_agent_pipeline_sync
+            import threading
+            ppt_cancel = threading.Event()
             full_text = ""
             for chunk in call_agent_pipeline_sync(
                 text[:3000],
@@ -976,6 +992,7 @@ class AICardWindow(QWidget):
                 session_id=f"ppt_gen_{int(time.time())}",
                 is_new_task=True,
                 context_source="ppt_generator",
+                cancel_event=ppt_cancel,
             ):
                 if isinstance(chunk, tuple):
                     continue  # 跳过 annotations 等 metadata
@@ -1500,6 +1517,10 @@ class AICardWindow(QWidget):
             self.text_edit.setPlainText(f"❌ 无法连接到 IDE 伴生插件，请确认已在 VSCode/Trae 中安装并激活插件。\n\n错误信息: {e}")
 
     def send_chat_message(self):
+        from opencopilot.agent.observability import PipelineObservability
+        from PyQt6.QtCore import QCoreApplication
+        obs = PipelineObservability.get_instance()
+        
         user_text = self.chat_input.text().strip()
         if not user_text:
             return
@@ -1514,10 +1535,29 @@ class AICardWindow(QWidget):
         self.append_chat_message("你", user_text)
         
         self.append_chat_message("AI", "正在思考...", is_temp=True)
+        # 保存流式内容的起始光标位置，用于后续精确替换
+        self._chat_stream_start = self.chat_display.textCursor().position()
+        
+        # 先 disconnect 旧 worker 信号，防止 queued signal 脏读
+        if self.chat_worker is not None:
+            old_wid = getattr(self.chat_worker, '_wid', '?')
+            obs.gui_log(f"disconnect old Worker#{old_wid}")
+            try:
+                self.chat_worker.text_updated.disconnect(self.on_chat_updated)
+            except TypeError:
+                pass
+            try:
+                self.chat_worker.finished_signal.disconnect(self.on_chat_finished)
+            except TypeError:
+                pass
         
         if self.chat_worker and self.chat_worker.isRunning():
+            old_wid = getattr(self.chat_worker, '_wid', '?')
+            obs.gui_log(f"stop old Worker#{old_wid}")
             self.chat_worker.stop()
-            self.chat_worker.wait()
+            # 不等待旧 Worker——cancel_event.set() + task.cancel() 沿 async 栈传播 CancelledError。
+            # 旧 pipeline 在全局持久化 event loop 中自然消亡，不阻塞新调用。
+            QCoreApplication.processEvents()
 
         # 合并工作台任务上下文 + 源文本内容
         meta = dict(self.context_meta)
@@ -1536,6 +1576,7 @@ class AICardWindow(QWidget):
 
         self.chat_worker = ChatWorker(self.provider, user_text, self.session_id,
                                       self.context_source, meta)
+        obs.gui_log(f"created Worker#{self.chat_worker._wid} | text={user_text[:30]}")
         self.chat_worker.text_updated.connect(self.on_chat_updated)
         self.chat_worker.finished_signal.connect(self.on_chat_finished)
         self.chat_worker.start()
@@ -1588,28 +1629,27 @@ class AICardWindow(QWidget):
         self.append_chat_message("系统", help_text)
 
     def append_chat_message(self, role, text, is_temp=False):
+        """添加聊天消息。使用 QTextEdit.append() 自动处理段落分割和光标位置。"""
         color = "#4da6ff" if role == "你" else "#42f554" if role == "AI" else "#aaaaaa"
-        
-        cursor = self.chat_display.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        self.chat_display.setTextCursor(cursor)
-        
-        # 插入消息（使用 HTML 格式）
-        html = f'<p><b style="color:{color};">{role}:</b> {text}</p>'
-        self.chat_display.insertHtml(html)
-        
-        # 如果是临时消息（正在思考...），记录位置以便后续替换
-        if is_temp:
-            cursor.movePosition(cursor.MoveOperation.End)
-            self._temp_chat_pos = cursor.position()
-            
-        scrollbar = self.chat_display.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+        safe_text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        safe_text = safe_text.replace('\n', '<br>')
+        html = f'<b style="color:{color};">{role}:</b> {safe_text}'
+        self.chat_display.append(html)  # Qt 标准方法：自动段落分割 + 滚动
 
     def on_chat_updated(self, text):
+        """流式更新：替换最后一个段落（"正在思考..." 或上一次流式内容）。"""
         try:
+            sender = self.sender()
+            if sender is not self.chat_worker:
+                return
+            from opencopilot.agent.observability import PipelineObservability
+            obs = PipelineObservability.get_instance()
+            wid = getattr(sender, '_wid', '?')
+            obs.gui_log(f"on_chat_updated | worker=#{wid} | len={len(text)}")
+            
             cursor = self.chat_display.textCursor()
-            cursor.setPosition(self._temp_chat_pos)
+            # 选中从 stream_start 到文档末尾的全部内容（避免多 block 残留）
+            cursor.setPosition(self._chat_stream_start)
             cursor.movePosition(cursor.MoveOperation.End, cursor.MoveMode.KeepAnchor)
             cursor.removeSelectedText()
             cursor.insertHtml(md_render(text))
@@ -1619,14 +1659,22 @@ class AICardWindow(QWidget):
             print(f"[ASU] on_chat_updated error: {e}")
 
     def on_chat_finished(self):
+        """对话完成：无需特殊处理，append() + 最后一个 block 替换模式天然免疫陈旧信号。"""
         try:
-            # 检查 ChatWorker 是否有输出，如果没有则清除 "正在思考..." 占位符
-            worker = self.sender()
-            if worker and hasattr(worker, 'full_text') and not worker.full_text:
-                # Worker 没有任何输出，更新占位符为提示信息
+            sender = self.sender()
+            if sender is not self.chat_worker:
+                return
+            from opencopilot.agent.observability import PipelineObservability
+            obs = PipelineObservability.get_instance()
+            wid = getattr(sender, '_wid', '?')
+            empty = hasattr(sender, 'full_text') and not sender.full_text
+            obs.gui_log(f"on_chat_finished | worker=#{wid} | empty_output={empty}")
+            
+            # 检查是否有输出，无输出则清除占位符
+            if sender and hasattr(sender, 'full_text') and not sender.full_text:
                 cursor = self.chat_display.textCursor()
-                cursor.setPosition(self._temp_chat_pos)
-                cursor.movePosition(cursor.MoveOperation.End, cursor.MoveMode.KeepAnchor)
+                cursor.movePosition(cursor.MoveOperation.End)
+                cursor.movePosition(cursor.MoveOperation.StartOfBlock, cursor.MoveMode.KeepAnchor)
                 cursor.removeSelectedText()
                 cursor.insertHtml('<span style="color:#999;">AI 未返回响应，请重试。</span>')
             print(f"[ASU] Chat对话完成")
@@ -2186,7 +2234,18 @@ class AICardWindow(QWidget):
         
         if self.worker and self.worker.isRunning():
             self.worker.stop()
-            self.worker.wait()
+            # 不等待旧 Worker——cancel_event.set() 让旧 pipeline 在全局持久化 event loop 中自然消亡。
+
+        # 断开旧 worker 的信号连接，防止信号泄漏
+        if self.worker is not None:
+            try:
+                self.worker.text_updated.disconnect(self.on_text_updated)
+            except TypeError:
+                pass
+            try:
+                self.worker.finished_signal.disconnect(self._on_ai_finished)
+            except TypeError:
+                pass
 
         # 合并工作台任务上下文到来源上下文中
         meta = dict(self.context_meta)

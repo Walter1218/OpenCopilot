@@ -73,7 +73,7 @@ class RecoveryManager:
         """
         self.checkpoint_manager = checkpoint_manager
         self.state_manager = state_manager
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._recovery_history: List[Dict[str, Any]] = []
         self._retry_counts: Dict[str, int] = {}
     

@@ -286,14 +286,15 @@ class SkillContextMenu(QMenu):
             }
         )
         
-        # 使用路由器获取推荐
+        # 使用路由器获取推荐（复用全局持久化 event loop）
         try:
             import asyncio
-            loop = asyncio.new_event_loop()
-            recommendations = loop.run_until_complete(
-                self.router.route_multiple(context, max_skills=5)
+            from opencopilot.agent.caller import _EventLoopBridge
+            loop = _EventLoopBridge.get_loop()
+            future = asyncio.run_coroutine_threadsafe(
+                self.router.route_multiple(context, max_skills=5), loop
             )
-            loop.close()
+            recommendations = future.result(timeout=10)
             return recommendations
         except Exception as e:
             print(f"获取推荐技能失败: {e}")

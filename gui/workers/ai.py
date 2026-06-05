@@ -9,10 +9,14 @@ class AIWorker(QThread):
     text_updated = pyqtSignal(str)
     finished_signal = pyqtSignal()
 
+    _next_id = 0  # 类变量，进程级自增
+
     def __init__(self, provider, prompt, action_type="auto", session_id="default",
                  context_source="drag", context_meta=None, context_envelope=None,
                  image_base64=None):
         super().__init__()
+        AIWorker._next_id += 1
+        self._wid = AIWorker._next_id
         self.provider = provider
         self.prompt = prompt
         self.action_type = action_type
@@ -25,6 +29,12 @@ class AIWorker(QThread):
         self._cancel_event = threading.Event()
 
     def run(self):
+        from opencopilot.agent.observability import PipelineObservability
+        obs = PipelineObservability.get_instance()
+        obs.worker_log(self._wid, "AIWorker",
+                       f"START | text={self.prompt[:30]} | action={self.action_type} | session={self.session_id[:8]}",
+                       session_id=self.session_id)
+        
         try:
             full_text = ""
             chunk_count = 0
@@ -40,6 +50,8 @@ class AIWorker(QThread):
                 cancel_event=self._cancel_event
             ):
                 if not self._is_running:
+                    obs.worker_log(self._wid, "AIWorker", f"CANCELLED | chunks={chunk_count}",
+                                   session_id=self.session_id)
                     print(f"[ASU] AIWorker被中断 | chunks={chunk_count}")
                     break
                 full_text += chunk
@@ -54,13 +66,20 @@ class AIWorker(QThread):
                     
                 self.text_updated.emit(display_text.strip())
                 
+            obs.worker_log(self._wid, "AIWorker",
+                           f"FINISHED | chunks={chunk_count} | output_len={len(full_text)}",
+                           session_id=self.session_id)
             print(f"[ASU] AIWorker完成 | action={self.action_type} | chunks={chunk_count} | output_len={len(full_text)}")
             self.full_text = full_text
         except Exception as e:
+            obs.worker_log(self._wid, "AIWorker", f"ERROR | {e}",
+                           session_id=self.session_id)
             print(f"[ASU] AIWorker异常 | action={self.action_type} | error={str(e)}")
             self.text_updated.emit(f"\n[错误]: {str(e)}")
             self.full_text = ""
             
+        obs.worker_log(self._wid, "AIWorker", "emit finished_signal",
+                       session_id=self.session_id)
         self.finished_signal.emit()
 
     def stop(self):

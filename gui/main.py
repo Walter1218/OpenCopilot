@@ -203,6 +203,28 @@ class CopilotManager:
         if self._is_shutting_down:
             return
         old = self.mouse_thread
+        # 断开旧 listener 的信号连接，防止重复回调
+        if old is not None:
+            try:
+                old.mouse_moved.disconnect(self.cursor_overlay.update_cursor_position)
+            except TypeError:
+                pass
+            try:
+                old.right_clicked.disconnect(self._on_right_clicked)
+            except TypeError:
+                pass
+            try:
+                old.global_click.disconnect(self._on_global_click)
+            except TypeError:
+                pass
+            try:
+                old.listener_error.disconnect(self._on_mouse_listener_error)
+            except TypeError:
+                pass
+            try:
+                old.listener_died.disconnect(self._restart_mouse_listener)
+            except TypeError:
+                pass
         self.mouse_thread = MouseListenerWorker()
         self.mouse_thread.mouse_moved.connect(self.cursor_overlay.update_cursor_position)
         self.mouse_thread.right_clicked.connect(self._on_right_clicked)
@@ -229,6 +251,12 @@ class CopilotManager:
 
     def _ping_agent(self):
         """异步向 Agent 发送探活请求，完成后通过信号更新 UI 状态。"""
+        # 断开旧健康检查 worker 的信号连接
+        if hasattr(self, "_health_worker") and self._health_worker is not None:
+            try:
+                self._health_worker.health_result.disconnect(self._on_agent_health)
+            except TypeError:
+                pass
         self._health_worker = AgentHealthWorker()
         self._health_worker.health_result.connect(self._on_agent_health)
         self._health_worker.start()
@@ -245,6 +273,20 @@ class CopilotManager:
 def main():
     """Smart Copilot 主入口"""
     app = QApplication(sys.argv)
+    
+    # 提前初始化日志系统（SQLite + stderr）
+    import time
+    app_run_id = time.strftime("%Y%m%d_%H%M%S_") + str(int(time.time() * 1000) % 1000000)
+    from opencopilot.agent.log_store import LogStore
+    store = LogStore.get_instance()
+    store.init_run(app_run_id)
+    
+    from opencopilot.agent.observability import PipelineObservability
+    obs = PipelineObservability.get_instance()
+    obs._write_log("[MAIN] PipelineObservability initialized | app_run_id=" + app_run_id, source="MAIN", event="APP_START")
+    
+    print(f"📋 日志已初始化 | run={app_run_id} | db={store._db_path}")
+    
     if not check_accessibility_permission():
         print("❌ 辅助功能权限未授予，Smart Copilot 无法监听鼠标事件。")
         print("   请在系统设置中授权后重新运行。")

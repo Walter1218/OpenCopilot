@@ -1,0 +1,376 @@
+# OpenCopilot 🚀
+
+> **The macOS System-Level AI Right-Click Menu** — Select text anywhere, double right-click, AI appears.
+>
+> Not an IDE plugin · Not a chat window · Not an autonomous agent · The shortest path between you and AI
+
+<p align="center">
+  <img src="https://img.shields.io/badge/platform-macOS%2012%2B-blue" alt="platform">
+  <img src="https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-green" alt="python">
+  <img src="https://img.shields.io/badge/version-v4.0-orange" alt="version">
+  <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="license">
+  <a href="README.md">中文</a>
+</p>
+
+---
+
+## Positioning: The Shortest Path Between You and AI
+
+### The Current AI Assistant Landscape
+
+As of 2025-2026, desktop AI tools have split into three lanes:
+
+| Lane | Examples | Model | Limitation |
+|------|----------|-------|------------|
+| **IDE-Embedded** | Cursor / Trae / Windsurf / Copilot | AI inside the editor, Tab completion + Chat panel | Dead outside the IDE; useless for emails, PPTs, web browsing |
+| **Standalone Chat** | Claude Desktop / ChatGPT Desktop | Independent app + file/MCP access | Powerful tools, but you must "feed" content to them — copy-paste or upload |
+| **Autonomous Desktop Agent** | OpenClaw / Hermes / Solo | AI takes over the desktop, operates autonomously | Powerful but opaque; you can't intervene when it goes wrong; security risk |
+
+### OpenCopilot's Fourth Lane: System-Level On-Demand Intervention
+
+OpenCopilot takes none of these paths. Its design philosophy: **AI is an extension of your right mouse button, not another window.**
+
+```
+Cursor / Trae:
+  You → switch to IDE → ask a question → wait → manually apply result
+  Coverage: ████████░░  IDE only
+
+Claude Desktop:
+  You → ⌘Tab to Claude → type description → ⌘C⌘V content → wait → ⌘C⌘V result → ⌘Tab back
+  Coverage: ████████████ Any app, but you shuttle content
+
+OpenClaw / Hermes:
+  AI → operates desktop autonomously → you watch
+  Coverage: ████████████ Any app, but you're a passenger
+
+OpenCopilot:
+  You're writing a report in Word → select a paragraph → double right-click → pick an action → result appears on card
+  Coverage: ████████████ Any app, and you're always driving
+```
+
+**In one sentence**:
+- Cursor asks "what code do you want to write" — **you're in the IDE**
+- Claude Desktop asks "paste your content here" — **you're in a chat window**
+- OpenClaw says "I'll handle it" — **you're in the passenger seat**
+- OpenCopilot — you select, you decide what to ask, you review the result — **you're in any app, and AI comes to you**
+
+### The Office AI Era: They Generate, You Review & Fix
+
+The 2026 office AI landscape makes one thing clear: **WorkBuddy / QoderWork / DuMate have matured at "rapid first-draft generation"** — type one sentence, get a PPT/document in 3-10 minutes. The problem is:
+
+> AI-generated drafts are riddled with hallucinations — fabricated numbers, invented citations, logical contradictions, formatting chaos. You need a tool to **review and fix** the draft, not to generate yet another one.
+
+This is exactly where OpenCopilot sits:
+
+```
+Traditional workflow:
+  WorkBuddy outputs a draft → you manually review page by page in Office → spot a suspicious number → ???
+
+OpenCopilot workflow:
+  WorkBuddy outputs a draft → open in Office for review
+    → See "Q2 Revenue ¥38M" → select it → double right-click → "Does this match the Excel data?"
+    → See a logical gap → select it → double right-click → "Check if this contradicts page 3"
+    → Unprofessional phrasing → select it → double right-click → "Polish, B2B formal tone"
+```
+
+**4 Review Superpowers**:
+
+| Superpower | Details |
+|------------|---------|
+| **In-Office Review** | Select and analyze directly in Word/WPS/PPT — no window switching |
+| **Cross-Validation with Real Data** | Reads your Excel/docs as ground truth for comparison — not relying on LLM memory |
+| **Pipeline Multi-Layer Review** | ImmuneSystem blocks dangerous output + CapabilityRouter classifies review type (data check / fact check / style check) |
+| **Incremental Edit, Preserve Formatting** | Only changes the text you selected — never touches python-pptx generated layout |
+
+### Why System-Level Intervention
+
+OpenCopilot uses macOS **AXUIElement API** (Accessibility) to perceive your actions at the OS level, without depending on any specific app's plugin or API:
+
+- Text selection → system-level event monitoring, no ⌘C needed
+- Browser content → AppleScript bridge, no extension
+- IDE full file → companion plugin (optional), not mandatory
+- Screenshot analysis → CGWindow API, no app support required
+
+This means OpenCopilot delivers the **exact same interaction experience** across **Word, PPT, browsers, email, terminal, Finder, and any text editor**. You're not using an "AI coding tool" or an "AI chat tool" — you're using an "AI right-click menu that works in any software."
+
+---
+
+## Interaction Design
+
+### Three Interaction Postures
+
+| Posture | Trigger | Intent | Form |
+|---------|---------|--------|------|
+| **Instant Advisor** | Double right-click | "Take a look at this for me" | Translucent floating card, appears next to cursor, never steals focus |
+| **Deep Workbench** | Triple right-click | "I have a complex task" | Independent workspace window, with task context + multi-turn dialogue |
+| **Drag & Drop Feed** | Select → drag into card | "Fix just this part" | Accepts text dragged from any application |
+
+**Core interaction principles**:
+
+- **Never steals focus**: card appears without interrupting your typing
+- **Eyes stay put**: card follows cursor position, no forced gaze shift
+- **Context auto-carried**: selected text is automatically injected — no need to explain "the paragraph above"
+- **Human in the loop, always**: every interaction triggered by you, every result confirmed by you — not a black-box agent, but your enhanced "smart right-click"
+
+---
+
+## Core Capabilities
+
+### 🎯 Smart Analysis (Auto)
+
+Select any content, AI automatically identifies the type and delivers analysis.
+
+- Select code → architect-level review (design patterns, complexity, improvement suggestions)
+- Select news → extract key points, analyze context
+- Select data tables → data interpretation, trend analysis
+- Not sure which action to pick? Tap ✨ Auto
+
+### 🌐 Smart Translation
+
+Select text → double right-click → 🌐 Translate. Supports 8 languages bidirectional (ZH/EN/JA/KO/FR/DE/ES/RU).
+
+**Design highlight**: Translation direction is dynamically injected by the Pipeline's SessionSetup middleware into the System Prompt — ensuring the LLM accurately understands the target language, rather than guessing from a hardcoded "translate to English" instruction.
+
+### 💻 Code Analysis
+
+Not just syntax highlighting — **architect-level** code review:
+
+- **Design pattern recognition**: auto-detect Factory, Strategy, Observer, etc.
+- **Complexity analysis**: cyclomatic complexity, coupling assessment
+- **Improvement suggestions**: performance bottlenecks, security risks, readability issues
+- **Cross-reference revision**: when you modify one section, automatically scans the full file for places that need同步 adjustments
+
+Works with the IDE companion extension for a closed loop: select code → AI modifies → write back to IDE.
+
+### 📝 Document Cross-Reference Revision
+
+When you modify a paragraph in a document, AI automatically scans the full text for contradictions.
+
+**Three-part output**:
+1. **Revised text**: your paragraph, fixed
+2. **Cross-reference impact analysis**: other sections that need同步 updates (with line/paragraph references)
+3. **Revision rationale**: logical basis for this change
+
+Supports `.md`, `.txt`, `.py`, `.docx`, `.pptx`. Word/PPT files are auto-parsed to plain text via Privileged Broker for cross-scanning.
+
+### 📊 PPT Co-Creation
+
+From zero to presentation, AI participates throughout:
+
+| Stage | AI Role | Output |
+|-------|---------|--------|
+| Content Input | Drag in document / type topic | Structured material |
+| Outline Generation | AI analyzes content → plans slide structure | JSON outline (title + bullet points per slide) |
+| Co-Creative Editing | Natural language conversation to modify ("change this slide to left-right comparison layout") | Real-time slide updates |
+| Content Analysis | Select a slide → AI analyzes logic, data, expression | Analysis panel |
+| Optimization Suggestions | AI reviews the full deck → proposes 1-2 improvements | Suggestion bubbles |
+
+### 🔍 Multi-Source Context Awareness
+
+OpenCopilot doesn't just "look up selected text" — it proactively fetches what you're looking at:
+
+| Source | Trigger | What It Gets |
+|--------|---------|-------------|
+| Highlighted text (any app) | Double right-click (auto) | System-level AXUIElement silent read |
+| IDE full file | Click 📥 Read Full File | Entire code file |
+| Browser page | Click 🌐 Read Webpage | Full page content (Chrome/Safari/Brave/Edge/Arc) |
+| Screenshot | Click 👁️ Visual Analysis | Foreground window screenshot → multimodal analysis |
+| File selection | Click 📝 Full Revision | .docx / .pptx auto-parsed |
+
+**You never need to tell AI "what I was looking at" — it already knows.**
+
+### 🎭 Persona Workshop
+
+Click the 🎭 icon on the card title bar to create custom AI roles. Each role is a Markdown file (stored in `personas/`), editable with instant effect:
+
+```markdown
+# Xiaohongshu Copywriter
+You are a Xiaohongshu viral copywriting expert. Style requirements:
+- Max 3 lines per paragraph
+- Heavy emoji use ✨🔥💯
+- Lots of exclamation marks and rhetorical questions
+- End with 3-5 hashtag topics
+```
+
+### 💬 Continuous Dialogue
+
+Click 💬 Continuous Dialogue for multi-turn mode. AI remembers the full conversation history, supporting gradual deep-dive analysis. With the Workbench's "Task Context" feature, all conversations share the same contextual anchor.
+
+---
+
+## Technical Architecture
+
+### Design Decision: Pipeline Middleware vs Monolithic Prompt Stitching
+
+Products like Cursor and Claude Desktop are essentially "chat window + capability plugins" — they gather context, stitch it into one giant prompt, and throw it at the LLM. The problems with this approach:
+
+1. **Nowhere to put safety**: content filtering and permission checks embedded in prompts — LLM may bypass them
+2. **Unobservable**: when something goes wrong, you can only see what the LLM output — not what happened in between
+3. **Hard to extend**: adding a capability requires modifying prompt-stitching logic everywhere
+
+OpenCopilot follows OpenClaw's approach with a **7-layer async Pipeline**. Each layer is an independent middleware — interceptable, observable, replaceable:
+
+```
+User Request
+  │
+  ▼
+SessionSetup   ← session restore, persona load, translation direction dynamic injection
+  │
+  ▼
+SecurityGuard  ← permission check, rate limiting (Lane Semaphore per-lane throttling)
+  │
+  ▼
+ImmuneSystem   ← content safety detection, dangerous command filtering (independent of LLM)
+  │
+  ▼
+Planner        ← task complexity assessment → Agent paradigm selection
+  │
+  ▼
+StateTracking  ← session state tracking, checkpoint
+  │
+  ▼
+CapabilityRouter ← capability routing (code execution / knowledge retrieval / search / LLM)
+  │
+  ▼
+LLMAgent       ← Agent Loop hybrid paradigm
+  │
+  ├─ SIMPLE  → One-Shot (~2s): 80% of tasks
+  ├─ MEDIUM  → Plan-and-Solve (~10s): multi-step tasks
+  └─ COMPLEX → Plan+ReAct (~20s): tasks requiring error correction
+```
+
+**Key Pipeline capabilities**:
+
+| Capability | Description |
+|------------|-------------|
+| **Short-circuit safety** | Security check fails → immediate rejection, LLM never sees dangerous content |
+| **Full-chain observability** | 24 Timer instrumentation points classified by `action_type`, each layer's latency independently traceable |
+| **Graceful cancellation** | User interrupt propagates via `CancelledError` through the async stack — no brutal truncation |
+| **Declarative extension** | New capability = add one middleware, never touch existing code |
+
+### Why Borrow from OpenClaw's Architecture?
+
+OpenClaw's Pipeline + Agent Loop architecture solves three core problems in Agent engineering:
+
+1. **Global persistent Event Loop**: not one thread per request — the whole process shares one `asyncio` loop; cancellation via `task.cancel()` not thread-killing
+2. **Session-level serialization lock**: `asyncio.Lock` ensures only 1 Pipeline per session at a time — eliminating data races (the root cause of "repeated replies")
+3. **Middleware hot-swap**: safety/routing/planning are independent — never touch the LLM prompt
+
+**Key differences from OpenClaw**:
+
+| | OpenClaw | OpenCopilot |
+|---|---|---|
+| Interaction model | Agent autonomous decision + tool calls | User-triggered + double right-click |
+| Operation mode | Long-running autonomous tasks | Short interactions, on-demand intervention |
+| Safety model | Tool permission whitelist | Pipeline multi-layer interception + ImmuneSystem |
+| Capability focus | File/code/shell automation | Multi-app universal: Word/PPT/web/IDE/screenshot |
+| Observability | Node.js ecosystem | Python + SQLite persistent logs + stderr real-time output |
+
+**In short**: OpenClaw is "AI does the work for you", OpenCopilot is "AI lends a hand while you work". Both share the Pipeline architectural philosophy, but with different product visions.
+
+---
+
+## Quick Start
+
+### Requirements
+
+- macOS 12+
+- Python 3.11 ~ 3.13
+- Terminal must be granted **Accessibility** and **Screen Recording** permissions (System Settings → Privacy & Security)
+
+### Install
+
+```bash
+git clone https://github.com/Walter1218/OpenCopilot.git
+cd OpenCopilot
+pip install -e .
+```
+
+### Launch
+
+```bash
+# Terminal 1: API Gateway (auto-starts Knowledge Graph)
+python3 -m uvicorn smart_copilot_api:app --host 0.0.0.0 --port 8000 --reload
+
+# Terminal 2: Privileged Broker (⚠️ must run in native macOS Terminal)
+python3 opencopilot/broker/run.py
+
+# Terminal 3: UI
+python3 smart_copilot.py
+```
+
+After launch, colored cursor effects appear in the screen corner. Title bar 🟢 means ready.
+
+---
+
+## Project Structure
+
+```
+OpenCopilot/
+├── opencopilot/                  # Main package
+│   ├── agent/                    #   Agent core (Pipeline + Agent Loop + Caller)
+│   │   ├── caller.py             #     Unified caller (sync/async), global Event Loop
+│   │   ├── middlewares.py        #     7-layer Pipeline middleware
+│   │   ├── pipeline.py           #     Pipeline engine + PipelineContext
+│   │   ├── observability.py      #     Full-chain observability
+│   │   └── log_store.py          #     SQLite persistent logging
+│   ├── capabilities/             #   Capability layer
+│   │   ├── coding/               #     Code execution engine
+│   │   ├── knowledge/            #     Knowledge retrieval (Knowledge Graph)
+│   │   ├── search/               #     Search engine
+│   │   ├── memory/               #     Session memory management
+│   │   ├── skill/                #     Declarative Skill system
+│   │   ├── ppt/                  #     PPT co-creation engine
+│   │   └── state/                #     State management (checkpoint/recovery)
+│   ├── safety/                   #   Safety layer (security/immune)
+│   ├── broker/                   #   System agent (AXUIElement silent selection/sandbox penetration)
+│   ├── providers/                #   LLM providers
+│   ├── observability/            #   Observability module
+│   └── shared/                   #   Shared utilities (prompt building/context normalization)
+├── api/                          # API Gateway (:8000)
+│   ├── app.py                    #   Route factory
+│   └── routers/                  #   12 independent route modules
+├── gui/                          # PyQt6 desktop app
+│   ├── main.py                   #   Entry + CopilotManager
+│   ├── window.py                 #   AICardWindow — core floating card
+│   ├── workspace.py              #   AgentWorkspace — task workbench
+│   ├── workers/                  #   QThread Workers (ChatWorker/AIWorker)
+│   └── dialogs/                  #   Translation/Persona dialogs
+├── personas/                     # AI role files (*.md)
+├── asu-ide-extension/            # IDE companion extension (VSCode/Trae/Cursor)
+├── tests/                        # Tests (unit / e2e / ablation)
+├── scripts/                      # Daemon/launch scripts
+├── smart_copilot.py              # GUI entry
+├── smart_copilot_api.py          # API entry
+└── pyproject.toml
+```
+
+---
+
+## Documentation
+
+| Document | Content |
+|----------|---------|
+| [USER_GUIDE.md](USER_GUIDE.md) | User manual (interactions, features, permissions, FAQ) |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Architecture design (Pipeline, Agent Loop, Skill system, Broker protocol) |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | Development guide (module development, testing, adding Persona/Skill) |
+
+---
+
+## Roadmap
+
+| Phase | Content | Status |
+|-------|---------|--------|
+| P0 | Basic interaction, multi-engine AI, context awareness | ✅ |
+| P1 | Privileged Broker, multimodal vision, silent text selection | ✅ |
+| P2 | Persona workshop, PPT co-creation, Knowledge Graph, Skill architecture | ✅ |
+| P3 | Agent Loop refactor, OpenClaw single-process migration, Pipeline unification | ✅ |
+| P4 | v4.0 layered architecture refactor, code governance, full-chain observability | ✅ |
+| P5 | IDE Extension v2, Broker productization | 🔶 In Progress |
+| P6 | Proactive context awareness, multi-agent collaboration | 📋 Planned |
+
+---
+
+## License
+
+MIT © OpenCopilot Team

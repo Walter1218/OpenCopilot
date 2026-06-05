@@ -9,6 +9,7 @@
   <img src="https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-green" alt="python">
   <img src="https://img.shields.io/badge/version-v4.0-orange" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="license">
+  <a href="README_EN.md">English</a>
 </p>
 
 ---

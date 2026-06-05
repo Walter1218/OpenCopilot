@@ -983,13 +983,20 @@ class AICardWindow(QWidget):
             
             # 使用统一的 Agent Pipeline 调用器
             from opencopilot.agent.caller import call_agent_pipeline_sync
+            from opencopilot.agent.observability import PipelineObservability
             import threading
             ppt_cancel = threading.Event()
+            session_id = f"ppt_gen_{int(time.time())}"
+            
+            obs = PipelineObservability.get_instance()
+            obs.gui_log(f"PPT Outline Gen START | text_len={len(text[:3000])}",
+                        session_id=session_id, event="PPT_OUTLINE_START")
+            
             full_text = ""
             for chunk in call_agent_pipeline_sync(
                 text[:3000],
                 action_type="chat",
-                session_id=f"ppt_gen_{int(time.time())}",
+                session_id=session_id,
                 is_new_task=True,
                 context_source="ppt_generator",
                 cancel_event=ppt_cancel,
@@ -997,6 +1004,9 @@ class AICardWindow(QWidget):
                 if isinstance(chunk, tuple):
                     continue  # 跳过 annotations 等 metadata
                 full_text += chunk
+            
+            obs.gui_log(f"PPT Outline Gen DONE | output_len={len(full_text)}",
+                        session_id=session_id, event="PPT_OUTLINE_DONE")
             
             print(f"[PPT] AI 返回内容长度: {len(full_text)} 字符")
             print(f"[PPT] AI 返回前300字: {full_text[:300]}")

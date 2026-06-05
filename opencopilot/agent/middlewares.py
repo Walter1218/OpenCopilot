@@ -117,6 +117,10 @@ class SessionSetupMiddleware(BaseMiddleware):
             persona_prompt = self._load_persona(ctx.persona)
             _t_persona = time.time() - _t3
 
+            # 翻译模式：根据 context_meta 动态注入翻译方向
+            if ctx.action_type == "translate":
+                persona_prompt = self._inject_translation_direction(persona_prompt, context_meta)
+
             _t4 = time.time()
             source = envelope.get("source", "drag")
             context_prefix = self._build_context_prefix(source, envelope.get("meta", {}))
@@ -184,12 +188,43 @@ class SessionSetupMiddleware(BaseMiddleware):
 
             self._memory.add_message(session_id, "user", ctx.user_message_content)
 
-            PipelineObservability.get_instance().timer(f"[Timer] SessionSetup: total={time.time()-_t0:.3f}s | norm={_t_norm:.3f} mem={_t_mem:.3f} persona={_t_persona:.3f} prefix={_t_prefix:.3f} build={_t_build:.3f}")
+            PipelineObservability.get_instance().timer(f"[Timer] SessionSetup: total={time.time()-_t0:.3f}s | norm={_t_norm:.3f} mem={_t_mem:.3f} persona={_t_persona:.3f} prefix={_t_prefix:.3f} build={_t_build:.3f}",
+                                                        action_type=ctx.action_type)
         except Exception as e:
             print(f"[Pipeline] SessionSetup error: {e}", flush=True)
             traceback.print_exc()
 
         await next_fn()
+
+    @staticmethod
+    def _inject_translation_direction(persona_prompt: str, context_meta: dict) -> str:
+        """根据 context_meta 动态注入翻译方向到 system prompt
+
+        将翻译类型 persona 的模糊指令（"翻译为指定目标语言"）替换为明确的方向，
+        确保 LLM 不会在 system/user prompt 之间产生歧义。
+        """
+        source_lang = context_meta.get("source_lang", "zh")
+        target_lang = context_meta.get("target_lang", "en")
+        lang_map = {
+            "zh": "中文", "en": "英文", "ja": "日文",
+            "ko": "韩文", "fr": "法文", "de": "德文",
+            "es": "西班牙文", "ru": "俄文",
+        }
+        source_name = lang_map.get(source_lang, source_lang)
+        target_name = lang_map.get(target_lang, target_lang)
+
+        direction_line = f"请将用户提供的文本从{source_name}翻译为{target_name}。"
+
+        # 替换或插入翻译方向指令
+        if "翻译为指定目标语言" in persona_prompt:
+            persona_prompt = persona_prompt.replace(
+                "翻译为指定目标语言", f"从{source_name}翻译为{target_name}"
+            )
+        else:
+            # 在 persona 末尾追加方向指令（兜底）
+            persona_prompt = f"{persona_prompt}\n\n{direction_line}"
+
+        return persona_prompt
 
 
 class SecurityGuardMiddleware(BaseMiddleware):
@@ -215,7 +250,8 @@ class SecurityGuardMiddleware(BaseMiddleware):
 
             if not allowed:
                 ctx.short_circuit("❌ 权限不足，请求被拦截。")
-                PipelineObservability.get_instance().timer(f"[Timer] SecurityGuard: total={time.time()-_t0:.3f}s | perm={_t_perm:.3f} (BLOCKED)")
+                PipelineObservability.get_instance().timer(f"[Timer] SecurityGuard: total={time.time()-_t0:.3f}s | perm={_t_perm:.3f} (BLOCKED)",
+                                                            action_type=ctx.action_type)
                 return
 
             _t3 = time.time()
@@ -228,13 +264,16 @@ class SecurityGuardMiddleware(BaseMiddleware):
 
             if not has_quota:
                 ctx.short_circuit(f"⚠️ 请求过于频繁: {reason}")
-                PipelineObservability.get_instance().timer(f"[Timer] SecurityGuard: total={time.time()-_t0:.3f}s | perm={_t_perm:.3f} quota={_t_quota:.3f} (RATE LIMITED)")
+                PipelineObservability.get_instance().timer(f"[Timer] SecurityGuard: total={time.time()-_t0:.3f}s | perm={_t_perm:.3f} quota={_t_quota:.3f} (RATE LIMITED)",
+                                                            action_type=ctx.action_type)
                 return
 
-            PipelineObservability.get_instance().timer(f"[Timer] SecurityGuard: total={time.time()-_t0:.3f}s | perm={_t_perm:.3f} quota={_t_quota:.3f}")
+            PipelineObservability.get_instance().timer(f"[Timer] SecurityGuard: total={time.time()-_t0:.3f}s | perm={_t_perm:.3f} quota={_t_quota:.3f}",
+                                                        action_type=ctx.action_type)
         except Exception as e:
             print(f"[Pipeline] Security check error, allowing pass: {e}", flush=True)
-            PipelineObservability.get_instance().timer(f"[Timer] SecurityGuard: total={time.time()-_t0:.3f}s (ERROR, pass-through)")
+            PipelineObservability.get_instance().timer(f"[Timer] SecurityGuard: total={time.time()-_t0:.3f}s (ERROR, pass-through)",
+                                                        action_type=ctx.action_type)
 
         await next_fn()
 
@@ -285,12 +324,15 @@ class ImmuneSystemMiddleware(BaseMiddleware):
             _t_check = time.time() - _t0
             if result and not result.allowed:
                 ctx.short_circuit(f"⚠️ 规则检查发现违规: {result.message}\n\n请调整您的请求。")
-                PipelineObservability.get_instance().timer(f"[Timer] ImmuneSystem: total={_t_check:.3f}s (BLOCKED)")
+                PipelineObservability.get_instance().timer(f"[Timer] ImmuneSystem: total={_t_check:.3f}s (BLOCKED)",
+                                                            action_type=ctx.action_type)
                 return
-            PipelineObservability.get_instance().timer(f"[Timer] ImmuneSystem: total={_t_check:.3f}s")
+            PipelineObservability.get_instance().timer(f"[Timer] ImmuneSystem: total={_t_check:.3f}s",
+                                                        action_type=ctx.action_type)
         except Exception as e:
             print(f"[Pipeline] Immune check error, allowing pass: {e}", flush=True)
-            PipelineObservability.get_instance().timer(f"[Timer] ImmuneSystem: total={time.time()-_t0:.3f}s (ERROR, pass-through)")
+            PipelineObservability.get_instance().timer(f"[Timer] ImmuneSystem: total={time.time()-_t0:.3f}s (ERROR, pass-through)",
+                                                        action_type=ctx.action_type)
 
         await next_fn()
 
@@ -321,12 +363,15 @@ class PlannerMiddleware(BaseMiddleware):
                     }
                     plan_text = self._format_plan_for_system(ctx.metadata["plan"])
                     ctx.enriched_system = ctx.enriched_system + plan_text
-                PipelineObservability.get_instance().timer(f"[Timer] Planner: total={time.time()-_t0:.3f}s | create_plan={_t_plan:.3f}s (complex)")
+                PipelineObservability.get_instance().timer(f"[Timer] Planner: total={time.time()-_t0:.3f}s | create_plan={_t_plan:.3f}s (complex)",
+                                                            action_type=ctx.action_type)
             else:
-                PipelineObservability.get_instance().timer(f"[Timer] Planner: total={time.time()-_t0:.3f}s (skipped, not complex)")
+                PipelineObservability.get_instance().timer(f"[Timer] Planner: total={time.time()-_t0:.3f}s (skipped, not complex)",
+                                                            action_type=ctx.action_type)
         except Exception as e:
             print(f"[Pipeline] Planner error, skipping: {e}", flush=True)
-            PipelineObservability.get_instance().timer(f"[Timer] Planner: total={time.time()-_t0:.3f}s (ERROR)")
+            PipelineObservability.get_instance().timer(f"[Timer] Planner: total={time.time()-_t0:.3f}s (ERROR)",
+                                                        action_type=ctx.action_type)
 
         await next_fn()
 
@@ -369,7 +414,8 @@ class StateTrackingMiddleware(BaseMiddleware):
         except Exception as e:
             print(f"[Pipeline] State tracking error: {e}", flush=True)
 
-        PipelineObservability.get_instance().timer(f"[Timer] StateTracking: total={time.time()-_t0:.3f}s")
+        PipelineObservability.get_instance().timer(f"[Timer] StateTracking: total={time.time()-_t0:.3f}s",
+                                                    action_type=ctx.action_type)
         await next_fn()
 
 
@@ -401,7 +447,8 @@ class CapabilityRouterMiddleware(BaseMiddleware):
         llm_types = {"chat", "ppt", "coding", "evaluation", "planning", "skill", "translate"}
         if ctx.action_type in llm_types:
             _t_detect = time.time() - _t0
-            PipelineObservability.get_instance().timer(f"[Timer] CapabilityRouter: total={time.time()-_t0:.3f}s | detect={_t_detect:.3f}s type={ctx.action_type} → LLM (action_type)")
+            PipelineObservability.get_instance().timer(f"[Timer] CapabilityRouter: total={time.time()-_t0:.3f}s | detect={_t_detect:.3f}s type={ctx.action_type} → LLM (action_type)",
+                                                        action_type=ctx.action_type)
             await next_fn()
             return
 
@@ -409,7 +456,8 @@ class CapabilityRouterMiddleware(BaseMiddleware):
         _t_detect = time.time() - _t0
 
         if request_type in llm_types:
-            PipelineObservability.get_instance().timer(f"[Timer] CapabilityRouter: total={time.time()-_t0:.3f}s | detect={_t_detect:.3f}s type={request_type} → LLM")
+            PipelineObservability.get_instance().timer(f"[Timer] CapabilityRouter: total={time.time()-_t0:.3f}s | detect={_t_detect:.3f}s type={request_type} → LLM",
+                                                        action_type=ctx.action_type)
             await next_fn()
             return
 
@@ -425,15 +473,18 @@ class CapabilityRouterMiddleware(BaseMiddleware):
             elif request_type == "security":
                 result = self._handle_security_status(ctx)
             else:
-                PipelineObservability.get_instance().timer(f"[Timer] CapabilityRouter: total={time.time()-_t0:.3f}s | detect={_t_detect:.3f}s type={request_type} → passthrough")
+                PipelineObservability.get_instance().timer(f"[Timer] CapabilityRouter: total={time.time()-_t0:.3f}s | detect={_t_detect:.3f}s type={request_type} → passthrough",
+                                                            action_type=ctx.action_type)
                 await next_fn()
                 return
             _t_handle = time.time() - _t1
-            PipelineObservability.get_instance().timer(f"[Timer] CapabilityRouter: total={time.time()-_t0:.3f}s | detect={_t_detect:.3f}s handle={_t_handle:.3f}s type={request_type}")
+            PipelineObservability.get_instance().timer(f"[Timer] CapabilityRouter: total={time.time()-_t0:.3f}s | detect={_t_detect:.3f}s handle={_t_handle:.3f}s type={request_type}",
+                                                        action_type=ctx.action_type)
         except Exception as e:
             print(f"[Pipeline] Capability error: {e}", flush=True)
             traceback.print_exc()
-            PipelineObservability.get_instance().timer(f"[Timer] CapabilityRouter: total={time.time()-_t0:.3f}s (ERROR)")
+            PipelineObservability.get_instance().timer(f"[Timer] CapabilityRouter: total={time.time()-_t0:.3f}s (ERROR)",
+                                                        action_type=ctx.action_type)
             await next_fn()
             return
 
@@ -560,13 +611,16 @@ class LLMProviderMiddleware(BaseMiddleware):
             PipelineObservability.get_instance().ai_response(
                 ctx.session_id, full_reply, paradigm="llm",
                 chunk_count=_chunk_count, elapsed_ms=_elapsed,
+                action_type=ctx.action_type,
             )
-            PipelineObservability.get_instance().timer(f"[Timer] LLMProvider: total={time.time()-_t0:.3f}s | init={_t_init:.3f} ttfb={_t_ttfb:.3f} stream={_t_llm-_t_ttfb:.3f} chunks={_chunk_count} chars={len(full_reply)}")
+            PipelineObservability.get_instance().timer(f"[Timer] LLMProvider: total={time.time()-_t0:.3f}s | init={_t_init:.3f} ttfb={_t_ttfb:.3f} stream={_t_llm-_t_ttfb:.3f} chunks={_chunk_count} chars={len(full_reply)}",
+                                                        action_type=ctx.action_type)
         except asyncio.CancelledError:
             # Pipeline 被取消（通常是用户发新消息中断旧请求），加速清理
             # 不再 raise——由 caller.py 的 cancel_event 机制负责通知消费者
             print(f"[Pipeline] LLMProvider cancelled after {time.time()-_t0:.1f}s", flush=True)
-            PipelineObservability.get_instance().timer(f"[Timer] LLMProvider: total={time.time()-_t0:.3f}s (CANCELLED)")
+            PipelineObservability.get_instance().timer(f"[Timer] LLMProvider: total={time.time()-_t0:.3f}s (CANCELLED)",
+                                                        action_type=ctx.action_type)
             try:
                 await asyncio.wait_for(ctx.awrite_sse_done(), timeout=0.5)
             except Exception:
@@ -574,7 +628,8 @@ class LLMProviderMiddleware(BaseMiddleware):
         except Exception as e:
             print(f"[Pipeline] LLM error: {e}", flush=True)
             traceback.print_exc()
-            PipelineObservability.get_instance().timer(f"[Timer] LLMProvider: total={time.time()-_t0:.3f}s (ERROR: {e})")
+            PipelineObservability.get_instance().timer(f"[Timer] LLMProvider: total={time.time()-_t0:.3f}s (ERROR: {e})",
+                                                        action_type=ctx.action_type)
             await ctx.awrite_sse(f"\n[Agent Error]: {str(e)}")
             await ctx.awrite_sse_done()
 
@@ -675,7 +730,8 @@ class LLMAgentMiddleware(BaseMiddleware):
             print(f"[Pipeline] LLMAgent error: {e}", flush=True)
             traceback.print_exc()
             PipelineObservability.get_instance().timer(
-                f"[Timer] LLMAgent: total={time.time()-_t0:.3f}s (ERROR: {e})"
+                f"[Timer] LLMAgent: total={time.time()-_t0:.3f}s (ERROR: {e})",
+                action_type=ctx.action_type,
             )
             await ctx.awrite_sse(f"\n[Agent Error]: {str(e)}")
             await ctx.awrite_sse_done()
@@ -710,7 +766,8 @@ class LLMAgentMiddleware(BaseMiddleware):
         _t_ttfb = (_t_first_chunk - _t1) if _t_first_chunk else 0
         obs = PipelineObservability.get_instance()
         obs.ai_response(ctx.session_id, full_reply, paradigm="one_shot",
-                        chunk_count=_chunk_count, elapsed_ms=_t_total * 1000)
+                        chunk_count=_chunk_count, elapsed_ms=_t_total * 1000,
+                        action_type=ctx.action_type)
         obs.timer(f"[Timer] LLMAgent(One-Shot): total={_t_total:.3f}s | ttfb={_t_ttfb:.3f}s chunks={_chunk_count} chars={len(full_reply)}",
                   action_type=ctx.action_type)
         obs.agent_turn(ctx, paradigm="one_shot", turns=1, tool_calls=0)
@@ -763,7 +820,8 @@ class LLMAgentMiddleware(BaseMiddleware):
         _t_total = time.time() - _t0
         obs = PipelineObservability.get_instance()
         obs.ai_response(ctx.session_id, final, paradigm="plan_solve",
-                        chunk_count=0, elapsed_ms=_t_total * 1000)
+                        chunk_count=0, elapsed_ms=_t_total * 1000,
+                        action_type=ctx.action_type)
         obs.timer(
             f"[Timer] LLMAgent(Plan-Solve): total={_t_total:.3f}s turns={plan.total_turns} steps={len(plan.steps)}",
             action_type=ctx.action_type,
@@ -825,7 +883,8 @@ class LLMAgentMiddleware(BaseMiddleware):
         _t_total = time.time() - _t0
         obs = PipelineObservability.get_instance()
         obs.ai_response(ctx.session_id, final, paradigm="plan_react",
-                        chunk_count=0, elapsed_ms=_t_total * 1000)
+                        chunk_count=0, elapsed_ms=_t_total * 1000,
+                        action_type=ctx.action_type)
         obs.timer(
             f"[Timer] LLMAgent(Plan+ReAct): total={_t_total:.3f}s turns={plan.total_turns} steps={len(plan.steps)}",
             action_type=ctx.action_type,

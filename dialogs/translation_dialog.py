@@ -206,25 +206,30 @@ class TranslationDialog(QWidget):
             self.translate_btn.setEnabled(True)
     
     def _do_translate(self, text, source_lang, target_lang):
-        """通过 Agent Pipeline 执行真实翻译"""
-        # 构建翻译 prompt（与 API /api/text/translate 保持一致）
-        lang_map = {
-            "zh": "中文", "en": "英文", "ja": "日文",
-            "ko": "韩文", "fr": "法文", "de": "德文",
-            "es": "西班牙文", "ru": "俄文",
-        }
-        target_name = lang_map.get(target_lang, target_lang)
-        prompt = f"请将以下文本翻译成{target_name}：\n\n{text}"
-        
-        # 调用 Agent Pipeline（同步生成器，通过全局持久化 event loop 桥接 async）
+        """通过 Agent Pipeline 执行真实翻译
+
+        翻译方向通过 context_meta 传递给 Pipeline，
+        由 SessionSetupMiddleware 动态注入到 system prompt 中，
+        确保 LLM 收到的是清晰的翻译指令而非混淆的 prompt 拼接。
+        """
         from opencopilot.agent.caller import call_agent_pipeline_sync
+        from opencopilot.agent.observability import PipelineObservability
         import threading
+        
+        obs = PipelineObservability.get_instance()
+        
+        # 埋点：翻译开始
+        obs.gui_log(
+            f"Translation START | source={source_lang} target={target_lang} text_len={len(text)}",
+            event="TRANSLATION_START",
+            extra_data={"source_lang": source_lang, "target_lang": target_lang, "text_len": len(text)},
+        )
         
         chunks = []
         t_cancel = threading.Event()
         try:
             for chunk in call_agent_pipeline_sync(
-                text=prompt,
+                text=text,
                 action_type="translate",
                 context_source="chat",
                 context_meta={"task": "translate", "source_lang": source_lang, "target_lang": target_lang},
@@ -233,14 +238,28 @@ class TranslationDialog(QWidget):
             ):
                 chunks.append(chunk)
         except Exception:
-            # Pipeline 失败时回退到简单提示
+            obs.gui_log(
+                "Translation FAILED (Pipeline error)",
+                level="ERROR", event="TRANSLATION_FAILED",
+            )
             return f"[翻译失败] 请检查 Agent 服务是否正常运行。\n原文: {text}"
         
         result = "".join(chunks).strip()
         
-        # 如果 LLM 不可用，返回明确提示
         if not result:
+            obs.gui_log(
+                "Translation result EMPTY",
+                level="WARN", event="TRANSLATION_EMPTY",
+            )
             return f"[翻译服务暂不可用]\n原文: {text}"
+        
+        # 埋点：翻译完成
+        obs.gui_log(
+            f"Translation DONE | result_len={len(result)}",
+            event="TRANSLATION_DONE",
+            extra_data={"source_lang": source_lang, "target_lang": target_lang,
+                        "text_len": len(text), "result_len": len(result)},
+        )
         
         return result
     

@@ -289,7 +289,8 @@ class PipelineObservability:
 
     def ai_response(self, session_id: str, content: str, *,
                     paradigm: str = "llm", chunk_count: int = 0,
-                    elapsed_ms: Optional[float] = None, caller_id: Optional[int] = None):
+                    elapsed_ms: Optional[float] = None, caller_id: Optional[int] = None,
+                    action_type: str = "default"):
         """记录 AI 回复内容到日志系统。
 
         - stderr: 输出摘要（前 120 字符 + 统计信息）
@@ -302,13 +303,14 @@ class PipelineObservability:
             chunk_count: 流式 chunk 数
             elapsed_ms: 回复耗时（毫秒）
             caller_id: 调用者 ID
+            action_type: 动作类型（chat/translate/coding/...）
         """
         import json as _json
         chars = len(content)
         preview = content[:120].replace('\n', '\\n')
 
         # stderr 摘要
-        msg = (f"[AI_RESPONSE] session={session_id[:8]} | paradigm={paradigm} "
+        msg = (f"[AI_RESPONSE] session={session_id[:8]} | action={action_type} paradigm={paradigm} "
                f"| chunks={chunk_count} chars={chars} | {preview}...")
         sys.stderr.write(f"{self._thread_tag()} {msg}\n")
         sys.stderr.flush()

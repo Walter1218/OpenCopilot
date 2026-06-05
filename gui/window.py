@@ -1594,34 +1594,44 @@ class AICardWindow(QWidget):
         cursor.movePosition(cursor.MoveOperation.End)
         self.chat_display.setTextCursor(cursor)
         
+        # 插入消息（使用 HTML 格式）
+        html = f'<p><b style="color:{color};">{role}:</b> {text}</p>'
+        self.chat_display.insertHtml(html)
+        
+        # 如果是临时消息（正在思考...），记录位置以便后续替换
         if is_temp:
+            cursor.movePosition(cursor.MoveOperation.End)
             self._temp_chat_pos = cursor.position()
-            self.chat_display.insertHtml(f'<b style="color:{color};">{role}:</b> {text}<br><br>')
-        else:
-            self.chat_display.insertHtml(f'<b style="color:{color};">{role}:</b> {text}<br><br>')
             
         scrollbar = self.chat_display.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 
     def on_chat_updated(self, text):
-        cursor = self.chat_display.textCursor()
-        cursor.setPosition(self._temp_chat_pos)
-        cursor.movePosition(cursor.MoveOperation.End, cursor.MoveMode.KeepAnchor)
-        cursor.removeSelectedText()
-        cursor.insertHtml(md_render(text))
-        scrollbar = self.chat_display.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
-
-    def on_chat_finished(self):
-        # 检查 ChatWorker 是否有输出，如果没有则清除 "正在思考..." 占位符
-        worker = self.sender()
-        if worker and hasattr(worker, 'full_text') and not worker.full_text:
-            # Worker 没有任何输出，更新占位符为提示信息
+        try:
             cursor = self.chat_display.textCursor()
             cursor.setPosition(self._temp_chat_pos)
             cursor.movePosition(cursor.MoveOperation.End, cursor.MoveMode.KeepAnchor)
             cursor.removeSelectedText()
-            cursor.insertHtml('<span style="color:#999;">AI 未返回响应，请重试。</span>')
+            cursor.insertHtml(md_render(text))
+            scrollbar = self.chat_display.verticalScrollBar()
+            scrollbar.setValue(scrollbar.maximum())
+        except Exception as e:
+            print(f"[ASU] on_chat_updated error: {e}")
+
+    def on_chat_finished(self):
+        try:
+            # 检查 ChatWorker 是否有输出，如果没有则清除 "正在思考..." 占位符
+            worker = self.sender()
+            if worker and hasattr(worker, 'full_text') and not worker.full_text:
+                # Worker 没有任何输出，更新占位符为提示信息
+                cursor = self.chat_display.textCursor()
+                cursor.setPosition(self._temp_chat_pos)
+                cursor.movePosition(cursor.MoveOperation.End, cursor.MoveMode.KeepAnchor)
+                cursor.removeSelectedText()
+                cursor.insertHtml('<span style="color:#999;">AI 未返回响应，请重试。</span>')
+            print(f"[ASU] Chat对话完成")
+        except Exception as e:
+            print(f"[ASU] on_chat_finished error: {e}")
 
     # ---- 新增UI组件处理方法 ----
 

@@ -1,6 +1,7 @@
 # OpenCopilot 用户说明书
 
-> **版本**：v1.x | **适用平台**：macOS 15+ | **最后更新**：2026-05-26
+> **版本**：v4.0 | **适用平台**：macOS 12+ | **最后更新**：2026-06-04  
+> **状态**：分层架构，Agent Loop 混合范式，14 项质量提升已完成
 
 ---
 
@@ -18,8 +19,8 @@ OpenCopilot 是一款 macOS 桌面级 AI 智能协驾工具。它在后台静默
 
 | 项目 | 要求 |
 |------|------|
-| 操作系统 | macOS 15 (Sequoia) 或更高 |
-| Python | 3.10 ~ 3.12（勿使用 3.13+） |
+| 操作系统 | macOS 12 (Monterey) 或更高 |
+| Python | 3.11 ~ 3.13 |
 | 依赖 | `pip install -r requirements.txt` |
 
 ### 2.2 授予权限（一次性，首次运行前完成）
@@ -45,16 +46,18 @@ cd OpenCopilot
 pip install -r requirements.txt
 ```
 
-### 3.2 注册守护进程（一次性，实现开机自启）
+### 3.2 启动后台服务
 
-OpenCopilot 有两个后台服务需要常驻运行：
+OpenCopilot 需要后台服务支持 AI 能力：
 
-| 服务 | 端口 | 注册命令 |
+| 服务 | 端口 | 启动方式 |
 |------|------|----------|
-| Agent 智能体 | 18888 | `bash scripts/install_daemon.sh` |
-| Broker 特权代理 | 18889 | `bash scripts/install_broker_daemon.sh` ⚠️ 需在**原生终端**运行 |
+| API Gateway（AI 管线） | 8000 | `python3 -m uvicorn smart_copilot_api:app --port 8000` |
+| Broker 特权代理 | 18889 | `python3 opencopilot/broker/run.py`（⚠️ 需在**原生终端**运行） |
 
-> ⚠️ Broker 安装脚本**必须在 macOS 原生 Terminal.app 中运行**，不要在 IDE 内置终端执行，否则会继承沙盒限制。
+> **启动方式**：API Gateway 一键启动（自动带起知识图谱），Broker 需单独启动（原生终端权限）。
+>
+> ⚠️ Broker 必须在 macOS 原生 Terminal.app 中运行，IDE 内置终端会继承沙盒限制。
 
 ### 3.3 启动 UI
 
@@ -72,10 +75,10 @@ bash scripts/start_ui.sh
 
 **这是最常用的功能。操作只需两步：**
 
-1. **在任何软件中选中一段文字**
+1. **在任何软件中高亮选中一段文字** (系统会自动通过底层 AXUIElement 无感读取，无需按 Cmd+C 复制)
 2. **双击鼠标右键**
 
-一张半透明的悬浮卡片会在鼠标旁边弹出。拖拽你选中的文字到卡片中，选择一个快捷指令，AI 就会开始分析。
+一张半透明的悬浮卡片会在鼠标旁边弹出，自动带入你刚才选中的文字。选择一个快捷指令，AI 就会开始分析。
 
 #### 快捷指令按钮
 
@@ -85,6 +88,7 @@ bash scripts/start_ui.sh
 | 🌐 翻译 | 翻译为中文 | 阅读英文文档/网页 |
 | 💻 代码解析 | 以架构师视角解析代码 | 读代码、Code Review |
 | ✍️ 润色 | 优化文字表达 | 写邮件、报告、文案 |
+| 👁️ 视觉分析前台 | 瞬间截取最前台窗口图像进行多模态分析 | 遇到无法提取文本的图片、界面元素或图表时使用 |
 
 #### 自定义指令修改
 
@@ -219,7 +223,15 @@ AI 回复完成后，卡片底部会出现：
 
 > 拖拽使用系统底层 MIME 传输，不会触发 Cmd+C 导致的焦点丢失问题。100% 安全。
 
-### 4.7 连续对话
+### 4.8 角色工坊 (Persona Workshop)
+
+点击悬浮卡片标题栏右上角的 **「🎭」** 图标，即可打开角色工坊。
+在这里你可以：
+- 增删改查存放于 `personas/` 目录下的自定义 Prompt。
+- 即时编辑生效，无需重启软件。
+- 根据自己的工作习惯定制特定的 AI 角色（如：前端专家、法务顾问、小红书文案等）。
+
+### 4.9 连续对话
 
 点击卡片顶部的 **「💬 连续对话」** 标签页，可以进入多轮对话模式。
 
@@ -227,7 +239,7 @@ AI 回复完成后，卡片底部会出现：
 - AI 记住整个对话历史
 - 适合需要多轮追问的场景（如逐步深入分析一个问题）
 
-### 4.8 设置面板
+### 4.10 设置面板
 
 双击右键唤出卡片后，点击标题栏可以唤出设置面板（或从菜单栏触发）：
 
@@ -244,16 +256,12 @@ AI 回复完成后，卡片底部会出现：
 | 操作 | 命令 |
 |------|------|
 | 启动 UI | `bash scripts/start_ui.sh` |
-| 安装 Agent 守护进程 | `bash scripts/install_daemon.sh` |
-| 安装 Broker 守护进程 | `bash scripts/install_broker_daemon.sh` |
-| 卸载 Agent 守护进程 | `bash scripts/uninstall_daemon.sh` |
-| 卸载 Broker 守护进程 | `bash scripts/uninstall_broker_daemon.sh` |
-| 查看 Agent 实时日志 | `bash scripts/tail_logs.sh` 或 `tail -f ~/Library/Logs/ASU/agent_out.log` |
-| 查看 Broker 实时日志 | `tail -f ~/Library/Logs/ASU/broker_out.log` |
-| 检查 Agent 是否在线 | `curl http://127.0.0.1:18888/health` |
-| 检查 Broker 是否在线 | `curl -H "Authorization: Bearer $(cat ~/.asu_broker_token)" http://127.0.0.1:18889/health` |
-| 手动启动 Agent（调试） | `python asu_custom_agent.py` |
-| 手动启动 Broker（调试） | `cd asu_broker && python run.py` |
+| 启动 API Gateway | `uvicorn smart_copilot_api:app --host 0.0.0.0 --port 8000 --reload` |
+| 启动 Broker | `python asu_broker/run.py`（⚠️ 原生终端） |
+| 启动知识图谱 | 随 API Gateway 自动启动 |
+| 查看日志 | `tail -f ~/Library/Logs/ASU/agent_out.log` |
+| 检查 API 是否在线 | `curl http://127.0.0.1:8000/health` |
+| 检查 Broker 是否在线 | `curl http://127.0.0.1:18889/health` |
 
 ---
 
@@ -263,8 +271,8 @@ OpenCopilot 卡片标题栏有一个状态圆点：
 
 | 指示灯 | 含义 | 说明 |
 |:---:|---|---|
-| 🟢 绿色 | 正常 | Agent 在线，所有功能可用 |
-| 🔴 红色 | 离线 | Agent 未启动，UI 仍可打开但无法调用 AI。请检查守护进程是否安装并运行 |
+| 🟢 绿色 | 正常 | API Gateway + Broker 在线，所有功能可用 |
+| 🔴 红色 | 离线 | API Gateway 未启动，UI 仍可打开但无法调用 AI |
 
 ---
 
@@ -273,8 +281,8 @@ OpenCopilot 卡片标题栏有一个状态圆点：
 ### Q1：双击右键没反应？
 → 检查 **系统设置 → 隐私与安全性 → 辅助功能**，确认终端程序已被授权。
 
-### Q2：按钮显示红色/"OpenCopilot 核心守护服务未启动"？
-→ Agent 守护进程未运行。执行 `bash scripts/install_daemon.sh` 安装并启动。
+### Q2：按钮显示红色/"OpenCopilot 核心服务未启动"？
+→ API Gateway 未运行。启动命令：`uvicorn smart_copilot_api:app --port 8000`
 
 ### Q3：浏览器读取按钮不出现？
 → 确保 Broker 已安装且在**原生终端**中运行。执行 `bash scripts/install_broker_daemon.sh`。

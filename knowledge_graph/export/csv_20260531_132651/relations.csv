@@ -1,0 +1,168 @@
+id,source_id,target_id,type,description,weight
+"2af8d059-7bad-49af-9e61-bd7eeb0e329a","30cd00ab-7e08-4788-a839-4fbc3fd93a77","928afc21-8f0b-4ab5-b887-aec29ed8ec6a","documents","文档 Office_Prompt_Library_Design.md 描述了 ASU Custom Agent",1.0
+"3f41d89d-c740-4074-904a-11ca94424573","30cd00ab-7e08-4788-a839-4fbc3fd93a77","a7044135-6ccf-4e0d-b4a9-58447d660b67","documents","文档 Office_Prompt_Library_Design.md 描述了 Persona System",1.0
+"db8ec09a-fcdf-46f8-9f18-f008bf3fcdfc","30cd00ab-7e08-4788-a839-4fbc3fd93a77","1296d8fb-b2f3-4208-92a0-6776d3afe1a0","documents","文档 Office_Prompt_Library_Design.md 描述了 default.md",1.0
+"aa3cd5cb-2c91-4588-b33d-6fadf75a6824","30cd00ab-7e08-4788-a839-4fbc3fd93a77","f58e3065-70cf-44dd-8b98-70ad512c35e0","documents","文档 Office_Prompt_Library_Design.md 描述了 code.md",1.0
+"cbe51175-6194-447c-94b8-23abcc2e98ce","30cd00ab-7e08-4788-a839-4fbc3fd93a77","4cce5e9d-abfc-474d-9962-b8427beaed5f","documents","文档 Office_Prompt_Library_Design.md 描述了 translate.md",1.0
+"ae592af2-ef04-40c4-8ba5-fbda9d1031e1","30cd00ab-7e08-4788-a839-4fbc3fd93a77","d3bbbe0f-76c9-4d63-94fd-ad5322ea9865","documents","文档 Office_Prompt_Library_Design.md 描述了 polish.md",1.0
+"bc5c6866-4401-413b-a74e-31c71b4854c5","30cd00ab-7e08-4788-a839-4fbc3fd93a77","1f96e2a9-6d89-4ad9-be5a-3d56e1cbc768","documents","文档 Office_Prompt_Library_Design.md 描述了 custom.md",1.0
+"11dcc685-c111-4ee9-92d4-d1dc04b01a1a","30cd00ab-7e08-4788-a839-4fbc3fd93a77","157c1ef6-d00f-4086-ae0d-420cfb299951","documents","文档 Office_Prompt_Library_Design.md 描述了 revision.md",1.0
+"a637d8e0-1feb-459b-9ba7-276802d5e026","b02dd5bf-fbfc-4e24-a5b8-12fff76b44c9","7628b6ca-a17b-40f3-915d-bbcdfb0ae558","documents","文档 Office_UI_User_Guide.md 描述了 SSE",1.0
+"67717074-3c69-4da2-8674-c80b43511e52","5f72b02b-e94d-420d-a176-d56a470395f3","c35c1063-ca5c-41aa-a522-5626b94408fc","documents","文档 Smart_Copilot_API_Guide.md 描述了 Smart Copilot Platform",1.0
+"ab7e7a8f-791e-4896-90d3-aa103b6844df","5f72b02b-e94d-420d-a176-d56a470395f3","f56665a9-8fda-4593-8ad8-fee1705fc488","documents","文档 Smart_Copilot_API_Guide.md 描述了 /api/execute",1.0
+"79a1e6ad-b966-42f9-aca7-29761f12aae6","5f72b02b-e94d-420d-a176-d56a470395f3","4d78952a-648b-49a5-8a56-7a94c06f86ef","documents","文档 Smart_Copilot_API_Guide.md 描述了 /health",1.0
+"e6b32142-1045-4617-b749-dab979c3a30e","5f72b02b-e94d-420d-a176-d56a470395f3","bb4cc373-e902-4031-99c2-82d4993805b3","documents","文档 Smart_Copilot_API_Guide.md 描述了 /api/context/current",1.0
+"c56a7666-7b16-4024-ae41-4bac1805d310","5f72b02b-e94d-420d-a176-d56a470395f3","cf8704e5-77a7-4ef2-84db-089cc9ad6b17","documents","文档 Smart_Copilot_API_Guide.md 描述了 /api/context/inject",1.0
+"ddae99e6-43ae-4be2-8793-7f713780dd46","5f72b02b-e94d-420d-a176-d56a470395f3","e595f73f-6e93-4845-b489-4a1e775c21d8","documents","文档 Smart_Copilot_API_Guide.md 描述了 /api/context/history",1.0
+"b5d8360e-56ae-4822-bbb7-214eda02f858","5f72b02b-e94d-420d-a176-d56a470395f3","206b8271-e371-4eb8-9199-906942b894dc","documents","文档 Smart_Copilot_API_Guide.md 描述了 /api/execute/stream",1.0
+"bb460827-b22d-452e-a505-6b26deefd3dc","5f72b02b-e94d-420d-a176-d56a470395f3","f9ff865f-5665-44c7-a961-6c306500b789","documents","文档 Smart_Copilot_API_Guide.md 描述了 /api/probe/status",1.0
+"3e252f61-cf75-46c2-bc5a-706903d3eac4","5f72b02b-e94d-420d-a176-d56a470395f3","203fb769-1158-4d40-867f-ef987d46a530","documents","文档 Smart_Copilot_API_Guide.md 描述了 /api/probe/clipboard",1.0
+"7885110c-792b-4fca-a47e-0ce7c22b32bd","5f72b02b-e94d-420d-a176-d56a470395f3","96be8a2e-8a21-4c17-9760-2aa51a9bf10b","documents","文档 Smart_Copilot_API_Guide.md 描述了 /api/probe/selection",1.0
+"2968a751-c0a1-48f7-8d17-e207f2916e19","5f72b02b-e94d-420d-a176-d56a470395f3","e0f99499-3a45-41b2-bd14-306fa0ab5b71","documents","文档 Smart_Copilot_API_Guide.md 描述了 /api/probe/ide/context",1.0
+"c68e7920-e2cd-46aa-b597-467b070c5021","5f72b02b-e94d-420d-a176-d56a470395f3","78dce912-512a-48f3-bf0c-f46379b8da34","documents","文档 Smart_Copilot_API_Guide.md 描述了 /api/probe/browser",1.0
+"0de45853-2486-45d4-9c63-2f1328eb8652","5f72b02b-e94d-420d-a176-d56a470395f3","30d1b11b-a335-4db3-88b4-2f87bf4cbeb0","documents","文档 Smart_Copilot_API_Guide.md 描述了 /api/ppt/generate",1.0
+"3bcb327c-de7a-4b8e-8ca2-942ee0931111","5f72b02b-e94d-420d-a176-d56a470395f3","29918a91-4bcb-4c1b-8617-91a024df77a2","documents","文档 Smart_Copilot_API_Guide.md 描述了 /api/ppt/from-context",1.0
+"9bca5b85-0f73-4ada-b974-367532fb8a8e","5f72b02b-e94d-420d-a176-d56a470395f3","0e6afe87-4fee-4ca5-b90d-a94d14a41531","documents","文档 Smart_Copilot_API_Guide.md 描述了 /ws/events",1.0
+"27df2bd8-2193-4abd-9f04-a406092c9109","5f72b02b-e94d-420d-a176-d56a470395f3","04f46ad6-8ddc-48f6-a4aa-0bfcc2d14d4a","documents","文档 Smart_Copilot_API_Guide.md 描述了 smart_copilot_platform.py",1.0
+"86fad019-1129-4c60-9963-bb49fe1bfc41","5f72b02b-e94d-420d-a176-d56a470395f3","969da712-c075-40da-a328-b21d5296d2ff","documents","文档 Smart_Copilot_API_Guide.md 描述了 Smart_Copilot_API_Redesign.md",1.0
+"608b6fa0-c302-4038-8e4c-c17353470ff0","5f72b02b-e94d-420d-a176-d56a470395f3","2393a338-987c-45fa-b12d-53e5b7189902","documents","文档 Smart_Copilot_API_Guide.md 描述了 Context Management",1.0
+"1dc55c53-5c4c-4572-877d-b096becd5b6e","5f72b02b-e94d-420d-a176-d56a470395f3","8673761d-fb0f-421b-83e8-3f4e7b2e1ad1","documents","文档 Smart_Copilot_API_Guide.md 描述了 WebSocket",1.0
+"dc6cdb37-070d-49fa-8b4a-001c0e4d5e45","87454ce3-9064-4ce5-8584-73ebac5b5eb5","6b487498-aa67-48bf-9cd9-3a284f4c880c","documents","文档 USER_GUIDE.md 描述了 IDE Extension",1.0
+"cb958ad8-759a-4e92-898a-20f617a4d462","87454ce3-9064-4ce5-8584-73ebac5b5eb5","a4ddaf39-b890-45fb-bdb9-38659c8b14a2","documents","文档 USER_GUIDE.md 描述了 /tmp/asu_ide_port.txt",1.0
+"62a973cf-6f3d-49db-9def-15777bca2d60","87454ce3-9064-4ce5-8584-73ebac5b5eb5","93740cc2-8970-4a13-a299-4bc369f68ca1","documents","文档 USER_GUIDE.md 描述了 python asu_custom_agent.py",1.0
+"dd35cedc-b54a-4ac4-8467-4fbe8217149a","87454ce3-9064-4ce5-8584-73ebac5b5eb5","cbc4b602-8427-4c52-beea-a6b47f5cdd1c","documents","文档 USER_GUIDE.md 描述了 cd asu_broker && python run.py",1.0
+"8c901718-20cc-48b0-a9b4-4972561dc3e5","87454ce3-9064-4ce5-8584-73ebac5b5eb5","602563db-abc6-4806-a9e8-9bd4888dfe18","documents","文档 USER_GUIDE.md 描述了 Multimodal",1.0
+"aed40be4-74cb-4046-8cf0-c31fc1af4f62","c450dc3b-1fe0-4efa-b1af-1c2545ad637d","c6d4e654-d925-4de2-bf47-773b20ac735e","documents","文档 OpenCopilot_Architecture_Context_Extraction.md 描述了 Smart Copilot UI",1.0
+"08e3622d-093c-44f4-953c-cbe6780d7f31","c450dc3b-1fe0-4efa-b1af-1c2545ad637d","2499f2ff-d2dc-474d-8ae1-3cde750d44d7","documents","文档 OpenCopilot_Architecture_Context_Extraction.md 描述了 Context Envelope",1.0
+"b479a12d-7fcc-4765-bfae-082db4ef3cb3","c450dc3b-1fe0-4efa-b1af-1c2545ad637d","e7a2163b-2347-4553-8bc2-acdb1e07d9c9","documents","文档 OpenCopilot_Architecture_Context_Extraction.md 描述了 smart_copilot.py",1.0
+"9719f826-bf7d-416b-8aae-52fc9404d5ff","c450dc3b-1fe0-4efa-b1af-1c2545ad637d","fd313414-76c2-4551-af5f-8ae5eb9197de","documents","文档 OpenCopilot_Architecture_Context_Extraction.md 描述了 Session Persistence",1.0
+"18ace6ea-ba37-4bd0-896e-f7d5081c6b44","c450dc3b-1fe0-4efa-b1af-1c2545ad637d","cd6ee34a-e1ff-43d1-a800-715898f2a752","documents","文档 OpenCopilot_Architecture_Context_Extraction.md 描述了 LaunchAgent",1.0
+"8cec7bd1-36ff-4b4e-a9ac-d6d4c21611cb","1fbf66f6-e527-4d7a-97de-9a5536e34e09","82969b65-6269-4969-9386-4bc6671fc45f","documents","文档 OpenCopilot_Custom_Agent_Guide.md 描述了 Context Window Manager",1.0
+"4acd41dc-ae4f-42e6-8d07-c46e80c29b17","1fbf66f6-e527-4d7a-97de-9a5536e34e09","db63fef5-bc97-4944-8a5e-855a2ec1349f","documents","文档 OpenCopilot_Custom_Agent_Guide.md 描述了 /v1/agent/chat",1.0
+"7781f88d-3acc-4885-833f-0d96ecce41cf","1fbf66f6-e527-4d7a-97de-9a5536e34e09","b8255257-65d1-4e47-a41c-7813aca2c4e6","documents","文档 OpenCopilot_Custom_Agent_Guide.md 描述了 /diagnostics、/git-diff",1.0
+"35a974b6-33c7-483f-bdbc-8fbbd932a3de","1fbf66f6-e527-4d7a-97de-9a5536e34e09","9fdffba1-9bbb-4be3-be45-0f54d76c863c","documents","文档 OpenCopilot_Custom_Agent_Guide.md 描述了 config.json",1.0
+"94389a06-9b67-42ff-865a-0e56f762552b","1fbf66f6-e527-4d7a-97de-9a5536e34e09","087911f1-ba0e-411d-b178-bd806f8e3f62","documents","文档 OpenCopilot_Custom_Agent_Guide.md 描述了 asu_custom_agent.py",1.0
+"5fdc2e9d-81cc-46c5-90d9-6292337575c9","1fbf66f6-e527-4d7a-97de-9a5536e34e09","00c7a500-49f7-41bf-ad23-19d32b712105","documents","文档 OpenCopilot_Custom_Agent_Guide.md 描述了 llm_provider.py",1.0
+"8aff4b22-b511-4e89-83a7-cb7d52686a4e","1fbf66f6-e527-4d7a-97de-9a5536e34e09","541015ab-14c2-4cfc-a9e4-5617104b4d8d","documents","文档 OpenCopilot_Custom_Agent_Guide.md 描述了 personas/code.md",1.0
+"f74fe055-df51-42d0-ad5d-2654692654dc","1fbf66f6-e527-4d7a-97de-9a5536e34e09","01aab334-cd03-41ed-94c5-217f7ee4b96e","documents","文档 OpenCopilot_Custom_Agent_Guide.md 描述了 personas/translate.md",1.0
+"0836bf80-660b-4334-b31f-fb29a7972d39","1fbf66f6-e527-4d7a-97de-9a5536e34e09","f41d6507-ba5b-4a66-a89c-2045617857a4","documents","文档 OpenCopilot_Custom_Agent_Guide.md 描述了 personas/custom.md",1.0
+"33255baa-0dee-4479-bb12-934a4801414f","1fbf66f6-e527-4d7a-97de-9a5536e34e09","e6cbd36d-0a0d-4433-861b-2cacd6e8217a","documents","文档 OpenCopilot_Custom_Agent_Guide.md 描述了 personas/revision.md",1.0
+"8b6c1ac8-36e9-46df-b024-e6ad25b35706","1fbf66f6-e527-4d7a-97de-9a5536e34e09","83f73ff6-ff8a-4ef2-b811-3d73f4cc4d03","documents","文档 OpenCopilot_Custom_Agent_Guide.md 描述了 Vision Perception",1.0
+"957c77ff-10fb-4935-9812-446f21259f6d","f582773f-ea19-469c-9e35-b8b517049f76","c67b2300-9129-4113-be19-2139dc83838e","documents","文档 Quality_Evaluation_Framework.md 描述了 tools/evaluation_tools.py",1.0
+"2c9b8bea-8b11-45d3-9b4f-2f77fb974471","f582773f-ea19-469c-9e35-b8b517049f76","90b0f504-29c1-42d0-b58c-9b6cc066c3e9","documents","文档 Quality_Evaluation_Framework.md 描述了 evaluation_demo.py",1.0
+"0a513960-3e74-4d9b-a20b-861c07e67549","f582773f-ea19-469c-9e35-b8b517049f76","48f72a3c-7565-4930-aa89-c72b0ffd61d6","documents","文档 Quality_Evaluation_Framework.md 描述了 Template_Quality_Report.md",1.0
+"f27497dd-20fe-4d04-9b80-c87d57c35431","f582773f-ea19-469c-9e35-b8b517049f76","0c30c58b-0d50-4c27-8f80-90e855215b63","documents","文档 Quality_Evaluation_Framework.md 描述了 Scoring_Detail_Report.md",1.0
+"c66260c4-b633-40eb-908e-023833393c00","f582773f-ea19-469c-9e35-b8b517049f76","54a54bce-a294-4713-9769-ad64e5076bb2","documents","文档 Quality_Evaluation_Framework.md 描述了 Scoring_Workflow_Example.md",1.0
+"dfb9aedb-b9c4-4d9b-bb1a-311b725981dc","9d5451d0-d4c2-46c7-9b12-c636486dcc2e","d8e24531-75b0-4ed8-a0e2-5547f873b676","documents","文档 Template_Quality_Summary.md 描述了 tools/prompt_tools.py",1.0
+"b57d6b36-dc5a-4d0b-81d7-b81c7a1ec490","9d5451d0-d4c2-46c7-9b12-c636486dcc2e","d7a81c0d-555f-48d6-9853-8aafa07333da","documents","文档 Template_Quality_Summary.md 描述了 evaluate_templates.py",1.0
+"9b86fc61-8df6-473d-a3eb-151aa772916e","434f15db-2a7a-4eeb-8f90-24e64c2e8ca1","d5c683b4-73c5-419c-ac19-032669db597d","documents","文档 Phase3_Testing_Guide.md 描述了 Phase1_Testing_Guide.md",1.0
+"4a8a4829-5fe6-4786-b4d2-e28bb49031f6","434f15db-2a7a-4eeb-8f90-24e64c2e8ca1","47fd576c-6308-4b03-87a4-70cf01c15339","documents","文档 Phase3_Testing_Guide.md 描述了 Phase2_Testing_Guide.md",1.0
+"a11816be-d882-4547-abf4-17c7d266eaf4","434f15db-2a7a-4eeb-8f90-24e64c2e8ca1","dbbf6298-f99f-4287-ba9d-70df5313a83e","documents","文档 Phase3_Testing_Guide.md 描述了 Office_UI_Iteration_Plan.md",1.0
+"819d8fb4-528f-41cc-b885-53e4ab2ef4b3","434f15db-2a7a-4eeb-8f90-24e64c2e8ca1","5389a747-badf-4f5f-bf7a-249678e94a5b","documents","文档 Phase3_Testing_Guide.md 描述了 Office_UI_Optimization_Suggestions.md",1.0
+"aa2824d1-0635-4026-964c-ab5155bb3ff2","1c66967b-05d0-41a9-b4dd-031c920443a3","895a1b5b-94ea-4839-bb68-1a30283471d2","documents","文档 OpenCopilot_Development_TODO.md 描述了 /v1/agent/session/clear",1.0
+"71257550-4d15-4d3b-8a45-58237470899b","1c66967b-05d0-41a9-b4dd-031c920443a3","e85bdf45-bfaa-4a2a-8f2b-f7e82441380c","documents","文档 OpenCopilot_Development_TODO.md 描述了 /v1/agent/sessions",1.0
+"f0398ed8-512e-40a3-a15f-5396fbd0b387","1c66967b-05d0-41a9-b4dd-031c920443a3","ff9f1c40-8628-46c8-a961-a695999bc1b6","documents","文档 OpenCopilot_Development_TODO.md 描述了 /v1/agent/personas",1.0
+"4f9ae658-3720-4afa-a344-d53590f2a184","1c66967b-05d0-41a9-b4dd-031c920443a3","04a3d9b3-8d06-4729-b77c-c36f53fb8b8e","documents","文档 OpenCopilot_Development_TODO.md 描述了 /v1/agent/personas/reload",1.0
+"64355b2c-0fbb-4422-ae19-1415fa5073a3","1c66967b-05d0-41a9-b4dd-031c920443a3","9b4515b4-2c9f-425e-afcf-ba847e2bc3be","documents","文档 OpenCopilot_Development_TODO.md 描述了 /diagnostics",1.0
+"017c44aa-4e13-4e50-aa5f-65bc7c257337","1c66967b-05d0-41a9-b4dd-031c920443a3","aab3196f-0c01-494c-8e86-c63dc2687c9d","documents","文档 OpenCopilot_Development_TODO.md 描述了 /git-diff",1.0
+"ca12a004-3dc9-4045-9b75-6dfede80005e","1c66967b-05d0-41a9-b4dd-031c920443a3","916109d7-1e7f-40e8-af9e-cbd5dc292fa0","documents","文档 OpenCopilot_Development_TODO.md 描述了 /symbol",1.0
+"b0ef5d45-eb3c-45b6-8e1e-37f3dfde9526","1c66967b-05d0-41a9-b4dd-031c920443a3","d79fa913-64a4-4ac5-9525-ed7943663cba","documents","文档 OpenCopilot_Development_TODO.md 描述了 /workspace",1.0
+"ea123de1-d75e-4428-945b-5575f6988818","1c66967b-05d0-41a9-b4dd-031c920443a3","aac97ae6-a2ff-420a-8438-a45d3f57e6dc","documents","文档 OpenCopilot_Development_TODO.md 描述了 /api/batch/{batch_id}/status",1.0
+"54508ca6-bdda-4e15-9868-5b2bc153d627","1c66967b-05d0-41a9-b4dd-031c920443a3","7e42c805-ad11-4010-8cf2-eeb095e9ed61","documents","文档 OpenCopilot_Development_TODO.md 描述了 /18791",1.0
+"2906fdf3-6288-4f97-a526-01348c850523","1c66967b-05d0-41a9-b4dd-031c920443a3","849bd401-e858-49b8-b80a-06e789ec492e","documents","文档 OpenCopilot_Development_TODO.md 描述了 OpenCopilot_Next_Gen_Roadmap.md",1.0
+"2ae0a035-f338-455c-bd0d-ea71979b3de8","1c66967b-05d0-41a9-b4dd-031c920443a3","27c319df-2d57-4357-a7aa-58f9ea08bee3","documents","文档 OpenCopilot_Development_TODO.md 描述了 OpenCopilot_Local_Agent_Roadmap.md",1.0
+"f8c0a8d4-27b2-47f9-8a02-0e19ee2e9d58","1c66967b-05d0-41a9-b4dd-031c920443a3","c44b6f67-b4dc-4249-a02b-6d1c5309a619","documents","文档 OpenCopilot_Development_TODO.md 描述了 OpenCopilot_Global_Context_Awareness_Design.md",1.0
+"166d1db9-e39f-4c83-84ed-e6c7bed16e87","1c66967b-05d0-41a9-b4dd-031c920443a3","33c69c07-2eb0-485d-af53-c22bf59a3cf4","documents","文档 OpenCopilot_Development_TODO.md 描述了 IDE_Extension_Development_Guide.md",1.0
+"8554a086-a0dc-44e9-9574-51be7d11e7e6","1c66967b-05d0-41a9-b4dd-031c920443a3","286b3801-06ed-4e4c-b5a4-1eab67df3ecc","documents","文档 OpenCopilot_Development_TODO.md 描述了 OpenCopilot_Code_Review_Report.md",1.0
+"ffb2639b-f2cd-4fde-be40-9b50b0b2be66","1c66967b-05d0-41a9-b4dd-031c920443a3","2850e4d7-38e1-4756-9fe4-a212f90c50e3","documents","文档 OpenCopilot_Development_TODO.md 描述了 PPT CoCreation",1.0
+"85fa9767-aa1b-41b7-b30a-506d3498a40e","1c66967b-05d0-41a9-b4dd-031c920443a3","2f947029-d0e8-4a1a-9856-6843a0cfc4ff","documents","文档 OpenCopilot_Development_TODO.md 描述了 Dual Engine",1.0
+"c59106ec-0126-4e22-ae2c-d73b7afc8cd5","1c66967b-05d0-41a9-b4dd-031c920443a3","fdfb71ce-326f-4218-b7b8-29852ffcb95e","documents","文档 OpenCopilot_Development_TODO.md 描述了 Dual Layer",1.0
+"131e912f-cb50-4aa6-88cb-79ff610c004e","dcbc4328-ef8f-4cb6-a81c-eb9c7b8e93b1","fd8ba5dd-f4c8-4ecc-b4d1-449245dbdd64","documents","文档 UI_Architecture_Guide.md 描述了 ~/.asu_copilot/config.json",1.0
+"a74fb939-0511-421e-a962-1b68f700463f","121b7828-3776-478a-bd51-16672e88018d","4ca8c527-fa0b-4975-b7dd-04f7ea625287","documents","文档 Test_Running_Guide.md 描述了 core/theme_manager.py",1.0
+"da0eda4c-0024-4621-bd9b-0779bdb7b85e","121b7828-3776-478a-bd51-16672e88018d","0c763f03-f70b-488f-9351-69ab96ca5d2c","documents","文档 Test_Running_Guide.md 描述了 core/shortcut_manager.py",1.0
+"6323b4db-2469-4f71-992c-e4978b2d93d1","121b7828-3776-478a-bd51-16672e88018d","7b46478a-1146-4d17-92da-53f99d45b788","documents","文档 Test_Running_Guide.md 描述了 widgets/progress_widget.py",1.0
+"4652fc1d-b4e6-4776-8832-c24a53652125","121b7828-3776-478a-bd51-16672e88018d","e7bf6927-2efb-413d-aa6f-a00a29f316ea","documents","文档 Test_Running_Guide.md 描述了 widgets/settings_dialog.py",1.0
+"6c057e58-47ad-4409-b368-c9e70c71ef87","121b7828-3776-478a-bd51-16672e88018d","c70785e3-c1a0-4e77-943e-eb8f0397b281","documents","文档 Test_Running_Guide.md 描述了 widgets/context_menu.py",1.0
+"0c1cf87f-29a3-4971-b2a8-db90f22a2723","121b7828-3776-478a-bd51-16672e88018d","e7bb300e-bdbf-4eac-80b6-201cace5b3ea","documents","文档 Test_Running_Guide.md 描述了 widgets/terminology_dialog.py",1.0
+"89ae4a7f-7484-4b93-b0d3-022eb171be7d","121b7828-3776-478a-bd51-16672e88018d","7062a058-4ce9-4c03-88aa-94343653757e","documents","文档 Test_Running_Guide.md 描述了 widgets/file_drop_zone.py",1.0
+"f258587a-94ed-45d1-a3bd-be6283c0c683","121b7828-3776-478a-bd51-16672e88018d","a7c75d32-1f78-467f-afe6-baae84d43b7a","documents","文档 Test_Running_Guide.md 描述了 widgets/batch_dialog.py",1.0
+"11c7b63f-d639-4ffc-bb02-4258a748bc21","121b7828-3776-478a-bd51-16672e88018d","b4e9ab82-53bf-401c-b246-65fa0e825337","documents","文档 Test_Running_Guide.md 描述了 widgets/translation_memory.py",1.0
+"1201c73d-ec51-4ac7-9e6e-041aa453a62e","0463088a-9c6a-41ea-b355-f0b5d2790a13","6d5c1da3-a312-4734-9909-604d98b2d125","documents","文档 PPT_CoCreation_Improvement_Plan.md 描述了 /api/content/analyze",1.0
+"0158a17f-a74d-466e-b564-a787a021206d","0463088a-9c6a-41ea-b355-f0b5d2790a13","2d76463b-bd7d-4b64-87ea-ae79751afc36","documents","文档 PPT_CoCreation_Improvement_Plan.md 描述了 /api/content/convert",1.0
+"acf6546f-cff0-4490-b31f-daab63fb71de","0463088a-9c6a-41ea-b355-f0b5d2790a13","a20648d7-d98b-46d8-af87-7467c43d3a5c","documents","文档 PPT_CoCreation_Improvement_Plan.md 描述了 /api/content/update",1.0
+"e7412652-9c0e-4cc6-a5e0-984203016e2d","0463088a-9c6a-41ea-b355-f0b5d2790a13","f42aa8ce-3d04-410a-a966-5e5c1742eec4","documents","文档 PPT_CoCreation_Improvement_Plan.md 描述了 /api/content/preview",1.0
+"7f23babb-1430-4608-8c03-9281a364b5da","0463088a-9c6a-41ea-b355-f0b5d2790a13","8bce3da1-2fd6-40b6-b68c-c86957e99aaa","documents","文档 PPT_CoCreation_Improvement_Plan.md 描述了 /api/content/styles",1.0
+"325d7dcd-bdab-4092-9b7e-982b42241450","0463088a-9c6a-41ea-b355-f0b5d2790a13","03108a88-7550-41a4-aa33-d387940b5543","documents","文档 PPT_CoCreation_Improvement_Plan.md 描述了 ai_chat_widget.py",1.0
+"ba027e17-043b-47cd-a79d-de433193d77e","0463088a-9c6a-41ea-b355-f0b5d2790a13","07973f70-18b7-47ef-8f83-170b11861bae","documents","文档 PPT_CoCreation_Improvement_Plan.md 描述了 ppt_cocreation/content_converter.py",1.0
+"2a58b7ee-cebf-46ae-94b4-df1ee68739ae","0463088a-9c6a-41ea-b355-f0b5d2790a13","43e01c7e-46c4-42a7-8e85-3fbd90f58532","documents","文档 PPT_CoCreation_Improvement_Plan.md 描述了 content_converter.py",1.0
+"47b45557-6e6d-45cb-b252-cc38568dacd4","0463088a-9c6a-41ea-b355-f0b5d2790a13","d933644b-1648-4914-bc29-d3d4ed9c02d3","documents","文档 PPT_CoCreation_Improvement_Plan.md 描述了 preview_panel.py",1.0
+"5c9c7ec3-98ca-4ea8-8529-fd25696233fa","0463088a-9c6a-41ea-b355-f0b5d2790a13","088fd49f-371a-4f20-b904-0f1dd50184a8","documents","文档 PPT_CoCreation_Improvement_Plan.md 描述了 outline_panel.py",1.0
+"421818cf-3db9-40d4-af7f-cc697e620c3b","0463088a-9c6a-41ea-b355-f0b5d2790a13","29443151-da82-44a3-a1b3-073683e5872b","documents","文档 PPT_CoCreation_Improvement_Plan.md 描述了 cocreation_dialog.py",1.0
+"9ff9d591-e0bc-4857-9223-4560643e97d9","0463088a-9c6a-41ea-b355-f0b5d2790a13","3efec572-1b49-434a-9f26-3ecfecf4b80f","documents","文档 PPT_CoCreation_Improvement_Plan.md 描述了 content_conversion_api.py",1.0
+"89a870ff-9f5f-48b3-a664-aac8039ea925","39069529-4502-4e3d-bd25-58fbcbf92942","08410d99-7a6c-4fc1-ac07-215b41ade207","documents","文档 UI_Components_Integration_Guide.md 描述了 ~/.asu_copilot/themes.json",1.0
+"756408e6-e2f7-46db-ac50-a49eb872ff89","39069529-4502-4e3d-bd25-58fbcbf92942","7ed52d66-42a0-41c0-aa27-e35c294ca9c6","documents","文档 UI_Components_Integration_Guide.md 描述了 ~/.asu_copilot/shortcuts.json",1.0
+"752b5d79-1040-47c5-9cbd-3fbf4d4ae233","41fbab33-d101-4daf-860a-ce479b7d738f","53c095ed-fb3c-4172-8906-4bcf55e3d73d","documents","文档 README.md 描述了 ASU Broker",1.0
+"45d1fa7a-c04e-429a-8587-3ffd9e97e029","41fbab33-d101-4daf-860a-ce479b7d738f","d523ca5e-c77f-4beb-bfb8-135c52f60b8b","documents","文档 README.md 描述了 端口 18888",1.0
+"51273a43-6275-47dd-938c-5f29b10cb2d6","41fbab33-d101-4daf-860a-ce479b7d738f","1aa8e155-ae92-479f-a589-9b4173ec072b","documents","文档 README.md 描述了 cursor_effects.py",1.0
+"dee86a41-d7fe-408f-90c2-026f78e00cde","41fbab33-d101-4daf-860a-ce479b7d738f","4422f86c-a0cb-4bcd-8995-daae2601dc84","documents","文档 README.md 描述了 python3 asu_broker/run.py",1.0
+"c03006c7-fb04-4321-a576-ac70f463f6f2","a41a0b6e-023d-4883-bfd8-03f2df70e346","db4fd7fa-8e0e-4965-91db-d30c565b7dda","documents","文档 Testing_Tools_Guide.md 描述了 *_test.py",1.0
+"6636ef2f-358f-4afc-9f0d-e3de99eef194","a41a0b6e-023d-4883-bfd8-03f2df70e346","ce3f20b6-be41-43aa-92fa-c9a8926a318e","documents","文档 Testing_Tools_Guide.md 描述了 locustfile.py",1.0
+"7dbbcdd9-8201-47d0-a3df-4b2b296d9c8e","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","b4c0b9bf-b7d6-4718-9337-4981537309a4","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 Smart Copilot API",1.0
+"eb085710-3ce1-4e62-9c66-0c89d757bc2d","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","7ec03610-7696-4f47-88a5-f7451b0aaec2","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 /api/ppt/analyze",1.0
+"31fb9413-669d-47db-9103-47715ae5baba","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","6842cbee-23b8-424b-9ca5-9047b3a0ca58","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 /api/ppt/style/check",1.0
+"d9412b19-5589-40c7-b4ea-f12efc061226","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","b9ff54aa-ea68-43f2-9273-a9404d4596e6","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 /api/ppt/suggest",1.0
+"616c54f5-52af-4384-8fa5-e2d860c9e27f","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","0629d499-da2a-4a55-bfbe-c62100c37718","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 /api/ppt/chat",1.0
+"7e51c077-bc55-48c1-a337-6fa0c9022032","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","bdf1a384-a54a-4454-9ade-2e20c2cd6dbc","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 /api/session/create",1.0
+"1c542d71-e9cf-42d7-9701-1a127e7f3b83","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","4c510083-23ad-4301-aa54-d52271d2b7f1","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 /api/session/{id}",1.0
+"8de93eca-9776-4209-a02d-7251bc4a8153","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","9444e7e7-2b45-4536-b5f5-f5302beb8de8","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 /api/ppt/check",1.0
+"dc8cb1c4-496d-406a-a471-deb7c52c98dc","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","4da08396-0fa6-49be-b062-0be79307d251","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 /api/ppt/optimize",1.0
+"aa73a04a-360f-4ed4-8a2e-339acd88fb05","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","a3bbdd70-16c8-4762-9f35-edfa854e2669","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 /api/ppt/complete",1.0
+"af8b8cd8-f5f7-41fb-be29-d8d2ed08f9ae","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","030eeb1d-6de7-45a6-ab7d-f00aad8eb390","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 /api/internal/test",1.0
+"c106d7fb-e76e-443c-b3ba-5e595f6e249e","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","30f1784a-0535-4265-876d-b82a124856e8","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 /api/internal/verify",1.0
+"d24cbcf7-e898-4a49-805d-7fb649d30f57","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","48d808aa-d42b-4b6f-9430-40cbc1d96f1a","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 /api/internal/benchmark",1.0
+"6bbe21d3-2514-4976-bdd8-9673b2b7d067","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","a1e3daf5-a3a7-45f2-ab1a-1ae178b19d52","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 /api/internal/debug",1.0
+"d139d621-5105-45e5-8c71-e4b5c732d7e8","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","70f91759-5649-482f-be8b-1f5c2b382a5a","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 /api/internal/self-check",1.0
+"ad1bfaa5-7db2-4b29-96da-2851ec6426db","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","ca7c912f-7295-4ca4-b147-da20dff75d91","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 /api/session/{id}/context",1.0
+"ec611c90-0d3f-4968-ae10-ff7516465b43","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","ef92f329-10fe-4884-96f2-3ed89c773915","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 ppt_cocreation/context_analyzer.py",1.0
+"90c3be2d-2d44-4d41-b54d-3434be8e1497","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","7bc213ff-400f-42f6-9ddb-d0c16b1cf9f5","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 ppt_cocreation/suggestion_engine.py",1.0
+"567351b8-5be5-433c-a86c-a34b1c9fcd3b","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","f84fa0a8-4e7b-4a1f-a75f-fbfb141404e3","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 ppt_cocreation/conversation_manager.py",1.0
+"16de08f7-f3bf-4650-8894-95aa745aba1b","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","2ff5f355-9a73-4b30-b16f-94d7aff247f3","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 smart_copilot_api.py",1.0
+"b9085b73-2c3e-48d3-88ba-6bfbe0822069","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","43e3e280-99c8-41c3-8d7f-efde537982b8","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 ppt_cocreation/suggestion_bubble.py",1.0
+"e71aee1b-c360-44ea-811a-50d13e843568","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","3b6e8d56-3995-419a-936c-561e519b2d2e","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 ppt_cocreation/context_panel.py",1.0
+"bfea51b7-53a1-464b-885a-9494642a933b","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","bebac02e-9530-4b76-ad49-1b3e8f02d74c","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 PPT_CoCreation_Improvement_Strategy.md",1.0
+"7578d8ee-b62d-4a0e-aa44-fc99c3a455b7","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","92ad2b9c-661d-413c-92d7-5605fc47f607","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 PPT_CoCreation_UI_Improvement_Detailed.md",1.0
+"e87ada8b-31dc-42c3-a9ee-d8197fa672aa","e40ccfb5-72a6-4526-bc6e-0644bd8242ac","a640cbe3-e3d6-4d53-8572-c5ef4720bee8","documents","文档 PPT_CoCreation_Improvement_Master_Plan.md 描述了 PPT_CoCreation_API_Design.md",1.0
+"8dc2cd8e-7ee1-4e8c-9410-c2d91ce268f4","b4d99c9d-dbb2-42a0-b00c-e33bfd526546","954c092c-9135-4808-b5c3-167b1aada0e3","documents","文档 Project_Documentation_Overview.md 描述了 /v1/agent/chat，SSE",1.0
+"2b2af45f-6d13-4405-aa0e-eacd38ccab2f","b4d99c9d-dbb2-42a0-b00c-e33bfd526546","7424d168-b756-459c-89c2-028a425b29e8","documents","文档 Project_Documentation_Overview.md 描述了 端口 8088",1.0
+"7bf6e43d-0bbf-4a74-bc0d-b4d16c237cdf","b4d99c9d-dbb2-42a0-b00c-e33bfd526546","a60a5511-68d8-46e2-b3bf-6510038ae386","documents","文档 Project_Documentation_Overview.md 描述了 端口 8089",1.0
+"a7e2c2f3-db51-4c18-977a-457cdebddf9e","b4d99c9d-dbb2-42a0-b00c-e33bfd526546","01c5fd12-8742-41f9-9582-edea0d0772a8","documents","文档 Project_Documentation_Overview.md 描述了 ppt_generator.py",1.0
+"3ab7f8d3-e5d0-4c89-b0b1-d285bdcae808","b4d99c9d-dbb2-42a0-b00c-e33bfd526546","32069370-5784-40ef-ae86-9db2105b336d","documents","文档 Project_Documentation_Overview.md 描述了 OpenCopilot_Daemon_Deployment_Plan.md",1.0
+"654374ef-1e6f-4b7e-a5ff-edf787dcef9c","b4d99c9d-dbb2-42a0-b00c-e33bfd526546","1eeb564b-7e78-402d-b691-b0c68e74bb0e","documents","文档 Project_Documentation_Overview.md 描述了 docs/PPT_CoCreation_Design.md",1.0
+"a856c08d-e32a-466c-87c5-33208a81c9f9","b4d99c9d-dbb2-42a0-b00c-e33bfd526546","836af08a-2dd4-4d88-bbc2-5574919040b6","documents","文档 Project_Documentation_Overview.md 描述了 System_Running_Guide.md",1.0
+"512e80be-ee2a-408c-87e5-fd953d098ea4","b4d99c9d-dbb2-42a0-b00c-e33bfd526546","695ee5ce-49ab-437a-b121-7909d3cbf60e","documents","文档 Project_Documentation_Overview.md 描述了 Office_Assistant_Comparison.md",1.0
+"1db6385f-1bf1-47c2-bd16-f4465bf32bcf","b4d99c9d-dbb2-42a0-b00c-e33bfd526546","079a18cb-5a79-4524-99e4-5a5b98b56894","documents","文档 Project_Documentation_Overview.md 描述了 personas/{action_type}.md",1.0
+"bb746bb6-429b-43f5-a40e-814ceb2dc6e8","b4d99c9d-dbb2-42a0-b00c-e33bfd526546","80a6a3ce-e6b4-4bf3-9ff4-31719c09d080","documents","文档 Project_Documentation_Overview.md 描述了 UI_Improvement_Suggestions.md",1.0
+"26ca4f8b-93dd-4d8e-9d83-3d99d5a7bc83","ab853b42-fabc-4b8b-a11b-6454ce25cd34","fd7d0971-feba-4636-b6c6-211db6874413","documents","文档 test_docs/api_spec.md 描述了 /api/v2/order/create",1.0
+"53944cd4-b7af-4ca6-ba5b-02d914399d8f","ab853b42-fabc-4b8b-a11b-6454ce25cd34","ce6d743f-dcce-4517-b823-98795a8ab3fd","documents","文档 test_docs/api_spec.md 描述了 /api/v2/order/query",1.0
+"1eb7ddee-a780-436e-a2ed-78f8c067c152","ab853b42-fabc-4b8b-a11b-6454ce25cd34","2592ed8f-1f41-4611-bfe5-f8bf3bbf9e02","documents","文档 test_docs/api_spec.md 描述了 /api/v2/refund/create",1.0
+"c275c318-5d54-4b24-8519-8e29aae4e635","ab853b42-fabc-4b8b-a11b-6454ce25cd34","54ecb1cf-0dea-4a60-9455-78f2f74978ec","documents","文档 test_docs/api_spec.md 描述了 /api/v2/refund/query",1.0
+"bfcc5bc8-b264-4731-826d-0b28cdb2da01","61deefa8-da2d-4e16-8f7a-8fcbbce4143e","9ca2989f-7955-412f-89e4-5f44c59eadf9","documents","文档 test_docs/TEST_REPORT.md 描述了 /api/v1/system/fs/office/read",1.0
+"a3181864-8b50-478f-b674-c6d302b3e669","61deefa8-da2d-4e16-8f7a-8fcbbce4143e","e3e007a5-bc0e-447a-8546-187b20923538","documents","文档 test_docs/TEST_REPORT.md 描述了 /api/v2/",1.0
+"30de1e64-3bbb-4dd2-b687-2e39c4584878","61deefa8-da2d-4e16-8f7a-8fcbbce4143e","fb6e62b4-a6e0-49b4-b54e-4a097376d42a","documents","文档 test_docs/TEST_REPORT.md 描述了 python3 asu_custom_agent.py",1.0
+"9e479b24-da65-4647-895f-c4e0beb85a37","61deefa8-da2d-4e16-8f7a-8fcbbce4143e","25516f1a-b3e0-490e-b318-e0300643409b","documents","文档 test_docs/TEST_REPORT.md 描述了 office_probe.py",1.0
+"604255ac-7630-45b6-adc4-36cda4986872","61deefa8-da2d-4e16-8f7a-8fcbbce4143e","4e3a75b3-91c6-45aa-8a56-1d7eda98368d","documents","文档 test_docs/TEST_REPORT.md 描述了 project_plan.md",1.0
+"bac86e6b-469a-4117-9973-f583c9244d9a","61deefa8-da2d-4e16-8f7a-8fcbbce4143e","e7632caa-121e-46eb-90b3-eea1222edf2f","documents","文档 test_docs/TEST_REPORT.md 描述了 tech_spec.md",1.0
+"abd7bf0e-3fe3-4fd6-9269-dfb257c1567e","61deefa8-da2d-4e16-8f7a-8fcbbce4143e","fc875d3d-8b06-472b-a01b-0aa905e15229","documents","文档 test_docs/TEST_REPORT.md 描述了 meeting_notes.md",1.0
+"8ab4b94c-1d4b-439d-9030-0879b88ec4a9","61deefa8-da2d-4e16-8f7a-8fcbbce4143e","0b0001f1-e0a5-4dee-bb4c-1a933b5f76a5","documents","文档 test_docs/TEST_REPORT.md 描述了 budget_report.md",1.0
+"92dc085e-49de-45cd-bc3d-ef405dd3fa14","61deefa8-da2d-4e16-8f7a-8fcbbce4143e","c131df26-5d74-46b3-98e6-c4ca6e358e52","documents","文档 test_docs/TEST_REPORT.md 描述了 api_spec.md",1.0
+"8ecd382a-c598-4e28-9282-b226081d0ca9","61deefa8-da2d-4e16-8f7a-8fcbbce4143e","78b6ee24-a9d4-46c9-84ac-263e293fa331","documents","文档 test_docs/TEST_REPORT.md 描述了 mixed_release_note.md",1.0
+"a5c5dd37-44f3-4143-a973-150839fcfff0","530964de-af21-41d8-961d-f61bdcefb861","aa5f045e-3bd2-4664-9c3c-2b164af2646e","documents","文档 test_docs/mixed_release_note.md 描述了 /api/v1/system/capabilities)",1.0
+"24c61067-0156-4da1-9268-2de2df5362bf","530964de-af21-41d8-961d-f61bdcefb861","f036ef57-4c49-4a1d-bac5-0926984e9980","documents","文档 test_docs/mixed_release_note.md 描述了 system_probe_client.py",1.0
+"7c36c39a-31f2-4a32-af7a-7b86ba3d1b15","eb6abd1f-c347-4cf4-891e-6c6b656de11a","1ff50cce-84be-4f47-8a23-207b541bad50","documents","文档 build/bdist.macosx-26.0-arm64/python3.11-standalone/app/collect/test/ziptestdata/README.md 描述了 testdata_module_inside_zip.py",1.0
+"0bae4889-8e72-4d45-846d-b3a964d58f7a","eb6abd1f-c347-4cf4-891e-6c6b656de11a","eaec0a12-3d1e-49ff-9a7e-b83033e092e2","documents","文档 build/bdist.macosx-26.0-arm64/python3.11-standalone/app/collect/test/ziptestdata/README.md 描述了 __main__.py",1.0
+"200318c5-db3c-46a3-9803-fabb93f8b8ad","c6d4e654-d925-4de2-bf47-773b20ac735e","928afc21-8f0b-4ab5-b887-aec29ed8ec6a","depends_on","UI依赖Agent",1.0
+"7a675b7c-0646-43ab-8eed-69f5b8f85890","c6d4e654-d925-4de2-bf47-773b20ac735e","53c095ed-fb3c-4172-8906-4bcf55e3d73d","depends_on","UI依赖Broker",1.0
+"104889e6-0d49-4df9-b1b7-7fabd6914697","6b487498-aa67-48bf-9cd9-3a284f4c880c","928afc21-8f0b-4ab5-b887-aec29ed8ec6a","communicates_with","IDE与Agent通信",1.0
+"01784ed1-b95b-4b50-be9a-744cbabd4999","2850e4d7-38e1-4756-9fe4-a212f90c50e3","928afc21-8f0b-4ab5-b887-aec29ed8ec6a","depends_on","PPT功能依赖Agent",1.0
+"959fd92f-e8e1-4d76-b557-cc370f5b5a1f","a7044135-6ccf-4e0d-b4a9-58447d660b67","928afc21-8f0b-4ab5-b887-aec29ed8ec6a","configures","Persona配置Agent",1.0
+"0d9e074c-30ab-41e8-96f2-0869e14e5b1a","4bce8de5-75d5-45ad-8629-08555729efdf","928afc21-8f0b-4ab5-b887-aec29ed8ec6a","depends_on","测试关系",1.0

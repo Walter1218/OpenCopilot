@@ -1,38 +1,33 @@
 #!/bin/bash
 # ============================================================
-# ASU Agent 守护进程 一键卸载脚本
-# 功能：停止守护进程并从 LaunchAgents 中移除注册
-# 使用：bash scripts/uninstall_daemon.sh
+# 【⚠️ 废弃警告 DEPRECATED】
+# 该脚本在 P1 阶段架构重构前用于卸载 Agent 守护进程。
 # ============================================================
 
 set -e
 
-PLIST_DEST="$HOME/Library/LaunchAgents/com.asu.agent.plist"
 LABEL="com.asu.agent"
+PLIST_DEST="$HOME/Library/LaunchAgents/com.asu.agent.plist"
 
 echo "============================================================"
-echo "  ASU Agent 守护进程卸载"
+echo "  卸载旧版 ASU Agent 守护进程"
 echo "============================================================"
 
-# ---- 停止并卸载 ----
-if [ -f "$PLIST_DEST" ]; then
-    echo "🔄 正在停止守护进程..."
-    launchctl unload "$PLIST_DEST" 2>/dev/null || true
-    rm -f "$PLIST_DEST"
-    echo "✅ plist 已移除: $PLIST_DEST"
-else
-    echo "🟡 未找到已安装的守护进程配置，跳过卸载。"
-fi
-
-# ---- 二次确认进程已停止 ----
+# 如果已加载，则卸载
 if launchctl list 2>/dev/null | grep -q "$LABEL"; then
-    echo "⚠️  进程可能仍在运行，尝试强制停止..."
-    launchctl remove "$LABEL" 2>/dev/null || true
+    echo "🔄 正在卸载 $LABEL..."
+    launchctl unload "$PLIST_DEST" 2>/dev/null || true
+    echo "✅ 卸载成功"
+else
+    echo "ℹ️ 未检测到运行中的旧版 Agent 守护进程。"
 fi
 
-echo ""
+# 删除 plist 文件
+if [ -f "$PLIST_DEST" ]; then
+    rm "$PLIST_DEST"
+    echo "✅ 已删除配置文件: $PLIST_DEST"
+fi
+
 echo "============================================================"
-echo "  卸载完成！ASU Agent 守护进程已停止并从开机启动中移除。"
-echo "  日志文件保留在: ~/Library/Logs/ASU/"
-echo "  如需重新安装，请运行: bash scripts/install_daemon.sh"
+echo "  卸载完成！"
 echo "============================================================"

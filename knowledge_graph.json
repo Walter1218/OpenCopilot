@@ -1,0 +1,23 @@
+{
+  "id": "e8652916-8461-4b3f-a49d-69faeb447bdc",
+  "name": "OpenCopilot Knowledge Graph",
+  "description": "OpenCopilot 项目知识图谱",
+  "version": "1.0.0",
+  "entities": {
+    "t1": {
+      "id": "t1",
+      "name": "t1",
+      "entity_type": "tool",
+      "description": "",
+      "properties": {
+        "x": 1
+      },
+      "source_documents": [],
+      "created_at": "2026-06-04T17:55:49.727681",
+      "updated_at": "2026-06-04T17:55:49.727683"
+    }
+  },
+  "relations": {},
+  "created_at": "2026-06-04T17:55:49.727641",
+  "updated_at": "2026-06-04T17:55:49.727685"
+}

@@ -3,6 +3,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { exec } = require('child_process');
 
 let server;
 let lastActiveDocument = null;
@@ -173,6 +174,109 @@ function startServer() {
                 fileName: editor.document.fileName,
                 languageId: editor.document.languageId
             }));
+        }
+        // GET /diagnostics — 获取当前文件的诊断信息（报错、警告等）
+        else if (req.method === 'GET' && req.url === '/diagnostics') {
+            let document = vscode.window.activeTextEditor?.document || lastActiveDocument;
+            if (!document) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'No active editor' }));
+                return;
+            }
+            const diagnostics = vscode.languages.getDiagnostics(document.uri);
+            const formatted = diagnostics.map(d => ({
+                severity: d.severity, // 0: Error, 1: Warning, 2: Information, 3: Hint
+                message: d.message,
+                source: d.source,
+                code: d.code,
+                line: d.range.start.line + 1,
+                character: d.range.start.character + 1
+            }));
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                fileName: document.fileName,
+                diagnostics: formatted
+            }));
+        }
+        // GET /git-diff — 获取当前文件的 git diff
+        else if (req.method === 'GET' && req.url === '/git-diff') {
+            let document = vscode.window.activeTextEditor?.document || lastActiveDocument;
+            if (!document) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'No active editor' }));
+                return;
+            }
+            const filePath = document.fileName;
+            const dir = path.dirname(filePath);
+            exec(`git diff HEAD -- "${filePath}"`, { cwd: dir }, (error, stdout, stderr) => {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    fileName: filePath,
+                    diff: stdout || '',
+                    error: stderr || (error ? error.message : null)
+                }));
+            });
+        }
+        // GET /symbol — 获取当前光标所在的 AST 符号（函数、类等）
+        else if (req.method === 'GET' && req.url === '/symbol') {
+            const editor = vscode.window.activeTextEditor;
+            let document = editor?.document || lastActiveDocument;
+            if (!document) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'No active editor' }));
+                return;
+            }
+            if (!editor) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Need an active editor to determine cursor position' }));
+                return;
+            }
+
+            const position = editor.selection.active;
+
+            vscode.commands.executeCommand('vscode.executeDocumentSymbolProvider', document.uri)
+                .then(symbols => {
+                    if (!symbols) {
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ symbol: null }));
+                        return;
+                    }
+
+                    let targetSymbol = null;
+                    function findSymbol(symList) {
+                        for (const sym of symList) {
+                            if (sym.range.contains(position)) {
+                                targetSymbol = sym;
+                                if (sym.children && sym.children.length > 0) {
+                                    findSymbol(sym.children);
+                                }
+                            }
+                        }
+                    }
+                    findSymbol(symbols);
+
+                    if (targetSymbol) {
+                        const text = document.getText(targetSymbol.range);
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({
+                            name: targetSymbol.name,
+                            kind: targetSymbol.kind, // e.g. 11 for Function, 4 for Class
+                            text: text,
+                            range: {
+                                startLine: targetSymbol.range.start.line,
+                                startCol: targetSymbol.range.start.character,
+                                endLine: targetSymbol.range.end.line,
+                                endCol: targetSymbol.range.end.character
+                            }
+                        }));
+                    } else {
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ symbol: null }));
+                    }
+                }).catch(err => {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: err.message }));
+                });
         }
         else {
             res.writeHead(404, { 'Content-Type': 'text/plain' });

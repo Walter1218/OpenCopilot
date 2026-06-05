@@ -1,0 +1,11 @@
+logging:
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  level: INFO
+skill_architecture:
+  backoff_factor: 2.0
+  cache_size: 100
+  cache_ttl: 300
+  default_timeout: 30
+  max_concurrent: 10
+  max_retries: 3
+  retry_delay: 1.0

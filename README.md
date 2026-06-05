@@ -18,17 +18,18 @@
 
 ### The Current AI Assistant Landscape
 
-As of 2025-2026, desktop AI tools have split into three lanes:
+As of 2025-2026, desktop AI tools have split into four lanes:
 
 | Lane | Examples | Model | Limitation |
 |------|----------|-------|------------|
 | **IDE-Embedded** | Cursor / Trae / Windsurf / Copilot | AI inside the editor, Tab completion + Chat panel | Dead outside the IDE; useless for emails, PPTs, web browsing |
 | **Standalone Chat** | Claude Desktop / ChatGPT Desktop | Independent app + file/MCP access | Powerful tools, but you must "feed" content to them — copy-paste or upload |
-| **Autonomous Desktop Agent** | OpenClaw / Hermes / Solo | AI takes over the desktop, operates autonomously | Powerful but opaque; you can't intervene when it goes wrong; security risk |
+| **Desktop Office Agent** | WorkBuddy / QoderWork / DuMate | AI operates your desktop, generates Word/PPT/Excel | Fast first-draft generation, but riddled with hallucinations — fabricated numbers, broken formatting, logical gaps |
+| **Autonomous Desktop Agent** | OpenClaw / Hermes / Solo | AI takes over the desktop, fully autonomous | Powerful but opaque; you can't intervene when it goes wrong; security risk |
 
-### OpenCopilot's Fourth Lane: System-Level On-Demand Intervention
+### OpenCopilot's Fifth Lane: System-Level On-Demand Review & Fix
 
-OpenCopilot takes none of these paths. Its design philosophy: **AI is an extension of your right mouse button, not another window.**
+OpenCopilot takes none of these paths. Its design philosophy: **AI is an extension of your right mouse button, not another window.** And its killer use case: **when WorkBuddy generates a hallucination-filled draft, OpenCopilot helps you find and fix every problem — without leaving Office.**
 
 ```
 Cursor / Trae:
@@ -39,20 +40,25 @@ Claude Desktop:
   You → ⌘Tab to Claude → type description → ⌘C⌘V content → wait → ⌘C⌘V result → ⌘Tab back
   Coverage: ████████████ Any app, but you shuttle content
 
+WorkBuddy / QoderWork:
+  AI → generates full PPT/doc → you open it → spot a hallucination → ???
+  Coverage: ████████████ Fast draft, but you're stuck reviewing alone
+
 OpenClaw / Hermes:
   AI → operates desktop autonomously → you watch
   Coverage: ████████████ Any app, but you're a passenger
 
 OpenCopilot:
-  You're writing a report in Word → select a paragraph → double right-click → pick an action → result appears on card
-  Coverage: ████████████ Any app, and you're always driving
+  WorkBuddy outputs a draft → you open in Office → select suspicious content → double right-click → AI reviews & fixes it
+  Coverage: ████████████ Any app, you review while AI fixes
 ```
 
 **In one sentence**:
 - Cursor asks "what code do you want to write" — **you're in the IDE**
 - Claude Desktop asks "paste your content here" — **you're in a chat window**
+- WorkBuddy says "here's your draft" — **you're stuck reviewing hallucinations alone**
 - OpenClaw says "I'll handle it" — **you're in the passenger seat**
-- OpenCopilot — you select, you decide what to ask, you review the result — **you're in any app, and AI comes to you**
+- OpenCopilot — WorkBuddy generates, you review, OpenCopilot fixes — **AI drafts, you steer**
 
 ### The Office AI Era: They Generate, You Review & Fix
 

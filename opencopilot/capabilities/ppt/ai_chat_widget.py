@@ -13,8 +13,10 @@ AI 对话共创组件
 - 集成智能建议气泡和内容分析面板
 """
 
+import copy
 import json
 import re
+import uuid
 import urllib.request
 import urllib.error
 
@@ -183,12 +185,14 @@ class AIWorker(QThread):
         self.instruction = ""
         self.slides_data = []
         self.current_index = -1
+        self.session_id = ""
 
-    def set_task(self, instruction: str, slides_data: list, current_index: int):
+    def set_task(self, instruction: str, slides_data: list, current_index: int, session_id: str = ""):
         """设置任务"""
         self.instruction = instruction
         self.slides_data = slides_data
         self.current_index = current_index
+        self.session_id = session_id
 
     def run(self):
         """执行任务 - 通过统一 Agent Pipeline 调用器"""
@@ -198,7 +202,7 @@ class AIWorker(QThread):
 
             # 使用统一的 prompt 构建服务，context_source="ppt_editor" 会自动注入 PPT 编辑指令
             user_message = self._build_user_message()
-            session_id = f"ppt_cocreation_{id(self)}"
+            session_id = self.session_id or f"ppt_cocreation_{uuid.uuid4().hex[:8]}"
             
             obs = PipelineObservability.get_instance()
             obs.gui_log(f"PPT Cocreation START | text_len={len(user_message)}",
@@ -228,17 +232,44 @@ class AIWorker(QThread):
     # _build_system_prompt 已移除，PPT 编辑指令统一由 prompt_builder.py 的 CONTEXT_DESCRIPTIONS["ppt_editor"] 管理
     
     def _build_user_message(self) -> str:
-        """构建用户消息"""
-        return f"""当前幻灯片数据：
-```json
-{json.dumps({"slides": self.slides_data}, ensure_ascii=False, indent=2)}
-```
-
-当前正在编辑第 {self.current_index + 1} 页幻灯片。
-
-用户指令：{self.instruction}
-
-请优先使用局部修改模式，只返回修改指令 JSON（不要返回完整数据）："""
+        """构建用户消息 — 增量发送：当前页完整 + 相邻页摘要"""
+        total = len(self.slides_data)
+        idx = self.current_index if self.current_index >= 0 else 0
+        
+        # 当前页完整数据
+        current_slide = self.slides_data[idx] if self.slides_data and idx < total else {}
+        
+        # 相邻页摘要
+        prev_summary = self._summarize_slide(idx - 1) if idx > 0 else None
+        next_summary = self._summarize_slide(idx + 1) if idx < total - 1 else None
+        
+        parts = [f"PPT 总共 {total} 页，当前正在编辑第 {idx + 1} 页。"]
+        
+        if prev_summary:
+            parts.append(f"\n前一页（第 {idx} 页）摘要：{prev_summary}")
+        
+        parts.append(f"\n当前幻灯片数据：\n```json\n{json.dumps(current_slide, ensure_ascii=False, indent=2)}\n```")
+        
+        if next_summary:
+            parts.append(f"\n后一页（第 {idx + 2} 页）摘要：{next_summary}")
+        
+        parts.append(f"\n用户指令：{self.instruction}")
+        parts.append("\n请优先使用局部修改模式，只返回修改指令 JSON（不要返回完整数据）：")
+        
+        return "\n".join(parts)
+    
+    def _summarize_slide(self, idx: int) -> str:
+        """生成单页幻灯片摘要（token 友好）"""
+        if idx < 0 or idx >= len(self.slides_data):
+            return ""
+        slide = self.slides_data[idx]
+        title = slide.get("title", "(无标题)")
+        layout = slide.get("layout", "text_only")
+        items = slide.get("items", [])
+        # 只取前3个要点文本摘要
+        item_texts = [it.get("text", "")[:20] for it in items[:3] if it.get("text")]
+        items_str = "、".join(item_texts) if item_texts else "无要点"
+        return f"标题：{title}，版式：{layout}，要点：{items_str}"
 
 
 class AICopilotChatWidget(QWidget):
@@ -254,6 +285,12 @@ class AICopilotChatWidget(QWidget):
         self.slides_data = []
         self.current_index = -1
         self.worker = None
+        self._session_id = f"ppt_cocreation_{uuid.uuid4().hex[:8]}"  # 稳定会话 ID，支持多轮对话
+        
+        # Undo/Redo 操作栈
+        self._undo_stack = []       # [(slides_data_deepcopy, description), ...]
+        self._redo_stack = []       # [(slides_data_deepcopy, description), ...]
+        self._max_history = 50
         
         # 新增：智能建议和分析面板
         self.suggestion_manager = None
@@ -287,6 +324,53 @@ class AICopilotChatWidget(QWidget):
         
         # 异步探活
         QTimer.singleShot(500, self._check_agent_health)
+        
+        # Undo / Redo 按钮
+        self.undo_btn = QPushButton("↩")
+        self.undo_btn.setFixedSize(24, 24)
+        self.undo_btn.setToolTip("撤销 (Ctrl+Z)")
+        self.undo_btn.setEnabled(False)
+        self.undo_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3c3c3c;
+                color: #888;
+                border: none;
+                border-radius: 12px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #4a4a4a;
+                color: #d4d4d4;
+            }
+            QPushButton:disabled {
+                color: #555;
+            }
+        """)
+        self.undo_btn.clicked.connect(self.undo)
+        header.addWidget(self.undo_btn)
+        
+        self.redo_btn = QPushButton("↪")
+        self.redo_btn.setFixedSize(24, 24)
+        self.redo_btn.setToolTip("重做 (Ctrl+Y)")
+        self.redo_btn.setEnabled(False)
+        self.redo_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3c3c3c;
+                color: #888;
+                border: none;
+                border-radius: 12px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #4a4a4a;
+                color: #d4d4d4;
+            }
+            QPushButton:disabled {
+                color: #555;
+            }
+        """)
+        self.redo_btn.clicked.connect(self.redo)
+        header.addWidget(self.redo_btn)
         
         # 内容分析面板切换按钮
         self.analysis_toggle_btn = QPushButton("📊")
@@ -370,15 +454,10 @@ class AICopilotChatWidget(QWidget):
         shortcuts_layout = QHBoxLayout()
         shortcuts_layout.setSpacing(8)
         
-        shortcut_commands = [
-            ("换个标题", "请为当前幻灯片建议一个新标题"),
-            ("添加要点", "在当前幻灯片添加一个新的要点"),
-            ("换版式", "将当前幻灯片改为更合适的版式"),
-            ("精简内容", "精简当前幻灯片的内容，保留核心信息"),
-            ("转图表", "分析当前幻灯片的内容，将适合的数据转换为图表或表格"),
-        ]
+        shortcut_labels = ["换个标题", "添加要点", "换版式", "精简内容", "转图表"]
+        self._shortcut_buttons = []
         
-        for label, command in shortcut_commands:
+        for label in shortcut_labels:
             btn = QPushButton(label)
             btn.setStyleSheet("""
                 QPushButton {
@@ -395,8 +474,9 @@ class AICopilotChatWidget(QWidget):
                     border-color: #555;
                 }
             """)
-            btn.clicked.connect(lambda checked, cmd=command: self._execute_shortcut(cmd))
+            btn.clicked.connect(lambda checked, lbl=label: self._execute_shortcut(self._build_shortcut_command(lbl)))
             shortcuts_layout.addWidget(btn)
+            self._shortcut_buttons.append(btn)
         
         shortcuts_layout.addStretch()
         chat_layout.addLayout(shortcuts_layout)
@@ -571,6 +651,25 @@ class AICopilotChatWidget(QWidget):
         self.input_edit.setText(command)
         self._on_send()
     
+    def _build_shortcut_command(self, label: str) -> str:
+        """根据当前幻灯片上下文构建快捷指令"""
+        idx = self.current_index if self.current_index >= 0 else 0
+        slide = self.slides_data[idx] if self.slides_data and idx < len(self.slides_data) else {}
+        title = slide.get("title", "无标题")
+        items = slide.get("items", [])
+        items_summary = "、".join([item.get("text", "")[:30] for item in items[:5]]) or "无"
+        
+        context = f"（第{idx+1}页，标题：{title}" + (f"，要点：{items_summary}" if items_summary else "") + "）"
+        
+        commands = {
+            "换个标题": f"当前幻灯片{context}，请为它建议一个新的、更有吸引力的标题",
+            "添加要点": f"当前幻灯片{context}，请为它添加一个新的、有价值的要点",
+            "换版式": f"当前幻灯片{context}，版式为{slide.get('layout','text_only')}，请根据内容特点建议更合适的版式",
+            "精简内容": f"当前幻灯片{context}，请精简内容，保留最核心的信息",
+            "转图表": f"当前幻灯片{context}，请分析内容，将适合的部分转换为图表或表格展示",
+        }
+        return commands.get(label, f"请处理当前幻灯片{context}")
+    
     def _on_send(self):
         """发送消息"""
         instruction = self.input_edit.text().strip()
@@ -585,39 +684,82 @@ class AICopilotChatWidget(QWidget):
         self.input_edit.setEnabled(False)
         self.send_btn.setEnabled(False)
         
+        # 断开旧工作线程信号，防止信号泄漏
+        if hasattr(self, 'worker') and self.worker is not None:
+            try:
+                self.worker.response_ready.disconnect(self._on_ai_response)
+            except TypeError:
+                pass
+            try:
+                self.worker.error_occurred.disconnect(self._on_ai_error)
+            except TypeError:
+                pass
+            if self.worker.isRunning():
+                self.worker.quit()
+                self.worker.wait(2000)
         # 创建 AI 工作线程
         self.worker = AIWorker(self.agent_url)
         self.worker.response_ready.connect(self._on_ai_response)
         self.worker.error_occurred.connect(self._on_ai_error)
-        self.worker.set_task(instruction, self.slides_data, self.current_index)
+        self.worker.set_task(instruction, self.slides_data, self.current_index, self._session_id)
         self.worker.start()
     
     def _on_ai_response(self, response: str):
-        """AI 响应"""
-        # 尝试解析 JSON
+        """AI 响应 — 支持处理多个 JSON 动作"""
         try:
-            # 提取 JSON（支持嵌套花括号）
-            json_str = self._extract_json(response)
-            if json_str is None:
+            # 提取所有 JSON 对象（AI 可能返回多个操作指令）
+            json_objects = self._extract_all_json(response)
+            if not json_objects:
                 raise ValueError("无法找到 JSON 数据")
             
-            data = json.loads(json_str)
+            # 保存操作前状态（用于撤销）
+            self._push_undo_state(self.instruction[:40] + ("..." if len(self.instruction) > 40 else ""))
             
-            # 应用更新（支持局部更新和全量更新）
-            success_msg = self._apply_update(data)
+            success_msgs = []
+            first_error = None
             
-            # 显示成功消息
-            self._add_message(f"✅ {success_msg}", is_user=False)
+            for json_str in json_objects:
+                try:
+                    data = json.loads(json_str)
+                    msg = self._apply_update(data)
+                    success_msgs.append(msg)
+                except Exception as e:
+                    if first_error is None:
+                        first_error = str(e)
+                    continue
             
-            # 新增：触发建议气泡（如果当前幻灯片有优化空间）
-            self._trigger_suggestions_for_current_slide()
-            
-            # 新增：更新分析面板
-            if self.analysis_panel.isVisible():
-                self._analyze_current_slide()
+            if success_msgs:
+                # 构建带对比的反馈消息
+                if len(success_msgs) == 1 and isinstance(success_msgs[0], dict):
+                    # 单条改动，显示 before/after 对比
+                    self._add_message(self._format_diff_message(success_msgs[0]), is_user=False)
+                elif len(success_msgs) <= 2:
+                    # 多条改动，简洁汇总
+                    self._add_message("✅ 已完成以下修改：\n" + "\n".join(
+                        f"  • {m.get('summary', str(m))}" for m in success_msgs if isinstance(m, dict)
+                    ), is_user=False)
+                    # 为每条改动显示对比
+                    for m in success_msgs:
+                        if isinstance(m, dict) and m.get("old_value") is not None:
+                            self._add_message(self._format_diff_message(m), is_user=False)
+                else:
+                    summaries = [m.get("summary", str(m)) if isinstance(m, dict) else str(m) for m in success_msgs]
+                    self._add_message(f"✅ 已应用 {len(success_msgs)} 项更新", is_user=False)
+                    for s in summaries[:5]:
+                        self._add_message(f"  • {s}", is_user=False)
+                
+                # 触发建议气泡
+                self._trigger_suggestions_for_current_slide()
+                
+                # 更新分析面板
+                if self.analysis_panel.isVisible():
+                    self._analyze_current_slide()
+            elif first_error:
+                raise ValueError(first_error)
+            else:
+                raise ValueError("所有 JSON 对象解析失败")
         
         except json.JSONDecodeError as e:
-            # JSON 解析失败，显示原始响应
             self._add_message(f"⚠️ 无法解析 AI 返回的数据：{str(e)}\n\n原始响应：\n{response}", is_user=False)
         
         except Exception as e:
@@ -627,33 +769,73 @@ class AICopilotChatWidget(QWidget):
         self.input_edit.setEnabled(True)
         self.send_btn.setEnabled(True)
     
-    def _extract_json(self, text: str) -> str:
-        """从文本中提取 JSON"""
-        # 先尝试从 ```json ... ``` 代码块中提取
-        code_block = re.search(r'```(?:json)?\s*(.*?)\s*```', text, re.DOTALL)
-        if code_block:
-            block_content = code_block.group(1).strip()
-            if block_content.startswith('{') or block_content.startswith('['):
-                return self._find_json_object(block_content)
+    def _format_diff_message(self, diff_info: dict) -> str:
+        """格式化改动对比消息"""
+        old_val = diff_info.get("old_value")
+        new_val = diff_info.get("new_value")
+        summary = diff_info.get("summary", "")
+        field = diff_info.get("field", "")
         
-        # 尝试直接从全文中提取
-        return self._find_json_object(text)
+        if old_val is None and new_val is None:
+            return f"✅ {summary}"
+        
+        # 截断长文本
+        def _truncate(v, max_len=60):
+            s = str(v) if v is not None else ""
+            return s[:max_len] + "..." if len(s) > max_len else s
+        
+        old_str = _truncate(old_val) or "(空)"
+        new_str = _truncate(new_val) or "(空)"
+        
+        lines = [f"✅ {summary}"]
+        if field:
+            lines.append(f"  `{field}`: ~~{old_str}~~ → **{new_str}**")
+        else:
+            lines.append(f"  ~~{old_str}~~ → **{new_str}**")
+        
+        return "\n".join(lines)
     
-    def _find_json_object(self, text: str) -> str:
-        """用括号计数找到匹配的 JSON 对象"""
-        start = text.find('{')
-        if start == -1:
-            return None
+    def _extract_all_json(self, text: str) -> list:
+        """从文本中提取所有 JSON 对象（支持多个操作指令）"""
+        # 先尝试从 ```json ... ``` 代码块中提取
+        code_blocks = re.findall(r'```(?:json)?\s*(.*?)\s*```', text, re.DOTALL)
+        if code_blocks:
+            all_objects = []
+            for block_content in code_blocks:
+                block_content = block_content.strip()
+                if block_content.startswith('{') or block_content.startswith('['):
+                    all_objects.extend(self._find_all_json_objects(block_content))
+            if all_objects:
+                return all_objects
         
-        depth = 0
-        for idx in range(start, len(text)):
-            if text[idx] == '{':
-                depth += 1
-            elif text[idx] == '}':
-                depth -= 1
-                if depth == 0:
-                    return text[start:idx + 1]
-        return None
+        # 尝试直接从全文中提取所有 JSON 对象
+        return self._find_all_json_objects(text)
+    
+    def _find_all_json_objects(self, text: str) -> list:
+        """用括号计数找到所有匹配的 JSON 对象"""
+        objects = []
+        i = 0
+        n = len(text)
+        while i < n:
+            start = text.find('{', i)
+            if start == -1:
+                break
+            
+            depth = 0
+            for j in range(start, n):
+                if text[j] == '{':
+                    depth += 1
+                elif text[j] == '}':
+                    depth -= 1
+                    if depth == 0:
+                        objects.append(text[start:j + 1])
+                        i = j + 1
+                        break
+            else:
+                # 括号未闭合，跳过
+                i = start + 1
+        
+        return objects
     
     def _trigger_suggestions_for_current_slide(self):
         """为当前幻灯片触发建议气泡（通过 Pipeline）"""
@@ -715,8 +897,53 @@ class AICopilotChatWidget(QWidget):
         """建议被忽略"""
         pass  # 静默忽略
     
-    def _apply_update(self, data: dict) -> str:
-        """应用更新（支持局部更新和全量更新）"""
+    # ==========================================
+    # 内容转换本地 ETL（P2-3）
+    # ==========================================
+    
+    def _normalize_content_item(self, item: dict) -> dict:
+        """本地校验并补全内容转换数据（chart/table/flowchart）"""
+        ct = item.get("content_type", "")
+        
+        if ct == "table":
+            td = item.get("table_data", {})
+            if not isinstance(td, dict):
+                td = {}
+            td.setdefault("title", "数据表")
+            td.setdefault("columns", ["项目", "内容"])
+            td.setdefault("rows", [])
+            # 确保每行列数一致
+            col_count = len(td["columns"])
+            td["rows"] = [r[:col_count] if len(r) > col_count else r + [""] * (col_count - len(r)) for r in td["rows"]]
+            item["table_data"] = td
+            
+        elif ct == "chart":
+            cd = item.get("chart_data", {})
+            ct = item.get("chart_type", "bar")
+            if not isinstance(cd, dict):
+                cd = {}
+            cd.setdefault("title", "图表")
+            cd.setdefault("labels", [])
+            cd.setdefault("datasets", [])
+            # 确保 datasets 格式正确
+            if cd["datasets"] and isinstance(cd["datasets"][0], dict):
+                cd["datasets"][0].setdefault("label", "数据")
+                cd["datasets"][0].setdefault("data", [])
+                cd["datasets"][0].setdefault("color", "#007bff")
+            item["chart_data"] = cd
+            
+        elif ct == "flowchart":
+            fd = item.get("flowchart_data", {})
+            if not isinstance(fd, dict):
+                fd = {}
+            fd.setdefault("title", "流程图")
+            fd.setdefault("steps", [])
+            item["flowchart_data"] = fd
+        
+        return item
+    
+    def _apply_update(self, data: dict) -> dict:
+        """应用更新（支持局部更新和全量更新），返回 diff 字典"""
         action = data.get("action")
         
         # 局部更新模式
@@ -735,13 +962,18 @@ class AICopilotChatWidget(QWidget):
         
         # 全量更新模式（兼容旧模式）
         if "slides" in data:
+            old_len = len(self.slides_data)
+            new_len = len(data["slides"])
             self.slides_data = data["slides"]
             self.slides_updated.emit(self.slides_data)
-            return "已全量更新幻灯片数据"
+            return {
+                "summary": f"已全量更新幻灯片（{old_len}页 → {new_len}页）",
+                "field": "slides", "old_value": f"{old_len}页", "new_value": f"{new_len}页"
+            }
         
         raise ValueError("无法识别的更新格式")
     
-    def _apply_field_update(self, data: dict) -> str:
+    def _apply_field_update(self, data: dict) -> dict:
         """应用字段更新"""
         slide_idx = data.get("slide_index")
         field = data.get("field")
@@ -753,11 +985,15 @@ class AICopilotChatWidget(QWidget):
         if not (0 <= slide_idx < len(self.slides_data)):
             raise ValueError(f"幻灯片索引 {slide_idx} 超出范围")
         
+        old_value = self.slides_data[slide_idx].get(field)
         self.slides_data[slide_idx][field] = value
         self.slides_updated.emit(self.slides_data)
-        return f"已更新第 {slide_idx + 1} 页的 {field}"
+        return {
+            "summary": f"已更新第 {slide_idx + 1} 页的 {field}",
+            "field": field, "old_value": old_value, "new_value": value
+        }
     
-    def _apply_item_update(self, data: dict) -> str:
+    def _apply_item_update(self, data: dict) -> dict:
         """应用要点更新"""
         slide_idx = data.get("slide_index")
         item_idx = data.get("item_index")
@@ -771,11 +1007,15 @@ class AICopilotChatWidget(QWidget):
         if not (0 <= item_idx < len(items)):
             raise ValueError(f"要点索引 {item_idx} 超出范围")
         
+        old_value = items[item_idx].get(field)
         items[item_idx][field] = value
         self.slides_updated.emit(self.slides_data)
-        return f"已更新第 {slide_idx + 1} 页第 {item_idx + 1} 个要点"
+        return {
+            "summary": f"已更新第 {slide_idx + 1} 页第 {item_idx + 1} 个要点的 {field}",
+            "field": field, "old_value": old_value, "new_value": value
+        }
     
-    def _apply_add_item(self, data: dict) -> str:
+    def _apply_add_item(self, data: dict) -> dict:
         """添加要点"""
         slide_idx = data.get("slide_index")
         item = data.get("item")
@@ -783,11 +1023,19 @@ class AICopilotChatWidget(QWidget):
         if not (0 <= slide_idx < len(self.slides_data)):
             raise ValueError(f"幻灯片索引 {slide_idx} 超出范围")
         
+        # 内容转换项：本地 ETL 校验 & 补全
+        item = self._normalize_content_item(item)
+        
+        old_count = len(self.slides_data[slide_idx].get("items", []))
         self.slides_data[slide_idx].setdefault("items", []).append(item)
         self.slides_updated.emit(self.slides_data)
-        return f"已在第 {slide_idx + 1} 页添加新要点"
+        item_preview = item.get("text", item.get("content_type", "要点"))[:30]
+        return {
+            "summary": f"已在第 {slide_idx + 1} 页添加要点",
+            "field": "items", "old_value": f"{old_count}个要点", "new_value": f"+ {item_preview}"
+        }
     
-    def _apply_remove_item(self, data: dict) -> str:
+    def _apply_remove_item(self, data: dict) -> dict:
         """删除要点"""
         slide_idx = data.get("slide_index")
         item_idx = data.get("item_index")
@@ -799,11 +1047,15 @@ class AICopilotChatWidget(QWidget):
         if not (0 <= item_idx < len(items)):
             raise ValueError(f"要点索引 {item_idx} 超出范围")
         
+        removed_text = items[item_idx].get("text", "")[:30]
         items.pop(item_idx)
         self.slides_updated.emit(self.slides_data)
-        return f"已删除第 {slide_idx + 1} 页第 {item_idx + 1} 个要点"
+        return {
+            "summary": f"已删除第 {slide_idx + 1} 页第 {item_idx + 1} 个要点",
+            "field": "items", "old_value": f"'{removed_text}'", "new_value": "(已删除)"
+        }
     
-    def _apply_add_slide(self, data: dict) -> str:
+    def _apply_add_slide(self, data: dict) -> dict:
         """添加幻灯片"""
         index = data.get("index", len(self.slides_data))
         slide = data.get("slide")
@@ -811,20 +1063,29 @@ class AICopilotChatWidget(QWidget):
         if not (0 <= index <= len(self.slides_data)):
             raise ValueError(f"插入位置 {index} 超出范围")
         
+        old_count = len(self.slides_data)
         self.slides_data.insert(index, slide)
         self.slides_updated.emit(self.slides_data)
-        return f"已在第 {index + 1} 页位置插入新幻灯片"
+        return {
+            "summary": f"已在第 {index + 1} 页位置插入新幻灯片",
+            "field": "slides", "old_value": f"{old_count}页", "new_value": f"{old_count + 1}页"
+        }
     
-    def _apply_remove_slide(self, data: dict) -> str:
+    def _apply_remove_slide(self, data: dict) -> dict:
         """删除幻灯片"""
         index = data.get("index")
         
         if not (0 <= index < len(self.slides_data)):
             raise ValueError(f"幻灯片索引 {index} 超出范围")
         
+        old_count = len(self.slides_data)
+        removed_title = self.slides_data[index].get("title", "")[:30]
         self.slides_data.pop(index)
         self.slides_updated.emit(self.slides_data)
-        return f"已删除第 {index + 1} 页幻灯片"
+        return {
+            "summary": f"已删除第 {index + 1} 页幻灯片（{removed_title}）",
+            "field": "slides", "old_value": f"{old_count}页", "new_value": f"{old_count - 1}页"
+        }
     
     def _on_ai_error(self, error: str):
         """AI 错误"""
@@ -834,6 +1095,74 @@ class AICopilotChatWidget(QWidget):
         self.input_edit.setEnabled(True)
         self.send_btn.setEnabled(True)
     
+    # ==========================================
+    # Undo / Redo 操作栈
+    # ==========================================
+    
+    def _push_undo_state(self, description: str):
+        """保存当前状态到撤销栈"""
+        self._undo_stack.append((copy.deepcopy(self.slides_data), description))
+        if len(self._undo_stack) > self._max_history:
+            self._undo_stack.pop(0)
+        self._redo_stack.clear()
+        self._update_undo_redo_buttons()
+    
+    def undo(self):
+        """撤销上一次操作"""
+        if not self._undo_stack:
+            return
+        # 当前状态 push 到 redo 栈
+        self._redo_stack.append((copy.deepcopy(self.slides_data), self._undo_stack[-1][1]))
+        # 恢复上一状态
+        prev_data, description = self._undo_stack.pop()
+        self.slides_data = prev_data
+        self.slides_updated.emit(self.slides_data)
+        self._add_message(f"↩ 已撤销：{description}", is_user=False)
+        self._update_undo_redo_buttons()
+    
+    def redo(self):
+        """重做上一次撤销的操作"""
+        if not self._redo_stack:
+            return
+        # 当前状态 push 到 undo 栈
+        self._undo_stack.append((copy.deepcopy(self.slides_data), self._redo_stack[-1][1]))
+        # 恢复 redo 状态
+        next_data, description = self._redo_stack.pop()
+        self.slides_data = next_data
+        self.slides_updated.emit(self.slides_data)
+        self._add_message(f"↪ 已重做：{description}", is_user=False)
+        self._update_undo_redo_buttons()
+    
+    def _update_undo_redo_buttons(self):
+        """更新撤销/重做按钮状态"""
+        self.undo_btn.setEnabled(len(self._undo_stack) > 0)
+        self.undo_btn.setToolTip(
+            f"撤销 ({len(self._undo_stack)}) — Ctrl+Z" if self._undo_stack else "无可撤销操作"
+        )
+        self.redo_btn.setEnabled(len(self._redo_stack) > 0)
+        self.redo_btn.setToolTip(
+            f"重做 ({len(self._redo_stack)}) — Ctrl+Y" if self._redo_stack else "无可重做操作"
+        )
+    
+    def keyPressEvent(self, event):
+        """键盘事件：Ctrl+Z 撤销，Ctrl+Y 重做"""
+        from PyQt6.QtCore import Qt
+        modifiers = event.modifiers()
+        
+        if modifiers == Qt.KeyboardModifier.ControlModifier:
+            if event.key() == Qt.Key.Key_Z:
+                self.undo()
+                return
+            elif event.key() == Qt.Key.Key_Y:
+                self.redo()
+                return
+        
+        super().keyPressEvent(event)
+    
+    # ==========================================
+    # 主题
+    # ==========================================
+
     def apply_theme(self, theme: dict):
         """应用主题样式"""
         # 更新滚动区域样式（聊天显示区域）

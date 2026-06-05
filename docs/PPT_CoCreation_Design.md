@@ -89,7 +89,22 @@
   - 支持转换类型：表格、柱状图、折线图、饼图、流程图
   - 在 `preview_panel.py` 中实现表格和图表渲染
   - 测试验证：107/107 全部通过
+- **Phase 2.5: AI 共创交互优化 (已完成 ✅)**
+  - 修复多轮对话上下文丢失：稳定 session_id，同一对话框内共享会话历史
+  - 快捷指令注入上下文：自动携带当前幻灯片标题/要点/版式信息
+  - Undo/Redo 操作栈：50 级历史，Ctrl+Z/Y 快捷键 + ↩/↪ 按钮
+  - 改动对比反馈：AI 修改后显示 `~~旧值~~ → **新值**` 的 before/after 对比
+  - 增量数据发送：仅发送当前页 + 前后各 1 页摘要，大幅降低 token 消耗
+  - 内容转换本地 ETL：chart/table/flowchart 数据自动校验补全默认值
 - **Phase 3: 视觉资产增强 (Visual Asset)**
   - 解析 JSON 中的 `visual_hint`，在渲染时自动调用在线无版权图库 API，或通过本地模型生成配图填入版式。
 - **Phase 4: 逆向解析 (Reverse Engineering)**
-  - 允许用户不仅能生成 PPT，还能把现有的丑陋 PPT 拖进去，系统逆向提取内容为 JSON，然后应用新主题重新渲染，实现“一键美化”。
+  - 允许用户不仅能生成 PPT，还能把现有的丑陋 PPT 拖进去，系统逆向提取内容为 JSON，然后应用新主题重新渲染，实现"一键美化"。
+
+## 六、交互迭代方案
+
+> 详细的下一代交互迭代方案（10 项交互改进 + 6 项功能迭代 + 架构改进 + Sprint 路线图）已独立成文：
+>
+> **→ [`PPT_CoCreation_Iteration_Plan.md`](./PPT_CoCreation_Iteration_Plan.md)**
+>
+> 交互稿 (Canvas Wireframe) 也已配套输出，包含 Main Layout / AI Detail / Features 三个视图。

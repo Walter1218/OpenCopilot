@@ -188,6 +188,11 @@ def process(data: list[str], timeout: int = 30) -> dict:
 | 内容输入 | 拖入文档 / 输入主题 | 结构化素材 |
 | 大纲生成 | AI 分析内容 → 规划幻灯片结构 | JSON 大纲（标题 + 每页要点） |
 | 共创编辑 | 自然语言对话修改（"把这页改成左右对比布局"） | 实时幻灯片更新 |
+| 多轮对话 | AI 记住历史操作，支持渐进式修改 | 上下文感知响应 |
+| 快捷指令 | 5 个上下文感知按钮，自动注入当前幻灯片信息 | 语义化 AI 请求 |
+| 撤销/重做 | Ctrl+Z/Y 撤销重做，50 级操作历史 | 操作回滚 |
+| 改动对比 | AI 修改后自动显示 ~~旧值~~ → **新值** 对比 | 透明变更 |
+| 内容转换 | 文本 ↔ 表格/图表/流程图，本地 ETL 自动校验补全 | 结构化内容 |
 | 内容分析 | 选中单页 → AI 分析逻辑、数据、表达 | 分析面板 |
 | 优化建议 | AI 审视全片 → 提出 1-2 条优化建议 | 建议气泡 |
 
@@ -353,9 +358,22 @@ OpenCopilot/
 │   ├── providers/                #   LLM 提供者
 │   ├── observability/            #   可观测性模块
 │   └── shared/                   #   共享工具 (prompt 构建/context 归一化)
-├── api/                          # API 网关 (:8000)
-│   ├── app.py                    #   路由工厂
-│   └── routers/                  #   12 个独立路由模块
+├── api/                          # API 网关 (:8000，统一入口)
+│   ├── app.py                    #   路由工厂（统一注册中心）
+│   └── routers/                  #   16+ 独立路由模块
+│       ├── chat.py               #     聊天/流式/WebSocket
+│       ├── system.py             #     系统状态
+│       ├── file.py               #     文件操作
+│       ├── config.py             #     配置管理
+│       ├── persona.py            #     人设管理
+│       ├── ppt.py                #     PPT 生成/分析/建议/质量检查
+│       ├── text.py               #     文本处理
+│       ├── knowledge.py          #     知识检索
+│       ├── coding.py             #     代码审查
+│       ├── tasks.py              #     任务管理
+│       ├── evaluation.py         #     评估/评分/本地评估
+│       ├── search.py             #     统一搜索 (NEW)
+│       └── memory.py             #     记忆管理 (NEW)
 ├── gui/                          # PyQt6 桌面应用
 │   ├── main.py                   #   入口 + CopilotManager
 │   ├── window.py                 #   AICardWindow 核心悬浮卡片
@@ -367,7 +385,8 @@ OpenCopilot/
 ├── tests/                        # 测试 (unit / e2e / ablation)
 ├── scripts/                      # 守护进程/启动脚本
 ├── smart_copilot.py              # GUI 入口
-├── smart_copilot_api.py          # API 入口
+├── smart_copilot_api.py          # API 入口（统一端口 8000）
+├── smart_copilot_platform.py     # ⚠️ 已废弃（合并到 smart_copilot_api.py）
 └── pyproject.toml
 ```
 
@@ -392,6 +411,7 @@ OpenCopilot/
 | P2 | Persona 工坊、PPT 共创、知识图谱、Skill 架构 | ✅ |
 | P3 | Agent Loop 重构、OpenClaw 单进程迁移、Pipeline 统一 | ✅ |
 | P4 | v4.0 分层架构重构、代码治理、全链路可观测性 | ✅ |
+| P4.1 | **AI 助手开发改革**：API 统一（双入口→单入口）、路由补全（+5模块）、空壳端点填充、ContextWindowManager 统一 | ✅ |
 | P5 | IDE Extension v2、Broker 产品化 | 🔶 进行中 |
 | P6 | 上下文主动感知、多 Agent 协作 | 📋 计划中 |
 

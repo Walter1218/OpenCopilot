@@ -83,26 +83,16 @@ CONTEXT_DESCRIPTIONS = {
         "3. **幻灯片操作**：\n"
         '   - 添加幻灯片：{"action": "add_slide", "index": 2, "slide": {"title": "新页面", "type": "content", "layout": "text_only", "items": []}}\n'
         '   - 删除幻灯片：{"action": "remove_slide", "index": 2}\n\n'
-        "4. **内容转换**（当用户要求转换为图表/表格/图片时）：\n\n"
-        "   **重要：从非结构化内容中提取数据的技巧**\n\n"
-        '   当用户说"把这个内容做成表格"或"用图表展示"时，你需要：\n'
-        "   1. 分析内容结构，识别出可提取的数据模式\n"
-        "   2. 从自然语言中提取关键信息（人物、属性、数值等）\n"
-        "   3. 将提取的数据组织成表格/图表格式\n\n"
-        "   **常见提取模式**：\n"
-        "   - **人物属性**：张三25岁在北京 -> 列：[姓名, 年龄, 城市]\n"
-        "   - **产品对比**：产品A卖100万，产品B卖200万 -> 列：[产品, 销量]\n"
-        "   - **时间序列**：Q1增长10%，Q2增长15% -> 列：[季度, 增长率]\n"
-        "   - **列表描述**：优点：便宜、快速、可靠 -> 列：[优点]\n\n"
-        "   **转换指令格式**：\n\n"
+        "4. **内容转换**（当用户要求转换为图表/表格/图片时）：\n"
+        "   直接使用 add_item 返回转换后的结构化数据。AI 自动从幻灯片当前内容中提取数据并组织为以下格式：\n\n"
         "   a) 转为表格：\n"
         '   {"action": "add_item", "slide_index": 0, "item": {"content_type": "table", "table_data": {"title": "标题", "columns": ["列1", "列2"], "rows": [["值1", "值2"]]}}}\n\n'
         "   b) 转为柱状图（适合对比）：\n"
         '   {"action": "add_item", "slide_index": 0, "item": {"content_type": "chart", "chart_type": "bar", "chart_data": {"title": "标题", "labels": ["标签1", "标签2"], "datasets": [{"label": "系列", "data": [10, 20], "color": "#007bff"}]}}}\n\n'
         "   c) 转为折线图（适合趋势）：\n"
-        '   {"action": "add_item", "slide_index": 0, "item": {"content_type": "chart", "chart_type": "line", "chart_data": {...}}}\n\n'
+        '   {"action": "add_item", "slide_index": 0, "item": {"content_type": "chart", "chart_type": "line", "chart_data": {"title": "...", "labels": [...], "datasets": [...]}}}\n\n'
         "   d) 转为饼图（适合占比）：\n"
-        '   {"action": "add_item", "slide_index": 0, "item": {"content_type": "chart", "chart_type": "pie", "chart_data": {...}}}\n\n'
+        '   {"action": "add_item", "slide_index": 0, "item": {"content_type": "chart", "chart_type": "pie", "chart_data": {"title": "...", "labels": [...], "datasets": [...]}}}\n\n'
         "   e) 转为流程图（适合步骤）：\n"
         '   {"action": "add_item", "slide_index": 0, "item": {"content_type": "flowchart", "flowchart_data": {"title": "标题", "steps": ["步骤1", "步骤2"]}}}\n\n'
         "   f) 添加图片（使用占位符或描述）：\n"

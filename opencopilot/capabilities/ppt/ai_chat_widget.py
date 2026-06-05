@@ -194,22 +194,32 @@ class AIWorker(QThread):
         """执行任务 - 通过统一 Agent Pipeline 调用器"""
         try:
             from opencopilot.agent.caller import call_agent_pipeline_sync
+            from opencopilot.agent.observability import PipelineObservability
 
             # 使用统一的 prompt 构建服务，context_source="ppt_editor" 会自动注入 PPT 编辑指令
             user_message = self._build_user_message()
+            session_id = f"ppt_cocreation_{id(self)}"
+            
+            obs = PipelineObservability.get_instance()
+            obs.gui_log(f"PPT Cocreation START | text_len={len(user_message)}",
+                        session_id=session_id, event="PPT_COCREATION_START")
 
             full_text = ""
             for chunk in call_agent_pipeline_sync(
                 text=user_message,
                 action_type="chat",
-                session_id=f"ppt_cocreation_{id(self)}",
+                session_id=session_id,
                 context_source="ppt_editor",
             ):
                 full_text += chunk
 
             if full_text:
+                obs.gui_log(f"PPT Cocreation DONE | output_len={len(full_text)}",
+                            session_id=session_id, event="PPT_COCREATION_DONE")
                 self.response_ready.emit(full_text)
             else:
+                obs.gui_log("PPT Cocreation EMPTY response",
+                            session_id=session_id, event="PPT_COCREATION_EMPTY", level="WARN")
                 self.error_occurred.emit("Agent 返回空响应，可能是模型配置问题")
 
         except Exception as e:
@@ -521,15 +531,24 @@ class AICopilotChatWidget(QWidget):
         # TODO: PPT 分析 API 待迁移到 Pipeline 模式下的独立端点
         try:
             from opencopilot.agent.caller import call_agent_pipeline_sync
+            from opencopilot.agent.observability import PipelineObservability
+            
+            session_id = f"ppt_analyze_{self.current_index}"
+            obs = PipelineObservability.get_instance()
+            obs.gui_log(f"PPT Analyze START | slide={self.current_index} text_len={len(full_content)}",
+                        session_id=session_id, event="PPT_ANALYZE_START")
+            
             result = ""
             for chunk in call_agent_pipeline_sync(
                 text=f"请分析以下PPT幻灯片内容：\n{full_content}",
                 action_type="ppt",
-                session_id=f"ppt_analyze_{self.current_index}",
+                session_id=session_id,
                 context_source="ppt_editor",
             ):
                 result += chunk
             if result and self.analysis_manager:
+                obs.gui_log(f"PPT Analyze DONE | output_len={len(result)}",
+                            session_id=session_id, event="PPT_ANALYZE_DONE")
                 self.analysis_manager.update_analysis_debounced({"analysis": result})
         except Exception as e:
             print(f"PPT 分析失败: {e}")
@@ -655,18 +674,26 @@ class AICopilotChatWidget(QWidget):
         try:
             from PyQt6.QtCore import QPoint
             from opencopilot.agent.caller import call_agent_pipeline_sync
+            from opencopilot.agent.observability import PipelineObservability
             import json
+            
+            session_id = f"ppt_suggest_{self.current_index}"
+            obs = PipelineObservability.get_instance()
+            obs.gui_log(f"PPT Suggest START | slide={self.current_index} text_len={len(full_content)}",
+                        session_id=session_id, event="PPT_SUGGEST_START")
             
             result = ""
             for chunk in call_agent_pipeline_sync(
                 text=f"请为以下PPT幻灯片提供1-2条优化建议：\n{full_content}",
                 action_type="ppt",
-                session_id=f"ppt_suggest_{self.current_index}",
+                session_id=session_id,
                 context_source="ppt_editor",
             ):
                 result += chunk
             
             if result.strip():
+                obs.gui_log(f"PPT Suggest DONE | output_len={len(result)}",
+                            session_id=session_id, event="PPT_SUGGEST_DONE")
                 suggestion = {"title": "AI优化建议", "content": result[:200]}
                 if not self.suggestion_manager:
                     self.suggestion_manager = SuggestionBubbleManager(self)

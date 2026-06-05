@@ -18,17 +18,18 @@
 
 ### 当前 AI 助手格局
 
-2025-2026 年，桌面 AI 工具分化为三条路线：
+2025-2026 年，桌面 AI 工具分化为四条路线：
 
 | 路线 | 代表产品 | 模式 | 局限 |
 |------|----------|------|------|
 | **IDE 内嵌** | Cursor / Trae / Windsurf / Copilot | AI 嵌入编辑器，Tab 补全 + Chat 面板 | 离开 IDE 就失效；写邮件、做 PPT、看网页时无用 |
 | **独立对话窗口** | Claude Desktop / ChatGPT Desktop | 独立 App + 文件/MCP 接入 | 工具虽强，但你需要把内容"喂"给它——复制粘贴或上传文件 |
+| **桌面办公 Agent** | WorkBuddy / QoderWork / DuMate | AI 操作桌面，生成 Word/PPT/Excel | 快速出草稿，但充满幻觉——虚构数据、格式错乱、逻辑断裂 |
 | **自主桌面 Agent** | OpenClaw / Hermes / Solo | AI 接管桌面，自主操作 | 强大但黑盒；出错时你插不上手；安全风险高 |
 
-### OpenCopilot 的第四路线：系统级按需介入
+### OpenCopilot 的第五路线：系统级审查修正
 
-OpenCopilot 不走上述任何一条。它的设计哲学是：**AI 是鼠标右键的延伸，不是另一个窗口。**
+OpenCopilot 不走上述任何一条。它的设计哲学是：**AI 是鼠标右键的延伸，不是另一个窗口。** 而它的杀手场景是：**当 WorkBuddy 生成了一份充满幻觉的草稿，OpenCopilot 帮你在不离开 Office 的情况下逐段审查、交叉验证、修正每一个问题。**
 
 ```
 Cursor / Trae：
@@ -39,20 +40,25 @@ Claude Desktop：
   你 → ⌘Tab 切到 Claude → 打字描述 → ⌘C⌘V 内容 → 等待 → ⌘C⌘V 结果 → ⌘Tab 切回
   覆盖范围: ████████████ 任意软件，但需要你搬运内容
 
+WorkBuddy / QoderWork：
+  AI → 生成全量 PPT/文档 → 你打开审阅 → 发现幻觉 → ???
+  覆盖范围: ████████████ 快速出稿，但审稿靠你自己
+
 OpenClaw / Hermes：
   AI → 自主操作桌面 → 你旁观
   覆盖范围: ████████████ 任意软件，但你是乘客
 
 OpenCopilot：
-  你在 Word 写报告 → 选中一段 → 双击右键 → 选指令 → 结果出现在卡片里
-  覆盖范围: ████████████ 任意软件，且你始终握着方向盘
+  WorkBuddy 出稿 → Office 打开 → 选中可疑内容 → 双击右键 → AI 审查并修正
+  覆盖范围: ████████████ 任意软件，你审阅、AI 修正
 ```
 
 **一句话区分**：
 - Cursor 问你"你想写什么代码"——**你在 IDE 里**
 - Claude Desktop 问你"把内容贴给我"——**你在聊天窗口里**  
+- WorkBuddy 说"草稿给你"——**你一个人面对满篇幻觉**
 - OpenClaw 说"我来操作"——**你在副驾驶**
-- OpenCopilot 你选中、你决定问什么、你看结果——**你在任何软件里，AI 来找你**
+- OpenCopilot —— WorkBuddy 生成，你审阅，OpenCopilot 修正——**AI 打稿，你把关**
 
 ### 办公 AI 时代：他们生成，你审查修改
 

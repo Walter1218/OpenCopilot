@@ -7,7 +7,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS%2012%2B-blue" alt="platform">
   <img src="https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-green" alt="python">
-  <img src="https://img.shields.io/badge/version-v4.0-orange" alt="version">
+  <img src="https://img.shields.io/badge/version-v5.0-orange" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="license">
   <a href="README.md">English</a>
 </p>
@@ -118,6 +118,32 @@ OpenCopilot 通过 macOS **AXUIElement API**（辅助功能接口）在系统层
 - **上下文自动携带**：选中的文字自动注入，不需要解释"就是上面那段"
 - **人始终在回路中**：每次交互由你触发，每条结果由你确认——不是黑盒 Agent，是增强你的"智能右键"
 
+### v5.0 交互升级
+
+**Smart Copilot 3-Tab 架构**：
+
+| Tab | 功能 | 设计理念 |
+|-----|------|---------|
+| **Work** | 快速操作（Explain/Fix/Polish） | Primary/Secondary 按钮分层，Context Strip 数据源切换 |
+| **Chat** | 连续对话 | Context Panel 显示可引用的上下文来源，Skill Panel 融入底部 |
+| **Studio** | PPT 共创工作台 | 合并原 Tab 3 + Tab 5，直接打开 4-Panel 编辑器 |
+
+**Agent Workspace 2.0**：
+
+| 面板 | 功能 | 说明 |
+|------|------|------|
+| **Task** | 任务定义与管理 | 任务详情 + 历史 + 模板加载 |
+| **Chat** | 会话列表 + 对话 | 多会话切换 + 持久化 |
+| **Files** | 最近文件 + 拖放区 | 文件管理 + 上下文注入 |
+| **Memory** | 知识与上下文 | 知识图谱 + 翻译记忆 + 术语库 |
+| **Settings** | 引擎 / 主题 / 快捷键 / 角色 | 统一设置入口 |
+
+**统一设置弹窗**：
+
+- 4 个分区：Engine / Appearance / Shortcuts / Advanced
+- 3 个入口：Smart Copilot Header / Workspace Sidebar / System Tray
+- 替代原有 2 个独立设置弹窗
+
 ---
 
 ## 核心能力
@@ -195,6 +221,21 @@ def process(data: list[str], timeout: int = 30) -> dict:
 | 内容转换 | 文本 ↔ 表格/图表/流程图，本地 ETL 自动校验补全 | 结构化内容 |
 | 内容分析 | 选中单页 → AI 分析逻辑、数据、表达 | 分析面板 |
 | 优化建议 | AI 审视全片 → 提出 1-2 条优化建议 | 建议气泡 |
+
+**v5.0 新增交互改进**：
+
+| 改进项 | 交互方式 | 说明 |
+|--------|---------|------|
+| **缩略图导航** | 80×45px 迷你幻灯片预览，支持拖拽排序 | 替代纯文字列表，鸟瞰全局 |
+| **流式 AI 反馈** | 打字指示器 + 进度条 + 部分结果实时渲染 | 减少等待焦虑 |
+| **预览直接编辑** | 双击预览中的标题/副标题 → 内联编辑器 | 所见即所得 |
+| **上下文指令** | 快捷按钮根据当前幻灯片内容类型自适应 | 智能操作推荐 |
+| **可分离对话** | 拖拽 Chat Header 可分离为浮动窗口 | 释放垂直空间 |
+| **差异预览** | AI 修改前显示 before/after 对比 | 建立信任感 |
+| **质量徽章** | 非侵入式警告：「内容较密，建议拆分」 | 导出前质量检查 |
+| **主题选择器** | 工具栏内联色块选择器，Hover 实时预览 | 直观主题切换 |
+| **覆盖率热力图** | Source Panel 顶部进度条，显示原文被利用比例 | 可视化内容覆盖 |
+| **统一撤销栈** | 时间线显示手动编辑(蓝)和 AI 编辑(紫) | 操作可回滚 |
 
 ### 🔍 多源上下文感知
 
@@ -380,13 +421,21 @@ OpenCopilot/
 │   ├── workspace.py              #   AgentWorkspace 任务工作台
 │   ├── workers/                  #   QThread Worker (ChatWorker/AIWorker)
 │   └── dialogs/                  #   翻译/Persona 等对话框
+├── widgets/                      # PyQt6 控件 (技能面板、设置对话框等)
+├── coding_agent/                 # 编码代理实现
+├── context_manager/              # 上下文管理系统
+├── core/                         # 核心工具和管理器
+├── knowledge_graph/              # 知识图谱实现
+├── docs/                         # 文档
+│   ├── UI_Redesign_Plan_v5.md    # v5.0 UI 改版方案
+│   ├── PPT_CoCreation_Design.md  # PPT 共创设计
+│   └── PPT_CoCreation_Iteration_Plan.md # PPT 迭代计划
 ├── personas/                     # AI 角色文件 (*.md)
 ├── asu-ide-extension/            # IDE 伴生插件 (VSCode/Trae/Cursor)
 ├── tests/                        # 测试 (unit / e2e / ablation)
 ├── scripts/                      # 守护进程/启动脚本
 ├── smart_copilot.py              # GUI 入口
 ├── smart_copilot_api.py          # API 入口（统一端口 8000）
-├── smart_copilot_platform.py     # ⚠️ 已废弃（合并到 smart_copilot_api.py）
 └── pyproject.toml
 ```
 
@@ -399,6 +448,7 @@ OpenCopilot/
 | [USER_GUIDE.md](USER_GUIDE.md) | 用户手册（交互方式、功能使用、权限配置、常见问题） |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 架构设计（Pipeline、Agent Loop、Skill 系统、Broker 协议） |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | 开发指南（模块开发、测试体系、新增 Persona/Skill） |
+| [docs/UI_Redesign_Plan_v5.md](docs/UI_Redesign_Plan_v5.md) | v5.0 UI 改版方案（3-Tab 架构、Workspace 2.0、统一设置） |
 
 ---
 
@@ -412,8 +462,9 @@ OpenCopilot/
 | P3 | Agent Loop 重构、OpenClaw 单进程迁移、Pipeline 统一 | ✅ |
 | P4 | v4.0 分层架构重构、代码治理、全链路可观测性 | ✅ |
 | P4.1 | **AI 助手开发改革**：API 统一（双入口→单入口）、路由补全（+5模块）、空壳端点填充、ContextWindowManager 统一 | ✅ |
-| P5 | IDE Extension v2、Broker 产品化 | 🔶 进行中 |
-| P6 | 上下文主动感知、多 Agent 协作 | 📋 计划中 |
+| P5 | v5.0 UI 改版：3-Tab 架构、Workspace 2.0、统一设置、Skill 重构 | 🔶 进行中 |
+| P6 | IDE Extension v2、Broker 产品化 | 📋 计划中 |
+| P7 | 上下文主动感知、多 Agent 协作 | 📋 计划中 |
 
 ---
 

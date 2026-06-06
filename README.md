@@ -7,7 +7,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS%2012%2B-blue" alt="platform">
   <img src="https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-green" alt="python">
-  <img src="https://img.shields.io/badge/version-v4.0-orange" alt="version">
+  <img src="https://img.shields.io/badge/version-v5.0-orange" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="license">
   <a href="README_CN.md">中文</a>
 </p>
@@ -118,6 +118,32 @@ This means OpenCopilot delivers the **exact same interaction experience** across
 - **Context auto-carried**: selected text is automatically injected — no need to explain "the paragraph above"
 - **Human in the loop, always**: every interaction triggered by you, every result confirmed by you — not a black-box agent, but your enhanced "smart right-click"
 
+### v5.0 Interaction Upgrade
+
+**Smart Copilot 3-Tab Architecture**:
+
+| Tab | Function | Design Philosophy |
+|-----|----------|-------------------|
+| **Work** | Quick operations (Explain/Fix/Polish) | Primary/Secondary button hierarchy, Context Strip data source switching |
+| **Chat** | Continuous dialogue | Context Panel shows available context sources, Skill Panel integrated at bottom |
+| **Studio** | PPT co-creation workbench | Merges original Tab 3 + Tab 5, directly opens 4-Panel editor |
+
+**Agent Workspace 2.0**:
+
+| Panel | Function | Description |
+|-------|----------|-------------|
+| **Task** | Task definition & management | Task details + history + template loading |
+| **Chat** | Session list + dialogue | Multi-session switching + persistence |
+| **Files** | Recent files + drop zone | File management + context injection |
+| **Memory** | Knowledge & context | Knowledge graph + translation memory + terminology |
+| **Settings** | Engine / Theme / Shortcuts / Persona | Unified settings entry |
+
+**Unified Settings Dialog**:
+
+- 4 sections: Engine / Appearance / Shortcuts / Advanced
+- 3 entry points: Smart Copilot Header / Workspace Sidebar / System Tray
+- Replaces original 2 separate settings dialogs
+
 ---
 
 ## Core Capabilities
@@ -170,6 +196,21 @@ From zero to presentation, AI participates throughout:
 | Co-Creative Editing | Natural language conversation to modify ("change this slide to left-right comparison layout") | Real-time slide updates |
 | Content Analysis | Select a slide → AI analyzes logic, data, expression | Analysis panel |
 | Optimization Suggestions | AI reviews the full deck → proposes 1-2 improvements | Suggestion bubbles |
+
+**v5.0 New Interaction Improvements**:
+
+| Improvement | Interaction | Description |
+|-------------|------------|-------------|
+| **Thumbnail Strip** | 80×45px mini slide previews, drag-to-reorder | Replaces text list, bird's-eye view |
+| **Streaming AI Feedback** | Typing indicator + progress bar + partial results | Reduces waiting anxiety |
+| **Click-to-Edit** | Double-click title/subtitle in preview → inline editor | WYSIWYG editing |
+| **Contextual Quick Actions** | Quick buttons adapt to current slide content type | Smart operation recommendations |
+| **Detachable AI Chat** | Drag Chat Header to detach as floating window | Frees vertical space |
+| **Diff Preview** | Before/after comparison before AI modifications | Builds trust |
+| **Quality Badges** | Non-intrusive warnings: "Content dense, consider splitting" | Pre-export quality check |
+| **Theme Picker** | Inline color block selector in toolbar with hover preview | Intuitive theme switching |
+| **Coverage Heatmap** | Progress bar at Source Panel top showing original content utilization | Visual content coverage |
+| **Unified Undo Stack** | Timeline showing manual edits (blue) and AI edits (purple) | Rollback capability |
 
 ### 🔍 Multi-Source Context Awareness
 
@@ -335,13 +376,22 @@ OpenCopilot/
 │   └── shared/                   #   Shared utilities (prompt building/context normalization)
 ├── api/                          # API Gateway (:8000)
 │   ├── app.py                    #   Route factory
-│   └── routers/                  #   12 independent route modules
+│   └── routers/                  #   16+ independent route modules
 ├── gui/                          # PyQt6 desktop app
 │   ├── main.py                   #   Entry + CopilotManager
 │   ├── window.py                 #   AICardWindow — core floating card
 │   ├── workspace.py              #   AgentWorkspace — task workbench
 │   ├── workers/                  #   QThread Workers (ChatWorker/AIWorker)
 │   └── dialogs/                  #   Translation/Persona dialogs
+├── widgets/                      # PyQt6 widgets (skill panel, settings dialog, etc.)
+├── coding_agent/                 # Coding agent implementation
+├── context_manager/              # Context management system
+├── core/                         # Core utilities and managers
+├── knowledge_graph/              # Knowledge graph implementation
+├── docs/                         # Documentation
+│   ├── UI_Redesign_Plan_v5.md    # v5.0 UI redesign plan
+│   ├── PPT_CoCreation_Design.md  # PPT co-creation design
+│   └── PPT_CoCreation_Iteration_Plan.md # PPT iteration plan
 ├── personas/                     # AI role files (*.md)
 ├── asu-ide-extension/            # IDE companion extension (VSCode/Trae/Cursor)
 ├── tests/                        # Tests (unit / e2e / ablation)
@@ -360,6 +410,7 @@ OpenCopilot/
 | [USER_GUIDE.md](USER_GUIDE.md) | User manual (interactions, features, permissions, FAQ) |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Architecture design (Pipeline, Agent Loop, Skill system, Broker protocol) |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Development guide (module development, testing, adding Persona/Skill) |
+| [docs/UI_Redesign_Plan_v5.md](docs/UI_Redesign_Plan_v5.md) | v5.0 UI redesign plan (3-Tab architecture, Workspace 2.0, unified settings) |
 
 ---
 
@@ -372,8 +423,9 @@ OpenCopilot/
 | P2 | Persona workshop, PPT co-creation, Knowledge Graph, Skill architecture | ✅ |
 | P3 | Agent Loop refactor, OpenClaw single-process migration, Pipeline unification | ✅ |
 | P4 | v4.0 layered architecture refactor, code governance, full-chain observability | ✅ |
-| P5 | IDE Extension v2, Broker productization | 🔶 In Progress |
-| P6 | Proactive context awareness, multi-agent collaboration | 📋 Planned |
+| P5 | v5.0 UI redesign: 3-Tab architecture, Workspace 2.0, unified settings, Skill refactoring | 🔶 In Progress |
+| P6 | IDE Extension v2, Broker productization | 📋 Planned |
+| P7 | Proactive context awareness, multi-agent collaboration | 📋 Planned |
 
 ---
 

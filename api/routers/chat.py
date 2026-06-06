@@ -87,6 +87,62 @@ async def get_chat_history(session_id: str):
     return {"session_id": session_id, "messages": history}
 
 
+# =============================================================================
+# v5 新增端点
+# =============================================================================
+
+@router.get("/sessions")
+async def list_sessions():
+    """
+    列出所有聊天会话
+
+    从 SessionManager.sessions 读取，返回会话列表摘要。
+    """
+    print(f"[V5-API] GET /api/chat/sessions")
+    try:
+        sessions = []
+        for sid, data in session_manager.sessions.items():
+            messages = data.get("messages", [])
+            last_msg = ""
+            if messages:
+                last = messages[-1]
+                last_msg = last.get("content", "")[:100]
+            sessions.append({
+                "session_id": sid,
+                "created_at": data.get("created_at", ""),
+                "message_count": len(messages),
+                "last_message": last_msg,
+            })
+        # 按创建时间倒序
+        sessions.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        print(f"[V5-API] sessions: returned {len(sessions)} sessions")
+        return {"sessions": sessions, "total": len(sessions)}
+    except Exception as e:
+        print(f"[V5-API] sessions error: {e}")
+        raise HTTPException(status_code=500, detail=f"获取会话列表失败: {str(e)}")
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_session(session_id: str):
+    """
+    删除指定聊天会话
+
+    从 SessionManager.sessions 中移除指定会话。
+    """
+    print(f"[V5-API] DELETE /api/chat/sessions/{session_id}")
+    try:
+        if session_id not in session_manager.sessions:
+            raise HTTPException(status_code=404, detail=f"会话 {session_id} 不存在")
+        del session_manager.sessions[session_id]
+        print(f"[V5-API] session {session_id} deleted")
+        return {"success": True, "message": f"会话 {session_id} 已删除"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[V5-API] delete session error: {e}")
+        raise HTTPException(status_code=500, detail=f"删除会话失败: {str(e)}")
+
+
 # ==========================================
 # WebSocket 端点
 # ==========================================

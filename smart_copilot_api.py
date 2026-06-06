@@ -1668,6 +1668,8 @@ from api.routers.knowledge import router as _kn_r
 from api.routers.coding import router as _cod_r
 from api.routers.tasks import router as _tsk_r
 from api.routers.evaluation import router as _evl_r
+from api.routers.workspace import router as _ws_r
+from api.routers.studio import router as _stu_r
 
 app.include_router(_chat_r)
 app.include_router(_chat_ws)
@@ -1681,3 +1683,5 @@ app.include_router(_kn_r)
 app.include_router(_cod_r)
 app.include_router(_tsk_r)
 app.include_router(_evl_r)
+app.include_router(_ws_r)
+app.include_router(_stu_r)

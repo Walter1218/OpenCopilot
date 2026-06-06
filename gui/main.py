@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import QStyle, QMessageBox
 from cursor_effects import CursorOverlay
 from gui.window import AICardWindow
 from gui.workspace import AgentWorkspace
+from gui.v5.navigation import NavigationManager
 from gui.workers.mouse import MouseListenerWorker
 from gui.workers.health import AgentHealthWorker
 from gui.shared import check_accessibility_permission
@@ -23,6 +24,9 @@ class CopilotManager:
         # Agent 作为独立的 OS 级守护进程运行（见 deploy/com.asu.agent.plist）。
         self.provider = ProviderFactory.create_provider()
         self._is_shutting_down = False
+
+        # v5.0 NavigationManager — 所有新窗口通过 nav 中枢跳转
+        self.nav = NavigationManager()
 
         # 三个独立图层：
         # 1. 光标特效图层（全屏、鼠标穿透）
@@ -102,13 +106,13 @@ class CopilotManager:
 
     def _show_quick_card(self):
         pos = QCursor.pos()
-        self.ai_card.show_card(pos.x(), pos.y())
+        self.nav.show_smart_copilot(pos.x(), pos.y())
 
     def _show_workspace(self):
-        pos = QCursor.pos()
-        self.workspace.show_workspace(pos.x(), pos.y())
+        self.nav.show_workspace()
 
     def _hide_all_windows(self):
+        self.nav.hide_all()
         self.ai_card.hide_card()
         self.workspace.hide_workspace()
 
@@ -118,6 +122,9 @@ class CopilotManager:
         self._is_shutting_down = True
 
         self.cleanup()
+
+        # 关闭 v5 窗口
+        self.nav.hide_all()
 
         self.ai_card._allow_close = True
         self.workspace._allow_close = True
@@ -176,11 +183,10 @@ class CopilotManager:
         if probe.is_broker_alive():
             selected = probe.get_selection() or ""
         
-        self.ai_card.show_card(pos.x(), pos.y(), selected_text=selected)
+        self.nav.show_smart_copilot(pos.x(), pos.y(), selected_text=selected)
 
     def _on_triple_right_click(self, x, y):
-        pos = QCursor.pos()
-        self.workspace.show_workspace(pos.x(), pos.y())
+        self.nav.show_workspace()
 
     def _on_global_click(self, x, y):
         self.cursor_overlay.add_ripple(x, y)

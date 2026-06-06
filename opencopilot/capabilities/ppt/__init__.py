@@ -9,6 +9,7 @@ PPT 人机共创编辑器模块
 """
 
 from .cocreation_dialog import CoCreationDialog
+from .cocreation_widget import CoCreationWidget, CoCreationWindow
 from .source_panel import SourcePanel
 from .outline_panel import OutlinePanel
 from .preview_panel import PreviewPanel
@@ -19,6 +20,8 @@ from .content_analysis_panel import ContentAnalysisPanel, AnalysisPanelManager
 
 __all__ = [
     'CoCreationDialog',
+    'CoCreationWidget',
+    'CoCreationWindow',
     'SourcePanel',
     'OutlinePanel',
     'PreviewPanel',

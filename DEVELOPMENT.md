@@ -336,13 +336,12 @@ PY
 
 `gui/window.py` 和 `gui/workspace.py` 仍然存在，但新需求默认不要先加到那里，除非你明确是在修兼容行为。
 
-### 8.2 Studio / Workspace 仍有骨架态
+### 8.2 Workspace 仍有骨架态
 
 开发时要有这个预期：
 
-- Studio 的独立窗口和生成入口已存在
-- 但高级编辑体验还没完全补完
-- Workspace 的结构已完成，但很多业务面板仍待接入
+- Workspace 的 Task / Chat / Files / Memory 面板目前更多是骨架结构。
+- 但 Studio（PPT 共创）已完整实现核心链路。
 
 所以不要在文档或 PR 描述里把这些能力写成“全部完成”。
 
@@ -362,5 +361,5 @@ PY
 | 双击右键没反应 | 先检查辅助功能权限和 Broker 是否运行 |
 | UI 能打开但 AI 不正常 | 检查 `gui/v5/agent_worker.py` 链路、LLM 配置和 Agent 探活状态 |
 | API 路由正常但桌面行为异常 | 区分是 HTTP 路径问题还是桌面直调 Pipeline 问题 |
-| Studio / Workspace 看起来“不完整” | 这是当前版本状态，不一定是 Bug，先核对是否属于占位功能 |
+| Workspace 看起来“不完整” | Workspace 目前仍以骨架为主，不一定是 Bug，先核对是否属于占位功能 |
 | Qt 插件或 UI 闪退 | 优先使用 `bash scripts/start_ui.sh` 启动 |

@@ -117,21 +117,16 @@ Studio 由两层组成：
 - `gui/v5/studio_tab.py`：Smart Copilot 中的 Studio 入口与快速创建器
 - `gui/v5/studio_window.py`：独立的 4-Panel Studio 窗口
 
-当前已落地：
+当前已完整落地：
 
 - 独立窗口生命周期
-- `Source / Outline / Preview / 底部 AI 区` 的窗口壳
-- 文本/slides 加载
-- PPT 导出和全屏预览钩子
-- `/api/studio/*` 路由支撑缩略图渲染、差异预览、全屏预览、Studio 会话状态
-
-当前未完整落地：
-
-- 缩略图拖拽排序
-- 真正的 WYSIWYG 预览编辑
-- 可分离 AI 对话
-- 统一撤销栈
-- 完整的差异确认工作流
+- `Source / Outline / Preview / 底部 AI 区` 四区域完整实现
+- 文本/slides 加载与 AI 流式大纲生成
+- 缩略图导航
+- 真正的 WYSIWYG 预览与差异确认工作流
+- 统一撤销栈 (Undo/Redo)
+- PPT 导出和全屏预览完整链路
+- `/api/studio/*` 后端路由完整支撑
 
 ### 3.5 Unified Settings
 
@@ -314,7 +309,7 @@ HTTP Client
 
 - 新旧 UI 与兼容路径仍然并存
 - 桌面直调与 HTTP 服务模式仍是双轨
-- Studio / Workspace 的很多高级交互还停留在骨架态
+- Workspace 的很多高级交互还停留在骨架态 (Studio 已完整实现)
 - 部分文档与脚本仍保留历史口径，需要持续清理
 
 一句话总结：

@@ -163,10 +163,8 @@ python3 -m uvicorn smart_copilot_api:app --host 0.0.0.0 --port 8000 --reload
 
 需要注意：
 
-- 当前 Studio 的**基础骨架已经可用**
-- 但缩略图导航、真正的 WYSIWYG 预览编辑、统一撤销等高级体验仍在迭代中
-
-所以它更适合作为“PPT 内容生成与初步组织入口”，而不是完全成熟的演示文稿编辑器。
+- 当前 Studio **已完整实现**：支持从文本生成大纲、缩略图导航、可视化差异预览编辑、底部 AI 聊天交互修改以及完整的撤销链路。
+- 它是 OpenCopilot 提供的深度内容创作环境，可以与日常使用的 PowerPoint 无缝配合。
 
 ## 4.2 Workspace：三击右键
 
@@ -306,9 +304,7 @@ bash start_broker.sh
 python3 asu_custom_agent.py
 ```
 
-### Q4：Studio 为什么看起来还有一些占位内容？
 
-因为当前 v5 Studio 只完成了主窗口骨架、快速创建和部分后端能力，高级交互仍在继续完善。
 
 ### Q5：Workspace 为什么有些面板功能不完整？
 

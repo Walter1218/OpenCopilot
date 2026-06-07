@@ -153,7 +153,7 @@ The v5 redesign is **partially shipped in code, not fully feature-complete**. Cu
 | **Navigation** | `NavigationManager` centralizes Smart Copilot / Workspace / Studio / Settings lifecycle | More legacy windows still coexist in compatibility paths |
 | **Smart Copilot** | 3-Tab shell (`Work / Chat / Studio`), drag & drop sharing, direct Agent calls via `V5AgentWorker` | Further polish on markdown rendering, command palette, richer context chips |
 | **Work / Chat** | Core interaction loop is usable: context fetch, streaming AI output, session handling, cancel | More advanced contextual actions and richer session management |
-| **Studio** | Independent window shell, text/slides loading, export/fullscreen hooks, dedicated `/api/studio/*` routes | Thumbnail strip, WYSIWYG preview, inline edit, detachable chat, unified undo are not fully wired into desktop UI yet |
+| **Studio** | PPT co-creation is fully implemented: 4-Panel workbench, thumbnail strip, diff preview edit, AI chat flow, unified undo stack, export & fullscreen | ✅ Fully Implemented |
 | **Workspace** | Sidebar + 5-panel shell, settings entry, refresh hooks | Task / Chat / Files / Memory business logic is still largely placeholder-based |
 | **Settings** | Unified settings dialog with Engine / Appearance / Shortcuts / Advanced and bridge persistence | More validation, richer summaries, broader config coverage |
 
@@ -200,21 +200,15 @@ Supports `.md`, `.txt`, `.py`, `.docx`, `.pptx`. Word/PPT files are auto-parsed 
 
 ### 📊 PPT Co-Creation
 
-The v5 codebase already includes a **Studio foundation**:
+The v5 codebase already includes a **fully implemented Studio PPT Co-creation Workbench**:
 
 - Independent `StudioWindowV5` lifecycle managed by `NavigationManager`
 - 4-region shell: `Source`, `Outline`, `Preview`, and bottom AI area
-- Text/slides loading hooks and PPT export / fullscreen preview hooks
-- Dedicated backend routes for thumbnail rendering, diff preview, fullscreen preview, and in-memory studio session state
-
-The following items remain **design targets / ongoing work**, not fully delivered end-to-end in the desktop UI yet:
-
-- Thumbnail strip with drag-to-reorder
-- WYSIWYG preview with click-to-edit
-- Detachable AI chat
-- Unified undo stack
-- Rich diff approval workflow
-- Quality badges and coverage heatmap
+- Thumbnail strip with navigation support
+- WYSIWYG preview and diff preview editing
+- Natural language AI dialogue for slide modifications
+- Unified Undo/Redo stack
+- Full pipeline for text/slides loading, PPT export, and fullscreen preview
 
 ### 🔍 Multi-Source Context Awareness
 
@@ -442,7 +436,7 @@ OpenCopilot/
 | P2 | Persona workshop, PPT co-creation, Knowledge Graph, Skill architecture | ✅ |
 | P3 | Agent Loop refactor, OpenClaw single-process migration, Pipeline unification | ✅ |
 | P4 | Layered architecture refactor, code governance, full-chain observability | ✅ |
-| P5 | v5.0 UI redesign: 3-Tab architecture, Workspace 2.0, unified settings, Skill refactoring | 🔶 In Progress |
+| P5 | v5.0 UI redesign: 3-Tab architecture, Workspace 2.0, unified settings, Skill refactoring | 🔶 In Progress (Studio Completed) |
 | P6 | IDE Extension v2, Broker productization | 📋 Planned |
 | P7 | Proactive context awareness, multi-agent collaboration | 📋 Planned |
 

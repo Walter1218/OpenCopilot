@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import (
     Qt, pyqtSignal, QPropertyAnimation, QEasingCurve,
-    QTimer, QPoint, QSize
+    QTimer, QPoint, QSize, QRectF
 )
 from PyQt6.QtGui import QFont, QColor, QPainter, QPainterPath, QIcon
 
@@ -425,7 +425,8 @@ class SuggestionBubble(QWidget):
         
         # 绘制半透明背景
         path = QPainterPath()
-        path.addRoundedRect(self.container.geometry(), 12, 12)
+        # QRect 需要转换为 QRectF 才能传给 addRoundedRect
+        path.addRoundedRect(QRectF(self.container.geometry()), 12, 12)
         painter.fillPath(path, QColor(42, 42, 42, 230))
 
 

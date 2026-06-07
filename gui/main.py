@@ -1,8 +1,15 @@
+"""CAD Manager + main()"""
+import sys
+import os
+
+# 将项目根目录加入 sys.path，确保能导入 core/ 等模块
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
 from PyQt6.QtCore import *
 from PyQt6.QtGui import *
 from PyQt6.QtWidgets import *
-"""CAD Manager + main()"""
-import sys
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
 from PyQt6.QtGui import QIcon, QCursor, QAction
 from typing import Dict, Any
@@ -11,6 +18,7 @@ from PyQt6.QtWidgets import QStyle, QMessageBox
 from cursor_effects import CursorOverlay
 from gui.window import AICardWindow
 from gui.workspace import AgentWorkspace
+from gui.v5.navigation import NavigationManager
 from gui.workers.mouse import MouseListenerWorker
 from gui.workers.health import AgentHealthWorker
 from gui.shared import check_accessibility_permission
@@ -23,6 +31,9 @@ class CopilotManager:
         # Agent 作为独立的 OS 级守护进程运行（见 deploy/com.asu.agent.plist）。
         self.provider = ProviderFactory.create_provider()
         self._is_shutting_down = False
+
+        # v5.0 NavigationManager — 所有新窗口通过 nav 中枢跳转
+        self.nav = NavigationManager()
 
         # 三个独立图层：
         # 1. 光标特效图层（全屏、鼠标穿透）
@@ -102,13 +113,13 @@ class CopilotManager:
 
     def _show_quick_card(self):
         pos = QCursor.pos()
-        self.ai_card.show_card(pos.x(), pos.y())
+        self.nav.show_smart_copilot(pos.x(), pos.y())
 
     def _show_workspace(self):
-        pos = QCursor.pos()
-        self.workspace.show_workspace(pos.x(), pos.y())
+        self.nav.show_workspace()
 
     def _hide_all_windows(self):
+        self.nav.hide_all()
         self.ai_card.hide_card()
         self.workspace.hide_workspace()
 
@@ -118,6 +129,9 @@ class CopilotManager:
         self._is_shutting_down = True
 
         self.cleanup()
+
+        # 关闭 v5 窗口
+        self.nav.hide_all()
 
         self.ai_card._allow_close = True
         self.workspace._allow_close = True
@@ -176,11 +190,10 @@ class CopilotManager:
         if probe.is_broker_alive():
             selected = probe.get_selection() or ""
         
-        self.ai_card.show_card(pos.x(), pos.y(), selected_text=selected)
+        self.nav.show_smart_copilot(pos.x(), pos.y(), selected_text=selected)
 
     def _on_triple_right_click(self, x, y):
-        pos = QCursor.pos()
-        self.workspace.show_workspace(pos.x(), pos.y())
+        self.nav.show_workspace()
 
     def _on_global_click(self, x, y):
         self.cursor_overlay.add_ripple(x, y)
@@ -272,27 +285,34 @@ class CopilotManager:
 
 def main():
     """Smart Copilot 主入口"""
+    from gui.v5.env import AppEnv, debug_print
+
     app = QApplication(sys.argv)
-    
+
     # 提前初始化日志系统（SQLite + stderr）
     import time
     app_run_id = time.strftime("%Y%m%d_%H%M%S_") + str(int(time.time() * 1000) % 1000000)
     from opencopilot.agent.log_store import LogStore
     store = LogStore.get_instance()
     store.init_run(app_run_id)
-    
+
     from opencopilot.agent.observability import PipelineObservability
     obs = PipelineObservability.get_instance()
     obs._write_log("[MAIN] PipelineObservability initialized | app_run_id=" + app_run_id, source="MAIN", event="APP_START")
-    
-    print(f"📋 日志已初始化 | run={app_run_id} | db={store._db_path}")
-    
+
+    debug_print(f"📋 日志已初始化 | run={app_run_id} | db={store._db_path}")
+    debug_print(f"🔧 运行模式: {AppEnv.mode_label()}")
+
     if not check_accessibility_permission():
-        print("❌ 辅助功能权限未授予，Smart Copilot 无法监听鼠标事件。")
-        print("   请在系统设置中授权后重新运行。")
+        if AppEnv.is_dev():
+            print("❌ 辅助功能权限未授予，Smart Copilot 无法监听鼠标事件。")
+            print("   请在系统设置中授权后重新运行。")
+        else:
+            # 生产模式：静默记录，不阻塞启动
+            obs._write_log("[MAIN] Accessibility permission not granted", source="MAIN", event="PERMISSION_MISSING", level="WARNING")
     app.setQuitOnLastWindowClosed(False)
     manager = CopilotManager()
-    print("🚀 ASU Smart Copilot 已启动！")
+    debug_print(f"🚀 ASU Smart Copilot 已启动！ [{AppEnv.mode_label()}]")
     ret = app.exec()
     manager.cleanup()
     sys.exit(ret)

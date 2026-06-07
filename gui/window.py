@@ -13,7 +13,7 @@ from opencopilot.agent.caller import call_agent_pipeline_sync
 from markdown_renderer import render as md_render
 from system_probe_client import SystemProbeClient
 from ppt_generator import generate_ppt_from_json, extract_json_from_text
-from opencopilot.capabilities.ppt import CoCreationDialog
+from opencopilot.capabilities.ppt import CoCreationDialog, CoCreationWindow
 from core.theme_manager import ThemeManager
 import subprocess
 from core.shortcut_manager import ShortcutManager
@@ -717,6 +717,59 @@ class AICardWindow(QWidget):
         self.tabs.addTab(self.tab_ppt_assistant, "🎯 PPT 助手")
         
         # ==========================
+        # Tab 5: PPT 共创工作台 (启动器)
+        # ==========================
+        self.tab_cocreation = QWidget()
+        cocreation_layout = QVBoxLayout(self.tab_cocreation)
+        cocreation_layout.setContentsMargins(0, 10, 0, 0)
+        cocreation_layout.setSpacing(12)
+
+        # 标题
+        cocreation_title = QLabel("🎨 PPT 共创工作台", self.tab_cocreation)
+        cocreation_title.setStyleSheet("color: #4da6ff; font-weight: bold; font-size: 16px; background: transparent; border: none;")
+        cocreation_layout.addWidget(cocreation_title)
+
+        # 描述
+        cocreation_desc = QLabel(
+            "输入或粘贴内容，AI 自动生成 PPT 大纲，进入大屏编辑模式。\n"
+            "支持：缩略图导航、预览直接编辑、上下文快捷指令、\n"
+            "AI 差异预览（Accept/Reject）、统一撤销栈、4 套主题切换",
+            self.tab_cocreation
+        )
+        cocreation_desc.setStyleSheet("color: #aaa; font-size: 12px; background: transparent; border: none;")
+        cocreation_desc.setWordWrap(True)
+        cocreation_layout.addWidget(cocreation_desc)
+
+        # 打开按钮
+        self.btn_open_cocreation = QPushButton("🚀 打开 PPT 共创工作台", self.tab_cocreation)
+        self.btn_open_cocreation.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(77, 166, 255, 180);
+                color: #fff;
+                border: 1px solid rgba(77, 166, 255, 255);
+                border-radius: 8px;
+                padding: 14px 20px;
+                font-weight: bold;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: rgba(77, 166, 255, 255);
+            }
+        """)
+        self.btn_open_cocreation.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_open_cocreation.clicked.connect(self._open_cocreation_window)
+        cocreation_layout.addWidget(self.btn_open_cocreation)
+
+        # 状态提示
+        self.cocreation_status = QLabel("", self.tab_cocreation)
+        self.cocreation_status.setStyleSheet("color: #888; font-size: 11px; background: transparent; border: none;")
+        cocreation_layout.addWidget(self.cocreation_status)
+
+        cocreation_layout.addStretch()
+
+        self.tabs.addTab(self.tab_cocreation, "🎨 PPT 共创")
+        
+        # ==========================
         # Tab 4: 技能中心
         # ==========================
         self.tab_skill_center = QWidget()
@@ -791,6 +844,21 @@ class AICardWindow(QWidget):
         
         if index == 1:  # 切换到对话 Tab
             self.chat_input.setFocus()
+        elif index == 3:  # 切换到 PPT 共创 Tab (启动器)
+            # 更新状态提示
+            if hasattr(self, '_cocreation_window') and self._cocreation_window and self._cocreation_window.isVisible():
+                self.cocreation_status.setText("✅ 共创工作台已打开，切换回去即可继续编辑")
+            elif hasattr(self, '_cocreation_window') and self._cocreation_window and self._cocreation_window.slides_data:
+                slides_count = len(self._cocreation_window.slides_data)
+                self.cocreation_status.setText(f"上次编辑：{slides_count} 页幻灯片 — 点击按钮继续编辑")
+            elif self.current_text:
+                # 有导入文本但未打开共创工作台时，自动打开
+                text_len = len(self.current_text)
+                self.cocreation_status.setText(f"📄 已导入 {text_len} 字文本，正在打开共创工作台...")
+                QApplication.processEvents()
+                self._open_cocreation_window()
+            else:
+                self.cocreation_status.setText("💡 请先在 Tab 1 导入文本，或点击按钮直接粘贴内容")
         # 注意：非聊天 Tab 不调用 self.setFocus()，
         # 否则会与 WA_ShowWithoutActivating 冲突，导致 macOS 收回窗口
     
@@ -966,6 +1034,59 @@ class AICardWindow(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "错误", f"启动 PPT 助手时出错：{e}")
     
+    def _open_cocreation_window(self):
+        """打开 PPT 共创工作台窗口"""
+        # 如果窗口已存在且可见，直接激活
+        if hasattr(self, '_cocreation_window') and self._cocreation_window and self._cocreation_window.isVisible():
+            self._cocreation_window.raise_()
+            self._cocreation_window.activateWindow()
+            return
+        
+        # 清理旧窗口引用（如果窗口已关闭但对象仍在）
+        if hasattr(self, '_cocreation_window') and self._cocreation_window:
+            try:
+                self._cocreation_window.close()
+                self._cocreation_window.deleteLater()
+            except Exception:
+                pass
+            self._cocreation_window = None
+        
+        # 获取上下文文本
+        text = self.current_text or ""
+        
+        # 创建新窗口
+        self._cocreation_window = CoCreationWindow(parent=self)
+        
+        self._cocreation_window.show()
+        
+        # 如果有文本，异步生成大纲
+        if text.strip():
+            QTimer.singleShot(100, lambda: self._load_cocreation_data(text))
+    
+    def _load_cocreation_data(self, text: str):
+        """异步加载共创数据到窗口"""
+        def _worker():
+            try:
+                json_data = self._generate_ppt_outline_with_ai(text)
+                if not json_data:
+                    json_data = self._generate_fallback_outline(text)
+                
+                # 回到主线程更新UI
+                def _update_ui():
+                    if not hasattr(self, '_cocreation_window') or not self._cocreation_window:
+                        return
+                    if json_data:
+                        slides = json_data.get("slides", []) if isinstance(json_data, dict) else json_data
+                        self._cocreation_window.load_slides(text, slides)
+                
+                QTimer.singleShot(0, _update_ui)
+                
+            except Exception as e:
+                print(f"[PPT 共创] 加载数据失败: {e}")
+        
+        # 启动后台线程
+        threading.Thread(target=_worker, daemon=True).start()
+    
     def _generate_ppt_outline_with_ai(self, text: str) -> dict:
         """使用 AI 生成 PPT 大纲
         
@@ -994,7 +1115,7 @@ class AICardWindow(QWidget):
             
             full_text = ""
             for chunk in call_agent_pipeline_sync(
-                text[:3000],
+                text,  # 不再硬截断到 3000 字符
                 action_type="chat",
                 session_id=session_id,
                 is_new_task=True,

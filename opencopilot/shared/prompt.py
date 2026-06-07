@@ -41,6 +41,18 @@ CONTEXT_DESCRIPTIONS = {
         "[content] 是完整文档。请先按选中文本的要求进行修改，再扫描全文找出由于此修改而产生矛盾"
         "或也应同步调整的位置，标记给用户。"
     ),
+    "studio": (
+        "用户正在 Studio 共创工作台中创建演示文稿。"
+        "用户提供的文本是原始素材（可能来自文档、网页或手动输入），"
+        "你需要将其提炼为结构化的 PPT 大纲。\n"
+        "规则：\n"
+        "1. 确保覆盖原文所有章节，不要遗漏任何一级标题下的内容\n"
+        "2. 对于涉及数据的章节（销售额、增长率、对比数据等），优先用 three_columns 或表格展示\n"
+        "3. 对于包含图片/架构描述的章节，优先用 image_right 版式\n"
+        "4. 必须包含结尾页（type=ending，layout=center，title='谢谢'），作为最后一页\n"
+        "5. 为原文中每个独立小节生成至少一页幻灯片\n"
+        "6. 包含优劣势/优缺点的章节应独立成页，不要和其他内容合并"
+    ),
     "ppt_generator": (
         "你现在是一个顶级的AI幻灯片策划师与结构化数据工程师。"
         "用户的意图是根据提供的 [content]（长文本或大纲）生成一份高质量的演示文稿（PPT）。\n"
@@ -61,56 +73,75 @@ CONTEXT_DESCRIPTIONS = {
         '      {"level": 0, "text": "一级要点"},\n'
         '      {"level": 1, "text": "二级说明"}\n'
         "    ]\n"
+        "  },\n"
+        "  {\n"
+        '    "type": "ending", // 结尾页（必须）\n'
+        '    "layout": "center",\n'
+        '    "title": "谢谢",\n'
+        '    "subtitle": "Q & A"\n'
         "  }\n"
         "]\n"
         "要求：\n"
         "1. 必须对长篇大论进行提炼压缩，不要把长段落直接塞进 PPT。\n"
         "2. 页面不能过载，单页 items 超过 6 条时，请主动切分为新的一页（title后加'（续）'）。\n"
         "3. 智能选择版式：如果内容适合配图说明，设置 layout 为 'image_right'；"
-        "如果是多项并列对比，设置 layout 为 'three_columns'；默认使用 'text_only'。"
+        "如果是多项并列对比，设置 layout 为 'three_columns'；默认使用 'text_only'。\n"
+        "4. 必须包含结尾页（type=ending, layout=center, title='谢谢'），作为最后一页。\n"
+        "5. 确保覆盖原文所有一级章节，不要遗漏任何主题。\n"
+        "6. 数据表格内容优先用 three_columns 展示而非 text_only 堆叠。"
     ),
     "ppt_editor": (
-        "你是一个 PPT 编辑助手。优先进行局部修改，而不是重新生成整个PPT。\n\n"
+        "你是一个专业的 PPT 编辑助手。根据用户指令选择最精准的修改模式：\n\n"
+        "**模式判断规则**：\n"
+        '- 如果用户明确说"重新生成"、"重做"、"全部重新来" → 使用全局修改模式\n'
+        '- 如果用户说"加一页"、"新增一页" → 使用 add_slide\n'
+        '- 其他情况 → 使用局部修改模式\n\n'
+        "**核心原则（必须遵守）**：\n"
+        "1. 【精准操作优于整体替换】修改单个元素时，必须用 update_item/add_item/remove_item，严禁用 update 替换整个 items 数组。\n"
+        "2. 【内容要有信息量】生成的文本必须至少 8 个字，表达完整意思，不是关键词堆砌。\n"
+        "3. 【数据必须结构化】涉及数值、对比、排名的内容，必须使用 table_data（表格）或 chart_data（图表）格式，不得用纯文本。\n"
+        "4. 【流程必须可视化】涉及步骤、阶段、审批流的，必须使用 flowchart_data 格式。\n"
+        "5. 【排版本质匹配】比较类内容优先用 three_columns，数据图表页优先用 image_right 布局。\n\n"
         "修改模式（按优先级排序）：\n\n"
-        "1. **局部修改**（推荐）：只修改用户指定的部分\n"
-        '   - 修改标题：{"action": "update", "slide_index": 1, "field": "title", "value": "新标题"}\n'
+        "1. **精准局部修改**（推荐用于大多数情况）：\n"
+        '   - 修改标题：{"action": "update", "slide_index": 1, "field": "title", "value": "更有冲击力的标题（至少10字）"}\n'
         '   - 修改副标题：{"action": "update", "slide_index": 0, "field": "subtitle", "value": "新副标题"}\n'
-        '   - 修改版式：{"action": "update", "slide_index": 0, "field": "layout", "value": "image_right"}\n\n'
-        "2. **修改要点**：\n"
-        '   - 更新要点：{"action": "update_item", "slide_index": 1, "item_index": 0, "field": "text", "value": "新内容"}\n'
-        '   - 添加要点：{"action": "add_item", "slide_index": 1, "item": {"text": "新要点", "level": 0, "content_type": "text"}}\n'
-        '   - 删除要点：{"action": "remove_item", "slide_index": 1, "item_index": 0}\n\n'
-        "3. **幻灯片操作**：\n"
-        '   - 添加幻灯片：{"action": "add_slide", "index": 2, "slide": {"title": "新页面", "type": "content", "layout": "text_only", "items": []}}\n'
+        '   - 修改版式：{"action": "update", "slide_index": 0, "field": "layout", "value": "image_right"}\n'
+        '   - 修改单个要点：{"action": "update_item", "slide_index": 1, "item_index": 0, "field": "text", "value": "完整描述句（至少8字）"}\n'
+        '   - 添加要点：{"action": "add_item", "slide_index": 1, "item": {"text": "完整描述句（至少8字）", "level": 0, "content_type": "text"}}\n'
+        '   - 删除要点：{"action": "remove_item", "slide_index": 1, "item_index": 0}\n'
+        '   - 复杂操作时，返回多个 JSON 对象，每行一个，逐行输出\n\n'
+        "2. **幻灯片增删**：\n"
+        '   - 添加幻灯片：{"action": "add_slide", "index": 2, "slide": {"title": "新页面", "type": "content", "layout": "text_only", "items": [{"level": 0, "text": "完整要点", "content_type": "text"}]}}\n'
         '   - 删除幻灯片：{"action": "remove_slide", "index": 2}\n\n'
-        "4. **内容转换**（当用户要求转换为图表/表格/图片时）：\n\n"
-        "   **重要：从非结构化内容中提取数据的技巧**\n\n"
-        '   当用户说"把这个内容做成表格"或"用图表展示"时，你需要：\n'
-        "   1. 分析内容结构，识别出可提取的数据模式\n"
-        "   2. 从自然语言中提取关键信息（人物、属性、数值等）\n"
-        "   3. 将提取的数据组织成表格/图表格式\n\n"
-        "   **常见提取模式**：\n"
-        "   - **人物属性**：张三25岁在北京 -> 列：[姓名, 年龄, 城市]\n"
-        "   - **产品对比**：产品A卖100万，产品B卖200万 -> 列：[产品, 销量]\n"
-        "   - **时间序列**：Q1增长10%，Q2增长15% -> 列：[季度, 增长率]\n"
-        "   - **列表描述**：优点：便宜、快速、可靠 -> 列：[优点]\n\n"
-        "   **转换指令格式**：\n\n"
-        "   a) 转为表格：\n"
-        '   {"action": "add_item", "slide_index": 0, "item": {"content_type": "table", "table_data": {"title": "标题", "columns": ["列1", "列2"], "rows": [["值1", "值2"]]}}}\n\n'
-        "   b) 转为柱状图（适合对比）：\n"
-        '   {"action": "add_item", "slide_index": 0, "item": {"content_type": "chart", "chart_type": "bar", "chart_data": {"title": "标题", "labels": ["标签1", "标签2"], "datasets": [{"label": "系列", "data": [10, 20], "color": "#007bff"}]}}}\n\n'
-        "   c) 转为折线图（适合趋势）：\n"
-        '   {"action": "add_item", "slide_index": 0, "item": {"content_type": "chart", "chart_type": "line", "chart_data": {...}}}\n\n'
-        "   d) 转为饼图（适合占比）：\n"
-        '   {"action": "add_item", "slide_index": 0, "item": {"content_type": "chart", "chart_type": "pie", "chart_data": {...}}}\n\n'
-        "   e) 转为流程图（适合步骤）：\n"
-        '   {"action": "add_item", "slide_index": 0, "item": {"content_type": "flowchart", "flowchart_data": {"title": "标题", "steps": ["步骤1", "步骤2"]}}}\n\n'
-        "   f) 添加图片（使用占位符或描述）：\n"
-        '   {"action": "add_item", "slide_index": 0, "item": {"content_type": "image", "image_url": "描述或URL"}}\n\n'
-        '5. **全局修改**（仅当用户明确要求"重新生成"时使用）：\n'
-        '   - 返回 {"slides": [...]}\n\n'
+        "3. **内容转换为结构化格式**（当用户要求转换为图表/表格/流程图时，必须使用结构化数据）：\n"
+        "   a) 转为表格（对比、排名、规格参数）：\n"
+        '   {"action": "add_item", "slide_index": 0, "item": {"content_type": "table", "table_data": {"title": "标题", "columns": ["列1", "列2"], "rows": [["值1", "值2"]]}}}\n'
+        "   b) 转为柱状图（适合对比）、折线图（适合趋势）、饼图（适合占比）：\n"
+        '   {"action": "add_item", "slide_index": 0, "item": {"content_type": "chart", "chart_type": "bar", "chart_data": {"title": "标题", "labels": ["A","B"], "datasets": [{"label": "系列", "data": [10,20], "color": "#007bff"}]}}}\n'
+        "   c) 转为流程图（适合步骤、阶段、审批链）：\n"
+        '   {"action": "add_item", "slide_index": 0, "item": {"content_type": "flowchart", '
+        '"flowchart_data": {"title": "流程标题", "nodes": [{"id": "n1", "text": "第一步", '
+        '"shape": "start"}, {"id": "n2", "text": "第二步", "shape": "process"}, '
+        '{"id": "n3", "text": "完成", "shape": "end"}], "edges": [{"from": "n1", "to": "n2"}, '
+        '{"from": "n2", "to": "n3"}]}}}\n\n'
+        '4. **全局修改**（当用户明确要求"重新生成"）：\n'
+        '   - 返回完整的 {"slides": [...]} 格式\n'
+        '   - 确保包含封面页和结尾页（type=ending, layout=center, title="谢谢"）\n\n'
         "内容类型：text / image / flowchart / icon / table / chart\n"
-        "版式类型：center / text_only / image_right / image_left / three_columns / two_columns / full_image"
+        "版式：center / text_only / image_right / image_left / three_columns / two_columns"
+    ),
+    "ppt_topic_extract": (
+        "你现在是一个专业的文档分析师。请从用户提供的文本中提取核心主题。"
+        "输出格式：JSON 数组，每个元素包含 title、abstract、importance_rank 字段。"
+    ),
+    "ppt_content_map": (
+        "你现在是一个专业的内容策划师。请将用户提供的主题和原文映射为结构化的内容要点。"
+        "输出格式：JSON 数组，每个元素包含 topic_index、topic_title、items、estimated_pages 字段。"
+    ),
+    "ppt_chart_convert": (
+        "你现在是一个数据可视化专家。请将用户提供的文本转换为图表数据。"
+        "输出格式：JSON 对象，包含 chart_type、chart_data、labels、datasets 字段。"
     ),
 }
 
@@ -126,6 +157,10 @@ CONTEXT_SOURCE_PRIORITY = {
     "revision": "high",   # 修订模式有明确的输出格式要求
     "ppt_generator": "high",  # PPT 生成有明确的 JSON 输出要求
     "ppt_editor": "high",     # PPT 编辑有明确的 JSON 输出要求
+    "ppt_topic_extract": "high",  # PPT 主题提取有明确的输出要求
+    "ppt_content_map": "high",    # PPT 内容映射有明确的输出要求
+    "ppt_chart_convert": "high",  # PPT 图表转换有明确的输出要求
+    "studio": "medium",   # Studio 工作台有 PPT 生成意图但依赖 persona
     "browser": "medium",  # 浏览器上下文有行为倾向
     "chat": "low",        # 聊天模式主要依赖 persona
     "drag": "low",        # 拖拽模式主要依赖 persona
@@ -156,10 +191,11 @@ PERSONA_CONFLICT_PATTERNS = {
 
 def load_persona(persona_name: str, base_dir: str = None) -> str:
     """
-    动态加载 Persona 文件，支持热更新
+    动态加载 Persona 文件，支持热更新、子目录路径和 action_type 映射。
     
     Args:
-        persona_name: persona 名称（如 "default", "code", "translate", "chat"）
+        persona_name: persona 名称或 action_type（如 "default", "code", "coding", "translate"）
+                      支持子目录路径格式（如 "office/business/presentation"）
         base_dir: personas 目录路径，默认为项目根目录下的 personas/
     
     Returns:
@@ -171,15 +207,40 @@ def load_persona(persona_name: str, base_dir: str = None) -> str:
         project_root = os.path.dirname(os.path.dirname(current_dir))
         base_dir = os.path.join(project_root, "personas")
     
+    # 1. 直接匹配（含子目录路径，如 "office/business/presentation"）
     filepath = os.path.join(base_dir, f"{persona_name}.md")
     if not os.path.exists(filepath):
-        # 回退到默认 persona
+        # 2. 通过 action_type → persona 映射表查找
+        mapped_name = _resolve_persona_mapping(persona_name)
+        if mapped_name != persona_name:
+            filepath = os.path.join(base_dir, f"{mapped_name}.md")
+    
+    if not os.path.exists(filepath):
+        # 3. 回退到默认 persona
         filepath = os.path.join(base_dir, "default.md")
         if not os.path.exists(filepath):
             return "你是一个强大的AI助手，请直接回答用户的问题。"
     
     with open(filepath, "r", encoding="utf-8") as f:
         return f.read().strip()
+
+
+def _resolve_persona_mapping(action_type: str) -> str:
+    """通过 ConfigManager 的 persona_mapping 将 action_type 映射为 persona 文件名。
+    
+    如果 ConfigManager 不可用或映射中无此 action_type，原样返回。
+    """
+    # 内置默认映射（ConfigManager 不可用时的兜底）
+    _BUILTIN_MAPPING = {
+        "coding": "code", "code_review": "code",
+        "translation": "translate",
+    }
+    try:
+        from config_manager import ConfigManager
+        mapping = ConfigManager.get_instance().get_persona_mapping()
+        return mapping.get(action_type, action_type)
+    except Exception:
+        return _BUILTIN_MAPPING.get(action_type, action_type)
 
 
 # ==========================================

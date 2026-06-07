@@ -7,7 +7,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS%2012%2B-blue" alt="platform">
   <img src="https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-green" alt="python">
-  <img src="https://img.shields.io/badge/version-v4.0-orange" alt="version">
+  <img src="https://img.shields.io/badge/version-v5.0-orange" alt="version">
   <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="license">
   <a href="README_CN.md">中文</a>
 </p>
@@ -107,16 +107,55 @@ This means OpenCopilot delivers the **exact same interaction experience** across
 
 | Posture | Trigger | Intent | Form |
 |---------|---------|--------|------|
-| **Instant Advisor** | Double right-click | "Take a look at this for me" | Translucent floating card, appears next to cursor, never steals focus |
+| **Instant Advisor** | Double right-click | "Take a look at this for me" | Lightweight floating window, appears near the cursor, never steals focus |
 | **Deep Workbench** | Triple right-click | "I have a complex task" | Independent workspace window, with task context + multi-turn dialogue |
 | **Drag & Drop Feed** | Select → drag into card | "Fix just this part" | Accepts text dragged from any application |
 
 **Core interaction principles**:
 
-- **Never steals focus**: card appears without interrupting your typing
-- **Eyes stay put**: card follows cursor position, no forced gaze shift
+- **Never steals focus**: the floating window appears without interrupting your typing
+- **Eyes stay put**: the floating window appears near the trigger point, no forced gaze shift
 - **Context auto-carried**: selected text is automatically injected — no need to explain "the paragraph above"
 - **Human in the loop, always**: every interaction triggered by you, every result confirmed by you — not a black-box agent, but your enhanced "smart right-click"
+
+### v5.0 Interaction Upgrade
+
+**Smart Copilot 3-Tab Architecture**:
+
+| Tab | Function | Design Philosophy |
+|-----|----------|-------------------|
+| **Work** | Quick operations (Explain/Fix/Polish) | Primary/Secondary button hierarchy, Context Strip data source switching |
+| **Chat** | Continuous dialogue | Context Panel shows available context sources, Skill Panel integrated at bottom |
+| **Studio** | PPT co-creation workbench | Merges original Tab 3 + Tab 5, directly opens 4-Panel editor |
+
+**Agent Workspace 2.0**:
+
+| Panel | Function | Description |
+|-------|----------|-------------|
+| **Task** | Task definition & management | Task details + history + template loading |
+| **Chat** | Session list + dialogue | Multi-session switching + persistence |
+| **Files** | Recent files + drop zone | File management + context injection |
+| **Memory** | Knowledge & context | Knowledge graph + translation memory + terminology |
+| **Settings** | Engine / Theme / Shortcuts / Persona | Unified settings entry |
+
+**Unified Settings Dialog**:
+
+- 4 sections: Engine / Appearance / Shortcuts / Advanced
+- 3 entry points: Smart Copilot Header / Workspace Sidebar / System Tray
+- Replaces original 2 separate settings dialogs
+
+### v5.0 Delivery Status
+
+The v5 redesign is **partially shipped in code, not fully feature-complete**. Current repo status:
+
+| Area | Already implemented in code | Still in progress |
+|------|-----------------------------|-------------------|
+| **Navigation** | `NavigationManager` centralizes Smart Copilot / Workspace / Studio / Settings lifecycle | More legacy windows still coexist in compatibility paths |
+| **Smart Copilot** | 3-Tab shell (`Work / Chat / Studio`), drag & drop sharing, direct Agent calls via `V5AgentWorker` | Further polish on markdown rendering, command palette, richer context chips |
+| **Work / Chat** | Core interaction loop is usable: context fetch, streaming AI output, session handling, cancel | More advanced contextual actions and richer session management |
+| **Studio** | PPT co-creation is fully implemented: 4-Panel workbench, thumbnail strip, diff preview edit, AI chat flow, unified undo stack, export & fullscreen | ✅ Fully Implemented |
+| **Workspace** | Sidebar + 5-panel shell, settings entry, refresh hooks | Task / Chat / Files / Memory business logic is still largely placeholder-based |
+| **Settings** | Unified settings dialog with Engine / Appearance / Shortcuts / Advanced and bridge persistence | More validation, richer summaries, broader config coverage |
 
 ---
 
@@ -161,15 +200,15 @@ Supports `.md`, `.txt`, `.py`, `.docx`, `.pptx`. Word/PPT files are auto-parsed 
 
 ### 📊 PPT Co-Creation
 
-From zero to presentation, AI participates throughout:
+The v5 codebase already includes a **fully implemented Studio PPT Co-creation Workbench**:
 
-| Stage | AI Role | Output |
-|-------|---------|--------|
-| Content Input | Drag in document / type topic | Structured material |
-| Outline Generation | AI analyzes content → plans slide structure | JSON outline (title + bullet points per slide) |
-| Co-Creative Editing | Natural language conversation to modify ("change this slide to left-right comparison layout") | Real-time slide updates |
-| Content Analysis | Select a slide → AI analyzes logic, data, expression | Analysis panel |
-| Optimization Suggestions | AI reviews the full deck → proposes 1-2 improvements | Suggestion bubbles |
+- Independent `StudioWindowV5` lifecycle managed by `NavigationManager`
+- 4-region shell: `Source`, `Outline`, `Preview`, and bottom AI area
+- Thumbnail strip with navigation support
+- WYSIWYG preview and diff preview editing
+- Natural language AI dialogue for slide modifications
+- Unified Undo/Redo stack
+- Full pipeline for text/slides loading, PPT export, and fullscreen preview
 
 ### 🔍 Multi-Source Context Awareness
 
@@ -274,6 +313,12 @@ OpenClaw's Pipeline + Agent Loop architecture solves three core problems in Agen
 
 **In short**: OpenClaw is "AI does the work for you", OpenCopilot is "AI lends a hand while you work". Both share the Pipeline architectural philosophy, but with different product visions.
 
+**Current v5 UI integration note**:
+
+- `Work` and `Chat` already call the shared Agent Pipeline implementation directly through `gui/v5/agent_worker.py`
+- non-AI UI actions go through `gui/v5/bridge.py`
+- `API Gateway (:8000)` remains the HTTP/OpenAPI surface and also hosts some v5 routes such as `/api/studio/*`
+
 ---
 
 ## Quick Start
@@ -295,17 +340,22 @@ pip install -e .
 ### Launch
 
 ```bash
-# Terminal 1: API Gateway (auto-starts Knowledge Graph)
+# Terminal 1: Agent Pipeline (:18888) - recommended for health check / HTTP compatibility
+python3 asu_custom_agent.py
+
+# Terminal 2: Privileged Broker (:18889) - required for selection / active doc / apply-back
+bash start_broker.sh
+
+# Terminal 3: API Gateway (:8000) - optional but recommended for OpenAPI + HTTP routes + /api/studio/*
 python3 -m uvicorn smart_copilot_api:app --host 0.0.0.0 --port 8000 --reload
 
-# Terminal 2: Privileged Broker (⚠️ must run in native macOS Terminal)
-python3 opencopilot/broker/run.py
-
-# Terminal 3: UI
-python3 smart_copilot.py
+# Terminal 4: UI
+bash scripts/start_ui.sh
 ```
 
-After launch, colored cursor effects appear in the screen corner. Title bar 🟢 means ready.
+For a more detailed startup matrix, see [docs/STARTUP_GUIDE.md](docs/STARTUP_GUIDE.md).
+
+After launch, the v5 UI is opened through `smart_copilot.py` → `gui/main.py`. Smart Copilot / Workspace / Studio are shown by the v5 navigation layer.
 
 ---
 
@@ -335,13 +385,25 @@ OpenCopilot/
 │   └── shared/                   #   Shared utilities (prompt building/context normalization)
 ├── api/                          # API Gateway (:8000)
 │   ├── app.py                    #   Route factory
-│   └── routers/                  #   12 independent route modules
+│   └── routers/                  #   16+ independent route modules
 ├── gui/                          # PyQt6 desktop app
 │   ├── main.py                   #   Entry + CopilotManager
-│   ├── window.py                 #   AICardWindow — core floating card
-│   ├── workspace.py              #   AgentWorkspace — task workbench
-│   ├── workers/                  #   QThread Workers (ChatWorker/AIWorker)
+│   ├── v5/                       #   v5 interaction layer (Navigation / Work / Chat / Studio / Settings)
+│   ├── window.py                 #   Legacy/compat floating card
+│   ├── workspace.py              #   Legacy/compat workspace
+│   ├── workers/                  #   QThread Workers
 │   └── dialogs/                  #   Translation/Persona dialogs
+├── widgets/                      # PyQt6 widgets (skill panel, settings dialog, etc.)
+├── asu_custom_agent.py           # Agent Pipeline service (:18888)
+├── asu_broker/                   # Privileged Broker service (:18889)
+├── coding_agent/                 # Coding agent implementation
+├── context_manager/              # Context management system
+├── core/                         # Core utilities and managers
+├── knowledge_graph/              # Knowledge graph implementation
+├── docs/                         # Documentation
+│   ├── UI_Redesign_Plan_v5.md    # v5.0 UI redesign plan
+│   ├── PPT_CoCreation_Design.md  # PPT co-creation design
+│   └── PPT_CoCreation_Iteration_Plan.md # PPT iteration plan
 ├── personas/                     # AI role files (*.md)
 ├── asu-ide-extension/            # IDE companion extension (VSCode/Trae/Cursor)
 ├── tests/                        # Tests (unit / e2e / ablation)
@@ -360,6 +422,8 @@ OpenCopilot/
 | [USER_GUIDE.md](USER_GUIDE.md) | User manual (interactions, features, permissions, FAQ) |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Architecture design (Pipeline, Agent Loop, Skill system, Broker protocol) |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Development guide (module development, testing, adding Persona/Skill) |
+| [docs/STARTUP_GUIDE.md](docs/STARTUP_GUIDE.md) | Startup matrix for Agent / Broker / API Gateway / UI |
+| [docs/UI_Redesign_Plan_v5.md](docs/UI_Redesign_Plan_v5.md) | v5.0 UI redesign plan (3-Tab architecture, Workspace 2.0, unified settings) |
 
 ---
 
@@ -371,9 +435,10 @@ OpenCopilot/
 | P1 | Privileged Broker, multimodal vision, silent text selection | ✅ |
 | P2 | Persona workshop, PPT co-creation, Knowledge Graph, Skill architecture | ✅ |
 | P3 | Agent Loop refactor, OpenClaw single-process migration, Pipeline unification | ✅ |
-| P4 | v4.0 layered architecture refactor, code governance, full-chain observability | ✅ |
-| P5 | IDE Extension v2, Broker productization | 🔶 In Progress |
-| P6 | Proactive context awareness, multi-agent collaboration | 📋 Planned |
+| P4 | Layered architecture refactor, code governance, full-chain observability | ✅ |
+| P5 | v5.0 UI redesign: 3-Tab architecture, Workspace 2.0, unified settings, Skill refactoring | 🔶 In Progress (Studio Completed) |
+| P6 | IDE Extension v2, Broker productization | 📋 Planned |
+| P7 | Proactive context awareness, multi-agent collaboration | 📋 Planned |
 
 ---
 

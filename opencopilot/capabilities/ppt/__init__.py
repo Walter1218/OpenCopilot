@@ -9,6 +9,7 @@ PPT 人机共创编辑器模块
 """
 
 from .cocreation_dialog import CoCreationDialog
+from .cocreation_widget import CoCreationWidget, CoCreationWindow
 from .source_panel import SourcePanel
 from .outline_panel import OutlinePanel
 from .preview_panel import PreviewPanel
@@ -16,9 +17,17 @@ from .ai_chat_widget import AICopilotChatWidget
 from .source_matcher import SourceMatcher
 from .suggestion_bubble import SuggestionBubble, SuggestionBubbleManager
 from .content_analysis_panel import ContentAnalysisPanel, AnalysisPanelManager
+from .pipeline import (
+    PPTGenerationPipeline, PipelineResult, Topic,
+    ContentMapping, ContentItem, FormatResult,
+)
+from .intent_router import IntentRouter
+from .storyline_view import StorylineView
 
 __all__ = [
     'CoCreationDialog',
+    'CoCreationWidget',
+    'CoCreationWindow',
     'SourcePanel',
     'OutlinePanel',
     'PreviewPanel',
@@ -28,4 +37,12 @@ __all__ = [
     'SuggestionBubbleManager',
     'ContentAnalysisPanel',
     'AnalysisPanelManager',
+    'PPTGenerationPipeline',
+    'PipelineResult',
+    'Topic',
+    'ContentMapping',
+    'ContentItem',
+    'FormatResult',
+    'IntentRouter',
+    'StorylineView',
 ]

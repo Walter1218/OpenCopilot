@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPT 预览</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f5f5;
+            padding: 40px;
+        }
+        
+        .slide-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .slide {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            margin-bottom: 40px;
+            padding: 60px;
+            position: relative;
+            overflow: hidden;
+            page-break-after: always;
+        }
+        
+        .slide::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 8px;
+            background: linear-gradient(90deg, #0052cc, #00b4d8);
+        }
+        
+        .slide-title {
+            font-size: 36px;
+            font-weight: 700;
+            color: #0052cc;
+            margin-bottom: 40px;
+            line-height: 1.2;
+        }
+        
+        .slide-subtitle {
+            font-size: 18px;
+            color: #666;
+            margin-top: 10px;
+            font-weight: 400;
+        }
+        
+        .content-area {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        .item-level-0 {
+            font-size: 20px;
+            color: #1a1a2e;
+            font-weight: 600;
+            padding: 12px 0;
+            border-left: 4px solid #0052cc;
+            padding-left: 16px;
+        }
+        
+        .item-level-1 {
+            font-size: 16px;
+            color: #3c4043;
+            padding: 8px 0 8px 32px;
+            position: relative;
+        }
+        
+        .item-level-1::before {
+            content: '•';
+            position: absolute;
+            left: 16px;
+            color: #0052cc;
+        }
+        
+        /* Three columns layout */
+        .three-columns {
+            display: flex;
+            gap: 30px;
+            margin-top: 20px;
+        }
+        
+        .column {
+            flex: 1;
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .column-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #0052cc, #00b4d8);
+            border-radius: 50%;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        .column-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #0052cc;
+            text-align: center;
+            margin-bottom: 16px;
+        }
+        
+        .column-items {
+            width: 100%;
+        }
+        
+        .column-item {
+            font-size: 14px;
+            color: #3c4043;
+            padding: 8px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .column-item:last-child {
+            border-bottom: none;
+        }
+        
+        /* Title slide */
+        .title-slide {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: linear-gradient(135deg, #0052cc 0%, #00b4d8 100%);
+            color: white;
+        }
+        
+        .title-slide .slide-title {
+            color: white;
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        
+        .title-slide .slide-subtitle {
+            color: rgba(255,255,255,0.9);
+            font-size: 24px;
+        }
+        
+        /* Ending slide */
+        .ending-slide {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+        }
+        
+        .ending-slide .slide-title {
+            color: white;
+            font-size: 60px;
+        }
+        
+        .ending-slide .slide-subtitle {
+            color: rgba(255,255,255,0.8);
+            font-size: 28px;
+            margin-top: 20px;
+        }
+        
+        /* Chart slide */
+        .chart-container {
+            margin-top: 30px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 30px;
+            height: 400px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+        }
+        
+        .chart-bar {
+            width: 80px;
+            background: linear-gradient(180deg, #0052cc, #00b4d8);
+            border-radius: 8px 8px 0 0;
+            position: relative;
+            transition: height 0.5s ease;
+        }
+        
+        .chart-bar-label {
+            position: absolute;
+            bottom: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            color: #666;
+            white-space: nowrap;
+        }
+        
+        .chart-bar-value {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            font-weight: bold;
+            color: #0052cc;
+        }
+        
+        /* Page number */
+        .page-number {
+            position: absolute;
+            bottom: 20px;
+            right: 30px;
+            font-size: 14px;
+            color: #999;
+        }
+        
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            .slide {
+                box-shadow: none;
+                margin: 0;
+                border-radius: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="slide-container">
+        
+<div class="slide title-slide">
+    <div class="slide-title">AI Agent 产品全景与趋势洞察<div class="slide-subtitle">从对话助手到自主执行的数字员工</div></div>
+    
+    <div class="page-number">1 / 7</div>
+</div>
+
+
+<div class="slide ">
+    <div class="slide-title">AI Agent 产品全景分类与市场概览</div>
+    <div class="content-area"><div class="item-level-0">核心演进：AI从被动响应工具，进化为主动决策执行的数字员工</div><div class="item-level-0">两大核心驱动趋势：桌面Agent与AI编程Agent</div><div class="item-level-0">六大产品类别全景梳理</div><div class="item-level-1">桌面办公Agent：操控电脑，执行复杂任务</div><div class="item-level-1">AI编程Agent：从代码补全到自主编程</div><div class="item-level-1">自进化框架：具备跨会话学习与技能积累能力</div></div>
+    <div class="page-number">2 / 7</div>
+</div>
+
+
+<div class="slide ">
+    <div class="slide-title">桌面Agent：2026年最热的新兴赛道</div>
+    <div class="content-area"><div class="item-level-0">定义：AI直接操控电脑、读取文件、执行脚本，成为“数字同事”</div><div class="item-level-0">市场爆发：2026年全球市场规模预计突破100亿美元，用户超5000万</div><div class="item-level-0">核心能力跃迁：从“被动应答”到“主动执行”</div><div class="item-level-1">本地操控、复杂执行、智能协同、主动服务四大能力</div><div class="item-level-0">代表产品与路线分化</div><div class="item-level-1">WorkBuddy：产品化、安全可控，上线两月登顶访问量</div><div class="item-level-1">OpenClaw：开源开放、社区驱动</div></div>
+    <div class="page-number">3 / 7</div>
+</div>
+
+
+<div class="slide ">
+    <div class="slide-title">AI编程Agent：竞争最激烈的赛道<br><small style='font-size: 18px; color: #666;'>赛道概述：从代码补全进化为自主编程Agent，产品密度最高、迭代最快</small></div>
+    
+<div class="three-columns">
+    
+<div class="column">
+    <div class="column-icon">C</div>
+    <div class="column-title">Claude Code</div>
+    <div class="column-items">
+        <div class="column-item">CLI Agent标杆，代表命令行交互的极致效率</div><div class="column-item">仅支持Claude模型</div>
+    </div>
+</div>
+
+<div class="column">
+    <div class="column-icon">U</div>
+    <div class="column-title">Cursor</div>
+    <div class="column-items">
+        <div class="column-item">IDE集成先驱，深度集成开发环境</div><div class="column-item">支持多模型，体验领先</div>
+    </div>
+</div>
+
+<div class="column">
+    <div class="column-icon">T</div>
+    <div class="column-title">腾讯CodeBuddy</div>
+    <div class="column-items">
+        <div class="column-item">三形态（CLI/IDE/插件）+自举开发</div><div class="column-item">内部覆盖率超90%</div>
+    </div>
+</div>
+
+</div>
+
+    <div class="page-number">4 / 7</div>
+</div>
+
+
+<div class="slide ">
+    <div class="slide-title">自进化Agent框架：从被编排到自己学</div>
+    <div class="content-area"><div class="item-level-0">新范式概述：以Hermes Agent为代表，Agent从被动执行转向主动学习与进化</div><div class="item-level-0">核心理念：解决复杂任务后，Agent能自动创建、积累并管理新技能</div><div class="item-level-1">本质区别：具备跨会话的持续进化能力，区别于AutoGPT等框架</div><div class="item-level-0">核心特性解析</div><div class="item-level-1">自动Skill创建：任务成功后，自动将解决方案写入知识库</div><div class="item-level-1">RL轨迹引导训练：利用强化学习优化决策路径</div></div>
+    <div class="page-number">5 / 7</div>
+</div>
+
+
+<div class="slide ">
+    <div class="slide-title">Agent核心架构与推理模式</div>
+    <div class="content-area"><div class="item-level-0">Agent核心四要素：LLM驱动下的规划、记忆、工具使用、行动</div><div class="item-level-1">规划：任务分解与策略制定</div><div class="item-level-1">记忆：上下文存储与历史信息</div><div class="item-level-1">工具使用：通过MCP等接口调用外部软件与服务</div><div class="item-level-1">行动：执行具体操作并反馈结果</div><div class="item-level-0">推理模式：需要长链推理、多轮规划与多Agent协同</div><div class="item-level-0">硬件适配：对CPU响应速度提出新要求，催生专用AI处理器</div></div>
+    <div class="page-number">6 / 7</div>
+</div>
+
+
+<div class="slide ending-slide">
+    <div class="slide-title">谢谢<div class="slide-subtitle">Q & A</div></div>
+    
+    <div class="page-number">7 / 7</div>
+</div>
+
+    </div>
+</body>
+</html>

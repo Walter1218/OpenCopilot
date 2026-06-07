@@ -254,6 +254,12 @@ def generate_ppt_from_json(json_data, output_path="output.pptx"):
             apply_corporate_theme(slide, prs, is_title_slide=True)
             format_title_slide(slide, slide_data.get("title", "演示文稿"), slide_data.get("subtitle", ""))
             
+        elif slide_type == "ending":
+            # 结尾页：居中展示 "谢谢" + "Q & A"
+            slide = prs.slides.add_slide(prs.slide_layouts[0])
+            apply_corporate_theme(slide, prs, is_title_slide=True)
+            format_title_slide(slide, slide_data.get("title", "谢谢"), slide_data.get("subtitle", "Q & A"))
+            
         elif slide_type == "content":
             slide = prs.slides.add_slide(prs.slide_layouts[1])
             apply_corporate_theme(slide, prs, is_title_slide=False)

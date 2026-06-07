@@ -86,3 +86,42 @@ async def ppt_chat_history(session_id: str):
 @router.post("/check")
 async def ppt_check(data: dict):
     return {"check": "ok"}
+
+
+# =============================================================================
+# v5 新增端点
+# =============================================================================
+
+class ExportSlidesRequest(BaseModel):
+    """导出 Slides 请求"""
+    slides: List[Dict[str, Any]] = Field(..., description="Slides JSON 数据")
+    filename: Optional[str] = Field(None, description="输出文件名（不含 .pptx 后缀）")
+
+
+@router.post("/export-slides")
+async def export_slides(request: ExportSlidesRequest):
+    """
+    导出 Slides 为 PPT 文件
+
+    接收 slides JSON + filename，生成 .pptx 并返回下载路径。
+    用于 Studio Window 底部 "导出 PPT" 按钮。
+    """
+    print(f"[V5-API] POST /api/ppt/export-slides | slides={len(request.slides)}, filename={request.filename}")
+    try:
+        filename = request.filename or f"presentation_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        if not filename.endswith('.pptx'):
+            filename += '.pptx'
+        output_path = os.path.join(tempfile.gettempdir(), filename)
+        generate_ppt_from_json(request.slides, output_path)
+        file_size = os.path.getsize(output_path)
+        print(f"[V5-API] export-slides: success, path={output_path}, size={file_size}")
+        return {
+            "success": True,
+            "file_path": output_path,
+            "filename": filename,
+            "file_size": file_size,
+            "slide_count": len(request.slides),
+        }
+    except Exception as e:
+        print(f"[V5-API] export-slides error: {e}")
+        raise HTTPException(status_code=500, detail=f"PPT 导出失败: {str(e)}")

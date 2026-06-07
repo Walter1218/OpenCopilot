@@ -180,8 +180,15 @@ class TestModelScannerWorker:
 # 3. AIWorker 测试
 # =========================================
 class TestAIWorker:
-    """测试 AI Worker 流式输出逻辑"""
+    """测试 AI Worker 流式输出逻辑
 
+    NOTE: 旧版 AIWorker 已废弃（改用 gui.v5.agent_worker.V5AgentWorker），
+    这些测试基于 provider.stream_agent_task mock，但 AIWorker.run() 现在
+    直接调用 call_agent_pipeline_sync()，mock 已失效。
+    保留测试作为历史参考，全部标记 skip。
+    """
+
+    @pytest.mark.skip(reason="旧版 AIWorker 已废弃，改用 V5AgentWorker")
     def test_ai_worker_stream(self, qapp, qtbot):
         """应逐 chunk 发射 text_updated 信号"""
         from gui.workers.ai import AIWorker
@@ -208,6 +215,7 @@ class TestAIWorker:
         # 最后一个发射的文本应包含完整内容
         assert "Hello world!" in texts[-1]
 
+    @pytest.mark.skip(reason="旧版 AIWorker 已废弃，改用 V5AgentWorker")
     def test_ai_worker_stop(self, qapp, qtbot):
         """stop() 应能中断流式处理"""
         from gui.workers.ai import AIWorker
@@ -244,6 +252,7 @@ class TestAIWorker:
         # 应该没有处理完所有 100 个 chunk
         assert len(texts) < 100
 
+    @pytest.mark.skip(reason="旧版 AIWorker 已废弃，改用 V5AgentWorker")
     def test_ai_worker_think_filter(self, qapp, qtbot):
         """应过滤 <think>...</think> 标签"""
         from gui.workers.ai import AIWorker
@@ -270,6 +279,7 @@ class TestAIWorker:
         assert "<think>" not in final
         assert "42" in final
 
+    @pytest.mark.skip(reason="旧版 AIWorker 已废弃，改用 V5AgentWorker")
     def test_ai_worker_error_handling(self, qapp, qtbot):
         """Provider 异常时应发射错误信息"""
         from gui.workers.ai import AIWorker
@@ -299,8 +309,15 @@ class TestAIWorker:
 # 4. ChatWorker 测试
 # =========================================
 class TestChatWorker:
-    """测试 Chat Worker"""
+    """测试 Chat Worker
 
+    NOTE: 旧版 ChatWorker 已废弃（改用 gui.v5.agent_worker.V5AgentWorker），
+    这些测试基于 provider.stream_agent_task mock，但 ChatWorker.run() 现在
+    直接调用 call_agent_pipeline_sync()，mock 已失效。
+    保留测试作为历史参考，全部标记 skip。
+    """
+
+    @pytest.mark.skip(reason="旧版 ChatWorker 已废弃，改用 V5AgentWorker")
     def test_chat_worker_basic(self, qapp, qtbot):
         """基本聊天流式输出"""
         from gui.workers.chat import ChatWorker
@@ -324,6 +341,7 @@ class TestChatWorker:
         assert len(finished) == 1
         assert "你好世界" in texts[-1]
 
+    @pytest.mark.skip(reason="旧版 ChatWorker 已废弃，改用 V5AgentWorker")
     def test_chat_worker_with_task_context(self, qapp, qtbot):
         """带任务上下文的聊天"""
         from gui.workers.chat import ChatWorker

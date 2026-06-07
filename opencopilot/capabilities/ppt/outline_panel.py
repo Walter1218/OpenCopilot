@@ -10,6 +10,7 @@
 
 import json
 import uuid
+from typing import List, Dict, Any
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem,
     QLineEdit, QTextEdit, QComboBox, QLabel, QPushButton, QFormLayout,
@@ -18,6 +19,9 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QSize, QMimeData
 from PyQt6.QtGui import QColor, QFont, QIcon, QDrag, QAction
+
+from .suggestion_engine import SuggestionEngine
+from .context_analyzer import SuggestionType
 
 
 class SlideListWidget(QListWidget):
@@ -225,6 +229,7 @@ class OutlinePanel(QWidget):
         self.slides_data = []
         self.current_index = -1
         self.item_editors = []
+        self.suggestion_engine = SuggestionEngine()
         self._init_ui()
     
     def _init_ui(self):
@@ -452,8 +457,26 @@ class OutlinePanel(QWidget):
             title = slide.get('title', f'幻灯片 {i+1}')
             slide_type = slide.get('type', 'content')
             icon = "🎯" if slide_type == "title" else "📄"
-            item = QListWidgetItem(f"{icon} {i+1}. {title}")
+            
+            # 获取质量徽章信息
+            badge_icon, badge_tooltip, badge_color = self._get_quality_badge_info(i)
+            
+            # 构建显示文本
+            display_text = f"{icon} {i+1}. {title}"
+            if badge_icon:
+                display_text = f"{badge_icon} {display_text}"
+            
+            item = QListWidgetItem(display_text)
             item.setData(Qt.ItemDataRole.UserRole, i)
+            
+            # 设置工具提示
+            if badge_tooltip:
+                item.setToolTip(badge_tooltip)
+            
+            # 设置徽章颜色（通过前景色）
+            if badge_color:
+                item.setForeground(QColor(badge_color))
+            
             self.slide_list.addItem(item)
     
     def _on_slide_selected(self, row: int):
@@ -495,7 +518,164 @@ class OutlinePanel(QWidget):
         # 更新要点编辑区
         self._refresh_items()
         
+        # 显示质量警告
+        self._show_quality_warning(row)
+        
         self.slide_selected.emit(row)
+    
+    def _check_slide_quality(self, slide_index: int) -> List[Dict[str, Any]]:
+        """检查幻灯片质量并返回问题列表"""
+        if slide_index < 0 or slide_index >= len(self.slides_data):
+            return []
+        
+        slide = self.slides_data[slide_index]
+        context = {
+            "slides": self.slides_data,
+            "current_slide": slide_index
+        }
+        
+        try:
+            result = self.suggestion_engine.generate_suggestions(context, max_suggestions=10)
+            issues = []
+            
+            for suggestion in result.suggestions:
+                # 过滤出与当前幻灯片相关的建议
+                if self._is_suggestion_relevant_to_slide(suggestion, slide_index):
+                    issues.append({
+                        "type": suggestion.type.value,
+                        "title": suggestion.title,
+                        "description": suggestion.description,
+                        "confidence": suggestion.confidence,
+                        "priority": suggestion.priority
+                    })
+            
+            return issues
+        except Exception as e:
+            print(f"质量检查失败: {e}")
+            return []
+    
+    def _is_suggestion_relevant_to_slide(self, suggestion, slide_index: int) -> bool:
+        """检查建议是否与指定幻灯片相关"""
+        # 对于风格一致性建议，检查是否涉及当前幻灯片
+        if suggestion.type == SuggestionType.STYLE_CONSISTENT:
+            action = suggestion.action
+            params = action.get("params", {})
+            return params.get("slide_index") == slide_index
+        
+        # 对于内容优化建议，检查是否针对当前幻灯片
+        if suggestion.type == SuggestionType.CONTENT_OPTIMIZE:
+            # 这些通常针对当前上下文，可以认为是相关的
+            return True
+        
+        # 对于结构改进建议，检查是否与当前幻灯片相关
+        if suggestion.type == SuggestionType.STRUCTURE_IMPROVE:
+            # 结构建议通常针对整个演示文稿，但可以标记在相关幻灯片上
+            return True
+        
+        # 对于视觉增强建议，检查是否针对当前幻灯片
+        if suggestion.type == SuggestionType.VISUAL_ENHANCE:
+            # 视觉增强建议通常针对当前内容
+            return True
+        
+        return False
+    
+    def _get_quality_badge_info(self, slide_index: int) -> tuple:
+        """获取质量徽章信息（图标、提示文本、样式）"""
+        issues = self._check_slide_quality(slide_index)
+        
+        if not issues:
+            return None, None, None
+        
+        # 根据问题数量和严重程度确定徽章
+        high_priority_count = sum(1 for issue in issues if issue.get("priority", 5) <= 2)
+        medium_priority_count = sum(1 for issue in issues if issue.get("priority", 5) == 3)
+        
+        if high_priority_count > 0:
+            icon = "🔴"
+            tooltip = f"发现 {high_priority_count} 个高优先级问题"
+            color = "#f14c4c"
+        elif medium_priority_count > 0:
+            icon = "🟡"
+            tooltip = f"发现 {medium_priority_count} 个中优先级问题"
+            color = "#cca700"
+        else:
+            icon = "🟢"
+            tooltip = f"发现 {len(issues)} 个优化建议"
+            color = "#28a745"
+        
+        # 添加详细问题描述
+        detailed_issues = []
+        for issue in issues[:3]:  # 最多显示3个问题
+            detailed_issues.append(f"• {issue['title']}")
+        
+        if len(issues) > 3:
+            detailed_issues.append(f"...还有 {len(issues) - 3} 个其他问题")
+        
+        tooltip += "\n" + "\n".join(detailed_issues)
+        
+        return icon, tooltip, color
+    
+    def _show_quality_warning(self, slide_index: int):
+        """显示质量警告"""
+        issues = self._check_slide_quality(slide_index)
+        
+        if not issues:
+            # 没有问题，隐藏警告
+            if hasattr(self, 'quality_warning_label'):
+                self.quality_warning_label.hide()
+            return
+        
+        # 创建或更新警告标签
+        if not hasattr(self, 'quality_warning_label'):
+            self.quality_warning_label = QLabel()
+            self.quality_warning_label.setStyleSheet("""
+                QLabel {
+                    background-color: #2d2d2d;
+                    border: 1px solid #3c3c3c;
+                    border-radius: 6px;
+                    padding: 8px;
+                    color: #d4d4d4;
+                    font-size: 11px;
+                }
+            """)
+            self.quality_warning_label.setWordWrap(True)
+            self.quality_warning_label.setAlignment(Qt.AlignmentFlag.AlignTop)
+            
+            # 将警告标签添加到编辑区域下方
+            # 找到编辑区域的父布局
+            edit_widget = self.findChild(QWidget, "edit_widget")
+            if edit_widget:
+                edit_layout = edit_widget.layout()
+                if edit_layout:
+                    edit_layout.addWidget(self.quality_warning_label)
+        
+        # 构建警告内容
+        high_priority = [i for i in issues if i.get("priority", 5) <= 2]
+        medium_priority = [i for i in issues if i.get("priority", 5) == 3]
+        low_priority = [i for i in issues if i.get("priority", 5) > 3]
+        
+        warning_text = f"⚠️ 质量检查报告 (第{slide_index + 1}页)\n"
+        warning_text += "=" * 40 + "\n"
+        
+        if high_priority:
+            warning_text += f"🔴 高优先级问题 ({len(high_priority)}个):\n"
+            for issue in high_priority[:2]:  # 最多显示2个
+                warning_text += f"  • {issue['title']}\n"
+            if len(high_priority) > 2:
+                warning_text += f"  ...还有 {len(high_priority) - 2} 个\n"
+        
+        if medium_priority:
+            warning_text += f"🟡 中优先级问题 ({len(medium_priority)}个):\n"
+            for issue in medium_priority[:2]:
+                warning_text += f"  • {issue['title']}\n"
+            if len(medium_priority) > 2:
+                warning_text += f"  ...还有 {len(medium_priority) - 2} 个\n"
+        
+        if low_priority:
+            warning_text += f"🟢 优化建议 ({len(low_priority)}个)\n"
+        
+        self.quality_warning_label.setText(warning_text)
+        self.quality_warning_label.show()
     
     def _refresh_items(self):
         """刷新要点编辑区"""
@@ -672,8 +852,9 @@ class OutlinePanel(QWidget):
             new_slide = copy.deepcopy(self.slides_data[row])
             new_slide['id'] = str(uuid.uuid4())[:8]
             new_slide['title'] = f"{new_slide.get('title', '')} (副本)"
-            
+
             self.slides_data.insert(row + 1, new_slide)
+            self.slide_added.emit(row + 1, new_slide)
             self._refresh_list()
             self.slide_list.setCurrentRow(row + 1)
     

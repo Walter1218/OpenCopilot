@@ -95,6 +95,7 @@ class TextProcessRequest(BaseModel):
     """文本处理请求"""
     text: str = Field(..., description="待处理文本")
     action: str = Field(..., description="处理类型: translate/polish/explain/summarize/code")
+    source_language: Optional[str] = Field("auto", description="源语言（翻译时使用，auto 表示自动检测）")
     target_language: Optional[str] = Field("zh", description="目标语言（翻译时使用）")
     custom_instruction: Optional[str] = Field(None, description="自定义指令")
 
@@ -1668,6 +1669,8 @@ from api.routers.knowledge import router as _kn_r
 from api.routers.coding import router as _cod_r
 from api.routers.tasks import router as _tsk_r
 from api.routers.evaluation import router as _evl_r
+from api.routers.workspace import router as _ws_r
+from api.routers.studio import router as _stu_r
 
 app.include_router(_chat_r)
 app.include_router(_chat_ws)
@@ -1681,3 +1684,5 @@ app.include_router(_kn_r)
 app.include_router(_cod_r)
 app.include_router(_tsk_r)
 app.include_router(_evl_r)
+app.include_router(_ws_r)
+app.include_router(_stu_r)

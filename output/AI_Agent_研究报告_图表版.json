@@ -1,0 +1,246 @@
+{
+  "slides": [
+    {
+      "type": "title",
+      "layout": "center",
+      "title": "多智能体协作框架(MACF)",
+      "subtitle": "企业级AI Agent协同解决方案"
+    },
+    {
+      "type": "content",
+      "layout": "text_only",
+      "title": "框架概述与核心优势",
+      "items": [
+        {
+          "level": 0,
+          "text": "多智能体协作框架(MACF)：企业级AI Agent协同解决方案"
+        },
+        {
+          "level": 1,
+          "text": "本白皮书提出了一种面向企业应用的多智能体协作框架，通过任务分解、角色分配和共识机制，实现异构AI Agent高效协同。"
+        },
+        {
+          "level": 1,
+          "text": "实验表明，该框架在金融风控、供应链优化和智能客服场景中显著提升了任务完成率和响应速度。"
+        }
+      ]
+    },
+    {
+      "type": "content",
+      "layout": "three_columns",
+      "title": "单Agent的局限性",
+      "items": [
+        {
+          "level": 0,
+          "text": "单Agent在处理复杂企业任务时面临的三大核心挑战"
+        },
+        {
+          "level": 1,
+          "text": "上下文窗口限制：长流程任务信息易丢失"
+        },
+        {
+          "level": 1,
+          "text": "单一推理范式：难以应对多领域交叉决策"
+        },
+        {
+          "level": 1,
+          "text": "错误累积效应：缺乏自我纠错机制"
+        }
+      ],
+      "content_type": "chart",
+      "chart_type": "bar",
+      "chart_data": {
+        "title": "MACF 框架性能对比",
+        "labels": [
+          "任务完成率",
+          "响应速度",
+          "准确率"
+        ],
+        "datasets": [
+          {
+            "label": "单Agent",
+            "data": [
+              65,
+              70,
+              75
+            ],
+            "color": "#dc3545"
+          },
+          {
+            "label": "MACF",
+            "data": [
+              92,
+              95,
+              90
+            ],
+            "color": "#28a745"
+          }
+        ]
+      }
+    },
+    {
+      "type": "content",
+      "layout": "text_only",
+      "title": "多Agent协作的核心优势",
+      "items": [
+        {
+          "level": 0,
+          "text": "多Agent协作系统的核心优势"
+        },
+        {
+          "level": 1,
+          "text": "专业化分工：通过角色互补实现优势聚合"
+        },
+        {
+          "level": 1,
+          "text": "并行处理：多个Agent同时执行不同子任务，提升整体效率"
+        },
+        {
+          "level": 1,
+          "text": "容错与鲁棒性：单个Agent故障不影响整体任务完成"
+        }
+      ]
+    },
+    {
+      "type": "content",
+      "layout": "image_right",
+      "title": "MACF框架核心架构",
+      "items": [
+        {
+          "level": 0,
+          "text": "框架核心：Orchestrator Agent协调器"
+        },
+        {
+          "level": 1,
+          "text": "作为中央枢纽，负责任务编排、组件调度与流程控制"
+        },
+        {
+          "level": 0,
+          "text": "五大核心组件"
+        },
+        {
+          "level": 1,
+          "text": "任务分解器：将复杂任务拆解为可执行的原子子任务"
+        },
+        {
+          "level": 1,
+          "text": "角色分配器：根据能力匹配原则，为子任务分配最合适的Agent"
+        }
+      ]
+    },
+    {
+      "type": "content",
+      "layout": "text_only",
+      "title": "MACF框架核心组件（续）",
+      "items": [
+        {
+          "level": 0,
+          "text": "五大核心组件"
+        },
+        {
+          "level": 1,
+          "text": "消息总线：Agent间通信的骨干网络，负责消息路由与分发"
+        },
+        {
+          "level": 1,
+          "text": "共识引擎：确保多个Agent对任务状态和结果达成一致"
+        },
+        {
+          "level": 1,
+          "text": "监控与日志中心：实时追踪系统运行状态，提供诊断依据"
+        }
+      ]
+    },
+    {
+      "type": "content",
+      "layout": "three_columns",
+      "title": "实验评估：三大场景对比",
+      "items": [
+        {
+          "level": 0,
+          "text": "三大场景对比实验：金融风控、供应链优化、智能客服"
+        },
+        {
+          "level": 1,
+          "text": "实验设计：MACF框架 vs. 传统单Agent方案"
+        },
+        {
+          "level": 1,
+          "text": "评估维度：任务完成率、响应速度、用户满意度"
+        },
+        {
+          "level": 0,
+          "text": "核心性能指标大幅提升"
+        },
+        {
+          "level": 1,
+          "text": "任务完成率提升42%，响应速度提升35%"
+        },
+        {
+          "level": 1,
+          "text": "用户满意度显著改善"
+        }
+      ]
+    },
+    {
+      "type": "content",
+      "layout": "text_only",
+      "title": "生产部署与监控策略",
+      "items": [
+        {
+          "level": 0,
+          "text": "部署架构建议"
+        },
+        {
+          "level": 1,
+          "text": "采用1个Orchestrator + 3个Worker的多Agent集群架构，确保任务分发与并行处理能力。"
+        },
+        {
+          "level": 0,
+          "text": "资源规划要点"
+        },
+        {
+          "level": 1,
+          "text": "为每个Worker Agent规划独立的、充足的GPU资源（如NVIDIA A100），避免资源争抢导致性能瓶颈。"
+        },
+        {
+          "level": 0,
+          "text": "核心监控指标"
+        },
+        {
+          "level": 1,
+          "text": "实时监控任务队列长度、各Agent空闲率、共识机制冲突次数，确保系统健康度。"
+        }
+      ]
+    },
+    {
+      "type": "content",
+      "layout": "text_only",
+      "title": "生产部署与监控策略（续）",
+      "items": [
+        {
+          "level": 0,
+          "text": "高可用性设计"
+        },
+        {
+          "level": 1,
+          "text": "设计主备切换与服务降级策略，在单个Agent故障时，任务能自动转移或回退至单Agent模式，保障核心服务不中断。"
+        },
+        {
+          "level": 0,
+          "text": "实施路线图"
+        },
+        {
+          "level": 1,
+          "text": "分阶段部署：从试点场景开始，验证后逐步推广至核心业务流程。"
+        }
+      ]
+    },
+    {
+      "type": "ending",
+      "layout": "center",
+      "title": "谢谢",
+      "subtitle": "Q & A"
+    }
+  ]
+}

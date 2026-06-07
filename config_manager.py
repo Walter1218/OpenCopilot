@@ -60,6 +60,20 @@ DEFAULT_WEB_SEARCH_CONFIG = {
     "limit": 3,
 }
 
+# action_type → persona 文件名映射（不含 .md）
+# 当 action_type 与 persona 文件名不同时在此配置
+DEFAULT_PERSONA_MAPPING = {
+    "ppt": "ppt",
+    "coding": "code",
+    "code_review": "code",
+    "translate": "translate",
+    "translation": "translate",
+    "chat": "chat",
+    "polish": "polish",
+    "revision": "revision",
+    "default": "default",
+}
+
 # 参数校验范围
 VALID_RANGES = {
     "agent.max_turns": (3, 30),
@@ -67,7 +81,7 @@ VALID_RANGES = {
     "agent.complexity_text_threshold": (50, 2000),
     "agent.react_retry_count": (0, 5),
     "llm.temperature": (0.0, 2.0),
-    "llm.max_completion_tokens": (256, 16384),
+    "llm.max_completion_tokens": (256, 65536),
     "llm.failover_max_failures": (1, 10),
 }
 
@@ -184,6 +198,19 @@ class ConfigManager:
     def get_web_search(self) -> Dict[str, Any]:
         """获取联网搜索配置"""
         return self._merge_with_defaults("web_search", DEFAULT_WEB_SEARCH_CONFIG, "web_search")
+
+    def get_persona_mapping(self) -> Dict[str, str]:
+        """获取 action_type → persona 文件名映射
+        
+        Returns:
+            {"ppt": "ppt", "coding": "code", ...}
+            key = action_type, value = personas/ 下的文件名（不含 .md）
+        """
+        user_mapping = self._config.get("persona_mapping", {})
+        result = dict(DEFAULT_PERSONA_MAPPING)
+        if isinstance(user_mapping, dict):
+            result.update(user_mapping)
+        return result
 
     def save(self) -> bool:
         """保存当前配置到 config.json"""

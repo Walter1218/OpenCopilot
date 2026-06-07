@@ -212,8 +212,9 @@ class SmartCopilotV5(QWidget):
     # =========================================================================
 
     def dragEnterEvent(self, event):
-        """拖拽进入窗口时检查是否为文件"""
-        if event.mimeData().hasUrls():
+        """拖拽进入窗口时检查是否为文件或文本"""
+        mime = event.mimeData()
+        if mime.hasUrls() or mime.hasText():
             event.acceptProposedAction()
             self.setStyleSheet(f"""
                 QWidget {{
@@ -227,7 +228,8 @@ class SmartCopilotV5(QWidget):
 
     def dragMoveEvent(self, event):
         """拖拽移动时持续接受"""
-        if event.mimeData().hasUrls():
+        mime = event.mimeData()
+        if mime.hasUrls() or mime.hasText():
             event.acceptProposedAction()
         else:
             event.ignore()
@@ -237,14 +239,34 @@ class SmartCopilotV5(QWidget):
         self.setStyleSheet("")
 
     def dropEvent(self, event):
-        """文件放下时读取内容并注入到 Work Tab"""
+        """放下时处理文件或文本，同步注入到三个 Tab"""
         self.setStyleSheet("")
-        urls = event.mimeData().urls()
+        mime = event.mimeData()
+        t = telemetry()
+
+        # 优先处理文本拖拽（如从 Qoder 拖拽的文本）
+        if mime.hasText() and not mime.hasUrls():
+            text = mime.text()
+            if text:
+                t.emit("V5_SC_DROP_TEXT", text_len=len(text),
+                       source_tab=self.tabs.tabText(self.tabs.currentIndex()))
+                self._selected_text = text
+                # 同步到三个 Tab
+                self._work_tab.set_context_text(text)
+                self._chat_tab.set_shared_text(text, source="drag_drop")
+                self._studio_tab.set_shared_text(text, source="drag_drop")
+                t.emit("V5_SC_TEXT_SHARED", text_len=len(text),
+                       target_tabs=["work", "chat", "studio"])
+                print(f"[v5] SmartCopilot: 拖放文本已共享到三个 Tab → {len(text)} 字符")
+            event.acceptProposedAction()
+            return
+
+        # 处理文件拖拽
+        urls = mime.urls()
         if not urls:
             event.ignore()
             return
 
-        t = telemetry()
         t.emit("V5_SC_DROP_FILES", file_count=len(urls))
 
         for url in urls:
@@ -260,11 +282,13 @@ class SmartCopilotV5(QWidget):
             if status == "ok" and text:
                 bridge.add_recent_file(file_path, source="drag_drop")
                 self._selected_text = text
+                # 同步到三个 Tab
                 self._work_tab.set_context_text(text)
-                self.tabs.setCurrentIndex(0)  # 切换到 Work Tab
-                t.emit("V5_SC_FILE_LOADED", file=file_name,
-                       text_len=len(text), source="drag_drop")
-                print(f"[v5] SmartCopilot: 拖放文件已加载 → {file_name} ({len(text)} 字符)")
+                self._chat_tab.set_shared_text(text, source=f"file:{file_name}")
+                self._studio_tab.set_shared_text(text, source=f"file:{file_name}")
+                t.emit("V5_SC_FILE_SHARED", file=file_name, text_len=len(text),
+                       target_tabs=["work", "chat", "studio"])
+                print(f"[v5] SmartCopilot: 拖放文件已共享到三个 Tab → {file_name} ({len(text)} 字符)")
             else:
                 t.emit("V5_SC_FILE_ERROR", file=file_name, status=status)
                 print(f"[v5] SmartCopilot: 拖放文件读取失败 → {file_name}, status={status}")

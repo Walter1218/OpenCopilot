@@ -1,11 +1,15 @@
 import re
 import os
 import json
+import logging
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import PP_ALIGN
+
+# 配置日志
+logger = logging.getLogger(__name__)
 
 def clean_markdown(text):
     """清理 Markdown 标记，返回纯文本（兼容旧调用）"""
@@ -280,18 +284,64 @@ def format_content_slide(slide, title_text, items, layout_type="text_only", prs=
             add_placeholder_image(slide, prs)
     elif layout_type == "three_columns":
         body_shape.text_frame.clear()
-        col_width = Inches(3.5)
-        for i in range(min(3, len(items))):
-            left_pos = Inches(1) + i * Inches(3.8)
-            txBox = slide.shapes.add_textbox(left_pos, Inches(2.0), col_width, Inches(4.0))
+        
+        # 按照level=0的项目进行逻辑分组
+        columns = []
+        current_col = []
+        for item in items:
+            if item.get("level", 0) == 0 and current_col:
+                columns.append(current_col)
+                current_col = [item]
+            else:
+                current_col.append(item)
+        if current_col:
+            columns.append(current_col)
+        
+        # 如果第1列只有一个概述项，将其合并到标题中，其余列作为内容列
+        if len(columns) > 3 and len(columns[0]) == 1:
+            overview_text = columns[0][0].get("text", "")
+            columns = columns[1:]  # 移除概述列
+            # 更新标题，添加概述
+            title_shape = slide.shapes.title
+            title_shape.text = f"{clean_markdown(title_text)}\n{overview_text}"
+        
+        # 限制最多显示3列
+        display_columns = columns[:3]
+        
+        # 计算列宽和间距
+        num_cols = len(display_columns)
+        total_width = Inches(11.333)
+        col_width = Inches(3.2)
+        col_spacing = (total_width - col_width * num_cols) / (num_cols + 1)
+        
+        # 显示每一列
+        for col_idx, col_items in enumerate(display_columns):
+            left_pos = Inches(1) + col_spacing * (col_idx + 1) + col_width * col_idx
+            
+            # 创建文本框
+            txBox = slide.shapes.add_textbox(left_pos, Inches(2.0), col_width, Inches(4.5))
             tf = txBox.text_frame
             tf.word_wrap = True
+            
+            # 添加列标题（第一个 item）
             p = tf.paragraphs[0]
-            _apply_formatted_paragraph(p, items[i].get("text", ""))
-            p.font.size = Pt(24)
-            p.font.color.rgb = RGBColor(15, 25, 45)
+            _apply_formatted_paragraph(p, col_items[0].get("text", ""))
+            p.font.size = Pt(18)
+            p.font.bold = True
+            p.font.color.rgb = RGBColor(0, 82, 204)
             p.alignment = PP_ALIGN.CENTER
-            icon = slide.shapes.add_shape(MSO_SHAPE.OVAL, left_pos + Inches(1.25), Inches(1.2), Inches(1.0), Inches(1.0))
+            p.space_after = Pt(12)
+            
+            # 添加该列的其他 items
+            for item in col_items[1:]:
+                p = tf.add_paragraph()
+                _apply_formatted_paragraph(p, item.get("text", ""))
+                p.font.size = Pt(14)
+                p.font.color.rgb = RGBColor(60, 64, 67)
+                p.space_before = Pt(8)
+            
+            # 添加列图标
+            icon = slide.shapes.add_shape(MSO_SHAPE.OVAL, left_pos + (col_width - Inches(1)) / 2, Inches(1.2), Inches(1.0), Inches(1.0))
             icon.fill.solid()
             icon.fill.fore_color.rgb = RGBColor(235, 240, 248)
             icon.line.fill.background()
@@ -302,6 +352,7 @@ def format_content_slide(slide, title_text, items, layout_type="text_only", prs=
     body_shape.left = Inches(1)
     body_shape.top = Inches(1.8)
     body_shape.height = Inches(5.0)
+    body_shape.text_frame.word_wrap = True  # 启用自动换行
     body_shape.text_frame.clear()
     
     for item in items:
@@ -313,22 +364,168 @@ def format_content_slide(slide, title_text, items, layout_type="text_only", prs=
         p = body_shape.text_frame.paragraphs[0] if not body_shape.text_frame.text.strip() else body_shape.text_frame.add_paragraph()
         _apply_formatted_paragraph(p, text)
         p.level = level
-        p.space_after = Pt(12)
+        p.space_after = Pt(8)
         
         if level == 0:
-            p.font.size = Pt(28)
+            p.font.size = Pt(20)  # 缩小字体
             p.font.color.rgb = RGBColor(15, 25, 45)
         else:
-            p.font.size = Pt(22)
+            p.font.size = Pt(16)  # 缩小字体
             p.font.color.rgb = RGBColor(60, 64, 67)
+
+
+def _repair_json_string(s: str) -> str:
+    """修复 AI 生成 JSON 中常见的语法错误（预处理 + 迭代式，最多 20 轮）
+
+    策略：
+    0. 预处理：全局清除尾随逗号（,} → }、,] → ]）—— 用正则一次完成，避免位置偏移
+    1. 迭代：解析 → 失败 → 定位错误位置 → 针对性修复 → 重试
+    处理的问题：
+    - 缺少冒号分隔符: "level:1" → "level":1
+    - 对象/数组之间缺少逗号: }{"key" → },{"key"
+    - 字符串值之间缺少逗号: "val""key" → "val","key"
+    - 单引号替换为双引号
+    """
+    import re as _re
+
+    # ---- 预处理阶段：全局清理 ----
+    # 0a. 将单引号键/值替换为双引号（AI 有时输出 Python 风格的 dict）
+    # 匹配 'key': 或 :'value' 模式（不处理字符串内部的单引号）
+    s = _re.sub(r"(?<=[\[{,])\s*'([^']*?)'\s*:", r' "\1":', s)
+
+    # 0b. 全局清除尾随逗号：,} → } 和 ,] → ]（含空白）
+    s = _re.sub(r',(\s*[}\]])', r'\1', s)
+
+    # ---- 迭代修复阶段 ----
+    for attempt in range(20):
+        try:
+            json.loads(s)
+            return s  # 解析成功
+        except json.JSONDecodeError as e:
+            pos = e.pos
+            msg = str(e)
+
+            if pos >= len(s):
+                break
+
+            fixed = False
+
+            # --- 策略 1: 缺少冒号 "key:value" → "key":value ---
+            fix_result = _try_fix_missing_colon(s, pos)
+            if fix_result[0] is not None:
+                fix_start, fix_end, fix_repl = fix_result
+                s = s[:fix_start] + fix_repl + s[fix_end:]
+                fixed = True
+
+            if not fixed:
+                # --- 策略 2: 对象/数组间缺少分隔符 ---
+                # }{ },[ ]{ ][
+                if pos > 0:
+                    prev = s[pos - 1]
+                    curr = s[pos]
+                    if prev in '}]' and curr in '{[':
+                        s = s[:pos] + ',' + s[pos:]
+                        fixed = True
+
+            if not fixed:
+                # --- 策略 3: "value""key" → "value","key" ---
+                if pos > 0 and s[pos] == '"' and s[pos - 1] == '"':
+                    s = s[:pos] + ',' + s[pos:]
+                    fixed = True
+
+            if not fixed:
+                # --- 策略 4: 再次尝试全局清除尾随逗号（可能在修复过程中产生新的） ---
+                new_s = _re.sub(r',(\s*[}\]])', r'\1', s)
+                if new_s != s:
+                    s = new_s
+                    fixed = True
+
+            if not fixed:
+                # --- 策略 5: 通用——在错误位置前插入逗号 ---
+                if pos > 0 and s[pos - 1] not in ',{[:':
+                    s = s[:pos] + ',' + s[pos:]
+                    fixed = True
+
+            if not fixed:
+                # --- 策略 6: 跳过当前字符（不可修复的非法字符）---
+                # 尝试删除错误位置的单个字符后是否能继续
+                if pos < len(s):
+                    s = s[:pos] + s[pos + 1:]
+                    fixed = True
+
+            if not fixed:
+                logger.warning(f"[repair_json] 第{attempt+1}轮无法修复: pos={pos}, msg={msg}")
+                break
+
+            logger.debug(f"[repair_json] 第{attempt+1}轮修复 pos={pos}")
+
+    return s
+
+
+def _try_fix_missing_colon(s: str, error_pos: int):
+    """尝试修复 "word:value" 缺少冒号的问题
+
+    从错误位置向前扫描，找到 "word: 模式，返回 (start, end, replacement)
+    """
+    import re
+    # 向前搜索最近的 "word: 模式（在 error_pos 前 50 字符范围内）
+    search_start = max(0, error_pos - 50)
+    region = s[search_start:error_pos + 30]
+
+    # 匹配: "word: 其中 word 是 \w+
+    matches = list(re.finditer(r'"(\w+):', region))
+    if not matches:
+        return (None, None, None)
+
+    # 取最后一个匹配（最接近错误位置的）
+    m = matches[-1]
+    abs_start = search_start + m.start()
+    abs_end = search_start + m.end()
+
+    # 验证：确认这个 "word: 不是在字符串值内部
+    # word 前面应该是 { , [ 或空白
+    if abs_start > 0:
+        prev_char = s[abs_start - 1]
+        if prev_char not in '{[, \t\n\r':
+            return (None, None, None)
+
+    # 构造修复: "word: → "word":
+    replacement = f'"{m.group(1)}":'
+    return (abs_start, abs_end, replacement)
+
 
 def extract_json_from_text(text):
     """从大模型的混合输出中提取 JSON 数据，或降级解析 Markdown 为 PPT 大纲"""
+    # 记录原始输入长度
+    logger.info(f"[extract_json] 输入长度: {len(text)} 字符")
+    
+    # 0. 清理中文引号（AI有时会返回中文引号，导致JSON解析失败）
+    # 注意：只替换作为JSON结构元素的中文引号，不要破坏字符串内部的内容
+    original_text = text
+    
+    # 替换中文双引号为英文双引号（仅在JSON结构位置）
+    # 匹配模式：JSON键值对的引号（前面是{,或:，后面是}或:或,）
+    text = re.sub(r'(?<=[\{,:])\s*[\u201c\u201d\u300c\u300d\u300e\u300f]\s*', '"', text)
+    text = re.sub(r'\s*[\u201c\u201d\u300c\u300d\u300e\u300f]\s*(?=[\},:])', '"', text)
+    
+    # 替换中文单引号为英文单引号（仅在字符串内部）
+    text = text.replace('\u2018', "'").replace('\u2019', "'")
+    
+    # 记录清理后的长度
+    if len(text) != len(original_text):
+        logger.info(f"[extract_json] 清理中文引号后长度: {len(text)} 字符 (减少 {len(original_text) - len(text)} 字符)")
+    
     # 1. 尝试匹配 ```json ... ``` 块（支持对象 {} 或数组 []）
     match = re.search(r'```(?:json)?\s*(\{.*?\}|\[.*?\])\s*```', text, re.DOTALL)
     json_str = match.group(1) if match else text
+    
+    if match:
+        logger.info(f"[extract_json] 找到 ```json 代码块，长度: {len(json_str)} 字符")
+    else:
+        logger.info(f"[extract_json] 未找到 ```json 代码块，使用完整文本")
 
     # 2. 尝试直接解析 JSON
+    clean_str = json_str  # 默认使用完整文本，后面可能被截取
     try:
         start_obj = json_str.find('{')
         start_arr = json_str.find('[')
@@ -348,6 +545,12 @@ def extract_json_from_text(text):
                 
             if end_idx > start_idx:
                 clean_str = json_str[start_idx:end_idx]
+                logger.info(f"[extract_json] 提取JSON字符串，长度: {len(clean_str)} 字符")
+                
+                # 记录JSON字符串的前200字符和后200字符
+                logger.info(f"[extract_json] JSON前200字符: {clean_str[:200]}")
+                logger.info(f"[extract_json] JSON后200字符: {clean_str[-200:]}")
+                
                 parsed = json.loads(clean_str)
                 
                 # 兼容两种格式：
@@ -355,14 +558,117 @@ def extract_json_from_text(text):
                 # 2. {"slides": [...]} - 部分格式，返回完整对象
                 # 3. [...] - 数组格式，直接返回
                 if isinstance(parsed, dict) and "slides" in parsed:
+                    logger.info(f"[extract_json] JSON解析成功，slides数量: {len(parsed.get('slides', []))}")
                     return parsed  # 返回完整字典，保留 title 等字段
                 elif isinstance(parsed, list):
+                    logger.info(f"[extract_json] JSON解析成功，数组长度: {len(parsed)}")
                     return parsed
-    except Exception:
-        pass
+    except json.JSONDecodeError as e:
+        logger.error(f"[extract_json] JSON解析失败: {e}")
+        logger.error(f"[extract_json] 错误位置: {e.pos}")
+        logger.error(f"[extract_json] 错误行: {e.lineno}, 错误列: {e.colno}")
+        # 记录错误位置附近的内容
+        if e.pos < len(json_str):
+            start = max(0, e.pos - 100)
+            end = min(len(json_str), e.pos + 100)
+            logger.error(f"[extract_json] 错误位置附近内容: {json_str[start:end]}")
+        
+        # 2.0.1 尝试迭代修复 AI 常见的 JSON 语法错误
+        try:
+            repaired = _repair_json_string(clean_str)
+            if repaired != clean_str:
+                logger.info("[extract_json] 迭代修复完成，尝试重新解析...")
+                print(f"[extract_json] 尝试迭代修复 JSON 语法错误 (修复后长度={len(repaired)})")
+                parsed = json.loads(repaired)
+                if isinstance(parsed, dict) and "slides" in parsed:
+                    logger.info(f"[extract_json] 修复后解析成功！slides数量: {len(parsed.get('slides', []))}")
+                    print(f"[extract_json] ✅ 自动修复 JSON 语法错误，解析出 {len(parsed.get('slides', []))} 个 slides")
+                    return parsed
+                elif isinstance(parsed, list):
+                    logger.info(f"[extract_json] 修复后解析成功，数组长度: {len(parsed)}")
+                    return parsed
+        except (json.JSONDecodeError, Exception) as repair_e:
+            logger.error(f"[extract_json] 迭代修复后仍然失败: {repair_e}")
+            print(f"[extract_json] ❌ 迭代修复后仍然失败: {repair_e}")
+            # 输出修复后仍然出错的位置附近内容
+            if isinstance(repair_e, json.JSONDecodeError) and repair_e.pos < len(repaired):
+                ctx_start = max(0, repair_e.pos - 80)
+                ctx_end = min(len(repaired), repair_e.pos + 80)
+                print(f"[extract_json] 修复后错误位置附近: ...{repaired[ctx_start:ctx_end]}...")
+    except Exception as e:
+        logger.error(f"[extract_json] JSON解析异常: {type(e).__name__}: {e}")
+    
+    # 2.1 尝试修复被截断的 JSON
+    try:
+        # 检查是否是被截断的 JSON（包含 slides 但不完整）
+        if '"slides"' in json_str and '"slides":[' in json_str:
+            logger.info("[extract_json] 检测到可能被截断的JSON，尝试修复")
+            # 找到 slides 数组的开始
+            slides_start = json_str.find('"slides":[')
+            if slides_start > 0:
+                # 提取 slides 数组内容（跳过 "slides":[ 部分）
+                slides_content = json_str[slides_start + 10:]  # 跳过 "slides":[
+                
+                # 找到最后一个完整的 slide 对象
+                # 通过匹配花括号来找到完整的对象
+                brace_count = 0
+                last_complete_slide_end = -1
+                in_slide = False
+                
+                for i, char in enumerate(slides_content):
+                    if char == '{':
+                        if not in_slide:
+                            in_slide = True
+                        brace_count += 1
+                    elif char == '}':
+                        brace_count -= 1
+                        if brace_count == 0 and in_slide:
+                            last_complete_slide_end = i
+                            in_slide = False
+                
+                if last_complete_slide_end > 0:
+                    # 截取到最后一个完整的 slide
+                    slides_content = slides_content[:last_complete_slide_end + 1]
+                    
+                    # 构建完整的 JSON
+                    # 提取 title 字段
+                    title_match = re.search(r'"title"\s*:\s*"([^"]*)"', json_str[:slides_start])
+                    if title_match:
+                        fixed_json = '{"title":"' + title_match.group(1) + '","slides":[' + slides_content + ']}'
+                    else:
+                        fixed_json = '{"slides":[' + slides_content + ']}'
+                    
+                    try:
+                        parsed = json.loads(fixed_json)
+                        if isinstance(parsed, dict) and "slides" in parsed:
+                            logger.info(f"[extract_json] 修复被截断的 JSON，保留 {len(parsed['slides'])} 个 slides")
+                            print(f"[ppt_generator] 修复被截断的 JSON，保留 {len(parsed['slides'])} 个 slides")
+                            return parsed
+                    except json.JSONDecodeError as e:
+                        logger.error(f"[extract_json] 修复后的JSON解析失败: {e}")
+                        # 截断修复后的 JSON 可能仍有语法错误，尝试迭代修复
+                        try:
+                            repaired = _repair_json_string(fixed_json)
+                            parsed = json.loads(repaired)
+                            if isinstance(parsed, dict) and "slides" in parsed:
+                                logger.info(f"[extract_json] 截断+迭代修复 JSON，保留 {len(parsed['slides'])} 个 slides")
+                                print(f"[ppt_generator] 截断+迭代修复 JSON，保留 {len(parsed['slides'])} 个 slides")
+                                return parsed
+                        except (json.JSONDecodeError, Exception) as e2:
+                            logger.error(f"[extract_json] 截断+迭代修复仍失败: {e2}")
+                            pass
+                else:
+                    logger.warning("[extract_json] 未找到完整的slide对象")
+            else:
+                logger.warning("[extract_json] 未找到slides数组开始位置")
+        else:
+            logger.info("[extract_json] 未检测到被截断的JSON特征")
+    except Exception as e:
+        logger.error(f"[extract_json] 修复截断JSON异常: {type(e).__name__}: {e}")
         
     # 3. 如果 JSON 解析失败，但包含 Markdown 标题，则降级将 Markdown 转换为 JSON 结构
     if '# ' in text or '## ' in text:
+        logger.info("[extract_json] JSON解析失败，尝试Markdown降级处理")
         slides = []
         current_slide = None
         table_buffer = []       # 累积表格行
@@ -455,9 +761,89 @@ def extract_json_from_text(text):
         if current_slide:
             slides.append(current_slide)
         if slides:
+            logger.info(f"[extract_json] Markdown降级处理成功，生成 {len(slides)} 个slides")
             return slides
+        else:
+            logger.warning("[extract_json] Markdown降级处理未生成任何slides")
             
+    logger.error("[extract_json] 所有解析方式均失败，返回None")
     return None
+
+def format_chart_slide(slide, slide_data, prs):
+    """格式化图表页"""
+    from pptx.chart.data import CategoryChartData
+    from pptx.enum.chart import XL_CHART_TYPE
+    
+    title_text = slide_data.get("title", "图表")
+    chart_type_str = slide_data.get("chart_type", "bar")
+    chart_data = slide_data.get("chart_data", {})
+    
+    # 设置标题
+    title_shape = slide.shapes.title
+    title_shape.text = clean_markdown(title_text)
+    title_shape.width = Inches(11.333)
+    title_shape.left = Inches(1)
+    title_shape.top = Inches(0.5)
+    title_shape.height = Inches(1.2)
+    
+    for p in title_shape.text_frame.paragraphs:
+        p.font.bold = True
+        p.font.size = Pt(36)
+        p.font.color.rgb = RGBColor(0, 82, 204)
+        p.alignment = PP_ALIGN.LEFT
+    
+    # 准备图表数据
+    labels = chart_data.get("labels", [])
+    datasets = chart_data.get("datasets", [])
+    
+    if not labels or not datasets:
+        # 如果没有图表数据，显示占位符
+        body_shape = slide.placeholders[1]
+        body_shape.text = "图表数据加载中..."
+        return
+    
+    # 映射图表类型
+    chart_type_map = {
+        "bar": XL_CHART_TYPE.BAR_CLUSTERED,
+        "line": XL_CHART_TYPE.LINE,
+        "pie": XL_CHART_TYPE.PIE,
+        "doughnut": XL_CHART_TYPE.DOUGHNUT,
+    }
+    xl_chart_type = chart_type_map.get(chart_type_str, XL_CHART_TYPE.BAR_CLUSTERED)
+    
+    # 创建图表数据
+    chart_data_obj = CategoryChartData()
+    chart_data_obj.categories = labels
+    for dataset in datasets:
+        chart_data_obj.add_series(dataset.get("label", ""), dataset.get("data", []))
+    
+    # 添加图表到幻灯片
+    chart_left = Inches(1)
+    chart_top = Inches(1.8)
+    chart_width = Inches(11.333)
+    chart_height = Inches(5.0)
+    
+    chart_frame = slide.shapes.add_chart(
+        xl_chart_type, chart_left, chart_top, chart_width, chart_height, chart_data_obj
+    )
+    
+    # 设置图表样式
+    chart = chart_frame.chart
+    chart.has_legend = True
+    chart.legend.include_in_layout = False
+    
+    # 设置系列颜色
+    colors = [RGBColor(220, 53, 69), RGBColor(40, 167, 69), RGBColor(0, 123, 255), RGBColor(255, 193, 7)]
+    for i, series in enumerate(chart.series):
+        if i < len(datasets) and "color" in datasets[i]:
+            color_hex = datasets[i]["color"].lstrip('#')
+            r, g, b = int(color_hex[0:2], 16), int(color_hex[2:4], 16), int(color_hex[4:6], 16)
+            series.format.fill.solid()
+            series.format.fill.fore_color.rgb = RGBColor(r, g, b)
+        elif i < len(colors):
+            series.format.fill.solid()
+            series.format.fill.fore_color.rgb = colors[i]
+
 
 def generate_ppt_from_json(json_data, output_path="output.pptx"):
     prs = Presentation()
@@ -466,17 +852,30 @@ def generate_ppt_from_json(json_data, output_path="output.pptx"):
     
     for slide_data in json_data:
         slide_type = slide_data.get("type", "content")
+        content_type = slide_data.get("content_type", "text")
         
         if slide_type == "title":
             slide = prs.slides.add_slide(prs.slide_layouts[0])
             apply_corporate_theme(slide, prs, is_title_slide=True)
             format_title_slide(slide, slide_data.get("title", "演示文稿"), slide_data.get("subtitle", ""))
             
+        elif slide_type == "ending":
+            # 结尾页：复用 title 布局，居中展示 "谢谢" + "Q & A"
+            slide = prs.slides.add_slide(prs.slide_layouts[0])
+            apply_corporate_theme(slide, prs, is_title_slide=True)
+            format_title_slide(slide, slide_data.get("title", "谢谢"), slide_data.get("subtitle", "Q & A"))
+            
         elif slide_type == "content":
-            slide = prs.slides.add_slide(prs.slide_layouts[1])
-            apply_corporate_theme(slide, prs, is_title_slide=False)
-            layout_type = slide_data.get("layout", "text_only")
-            format_content_slide(slide, slide_data.get("title", "内容"), slide_data.get("items", []), layout_type, prs, slide_data)
+            # 检查是否是图表类型
+            if content_type == "chart" and "chart_data" in slide_data:
+                slide = prs.slides.add_slide(prs.slide_layouts[1])
+                apply_corporate_theme(slide, prs, is_title_slide=False)
+                format_chart_slide(slide, slide_data, prs)
+            else:
+                slide = prs.slides.add_slide(prs.slide_layouts[1])
+                apply_corporate_theme(slide, prs, is_title_slide=False)
+                layout_type = slide_data.get("layout", "text_only")
+                format_content_slide(slide, slide_data.get("title", "内容"), slide_data.get("items", []), layout_type, prs, slide_data)
             
     if len(prs.slides) == 0:
         slide = prs.slides.add_slide(prs.slide_layouts[0])

@@ -1,0 +1,195 @@
+{
+  "slides": [
+    {
+      "type": "title",
+      "layout": "center",
+      "title": "AI Agent 产品全景与趋势洞察",
+      "subtitle": "从对话助手到自主执行的数字员工"
+    },
+    {
+      "type": "content",
+      "layout": "text_only",
+      "title": "AI Agent 产品全景分类与市场概览",
+      "items": [
+        {
+          "level": 0,
+          "text": "核心演进：AI从被动响应工具，进化为主动决策执行的数字员工"
+        },
+        {
+          "level": 0,
+          "text": "两大核心驱动趋势：桌面Agent与AI编程Agent"
+        },
+        {
+          "level": 0,
+          "text": "六大产品类别全景梳理"
+        },
+        {
+          "level": 1,
+          "text": "桌面办公Agent：操控电脑，执行复杂任务"
+        },
+        {
+          "level": 1,
+          "text": "AI编程Agent：从代码补全到自主编程"
+        },
+        {
+          "level": 1,
+          "text": "自进化框架：具备跨会话学习与技能积累能力"
+        }
+      ]
+    },
+    {
+      "type": "content",
+      "layout": "text_only",
+      "title": "桌面Agent：2026年最热的新兴赛道",
+      "items": [
+        {
+          "level": 0,
+          "text": "定义：AI直接操控电脑、读取文件、执行脚本，成为“数字同事”"
+        },
+        {
+          "level": 0,
+          "text": "市场爆发：2026年全球市场规模预计突破100亿美元，用户超5000万"
+        },
+        {
+          "level": 0,
+          "text": "核心能力跃迁：从“被动应答”到“主动执行”"
+        },
+        {
+          "level": 1,
+          "text": "本地操控、复杂执行、智能协同、主动服务四大能力"
+        },
+        {
+          "level": 0,
+          "text": "代表产品与路线分化"
+        },
+        {
+          "level": 1,
+          "text": "WorkBuddy：产品化、安全可控，上线两月登顶访问量"
+        },
+        {
+          "level": 1,
+          "text": "OpenClaw：开源开放、社区驱动"
+        }
+      ]
+    },
+    {
+      "type": "content",
+      "layout": "three_columns",
+      "title": "AI编程Agent：竞争最激烈的赛道",
+      "items": [
+        {
+          "level": 0,
+          "text": "赛道概述：从代码补全进化为自主编程Agent，产品密度最高、迭代最快"
+        },
+        {
+          "level": 0,
+          "text": "Claude Code"
+        },
+        {
+          "level": 1,
+          "text": "CLI Agent标杆，代表命令行交互的极致效率"
+        },
+        {
+          "level": 1,
+          "text": "仅支持Claude模型"
+        },
+        {
+          "level": 0,
+          "text": "Cursor"
+        },
+        {
+          "level": 1,
+          "text": "IDE集成先驱，深度集成开发环境"
+        },
+        {
+          "level": 1,
+          "text": "支持多模型，体验领先"
+        },
+        {
+          "level": 0,
+          "text": "腾讯CodeBuddy"
+        },
+        {
+          "level": 1,
+          "text": "三形态（CLI/IDE/插件）+自举开发"
+        },
+        {
+          "level": 1,
+          "text": "内部覆盖率超90%"
+        }
+      ]
+    },
+    {
+      "type": "content",
+      "layout": "text_only",
+      "title": "自进化Agent框架：从被编排到自己学",
+      "items": [
+        {
+          "level": 0,
+          "text": "新范式概述：以Hermes Agent为代表，Agent从被动执行转向主动学习与进化"
+        },
+        {
+          "level": 0,
+          "text": "核心理念：解决复杂任务后，Agent能自动创建、积累并管理新技能"
+        },
+        {
+          "level": 1,
+          "text": "本质区别：具备跨会话的持续进化能力，区别于AutoGPT等框架"
+        },
+        {
+          "level": 0,
+          "text": "核心特性解析"
+        },
+        {
+          "level": 1,
+          "text": "自动Skill创建：任务成功后，自动将解决方案写入知识库"
+        },
+        {
+          "level": 1,
+          "text": "RL轨迹引导训练：利用强化学习优化决策路径"
+        }
+      ]
+    },
+    {
+      "type": "content",
+      "layout": "text_only",
+      "title": "Agent核心架构与推理模式",
+      "items": [
+        {
+          "level": 0,
+          "text": "Agent核心四要素：LLM驱动下的规划、记忆、工具使用、行动"
+        },
+        {
+          "level": 1,
+          "text": "规划：任务分解与策略制定"
+        },
+        {
+          "level": 1,
+          "text": "记忆：上下文存储与历史信息"
+        },
+        {
+          "level": 1,
+          "text": "工具使用：通过MCP等接口调用外部软件与服务"
+        },
+        {
+          "level": 1,
+          "text": "行动：执行具体操作并反馈结果"
+        },
+        {
+          "level": 0,
+          "text": "推理模式：需要长链推理、多轮规划与多Agent协同"
+        },
+        {
+          "level": 0,
+          "text": "硬件适配：对CPU响应速度提出新要求，催生专用AI处理器"
+        }
+      ]
+    },
+    {
+      "type": "ending",
+      "layout": "center",
+      "title": "谢谢",
+      "subtitle": "Q & A"
+    }
+  ]
+}

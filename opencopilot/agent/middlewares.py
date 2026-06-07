@@ -319,14 +319,57 @@ class ImmuneSystemMiddleware(BaseMiddleware):
         try:
             from opencopilot.safety.immune import RuleContext
 
+            # 内容生成任务完全跳过安全检查
+            # PPT/翻译/聊天/润色等只是生成文本，不会执行代码，无需安全检查
+            content_generation_actions = {"ppt", "translate", "chat", "polish", "explain", "evaluation"}
+            if ctx.action_type in content_generation_actions:
+                PipelineObservability.get_instance().log(
+                    "ImmuneSystem", f"SKIPPED for content generation: {ctx.action_type}",
+                    session_id=ctx.session_id, level="DEBUG",
+                    event="IMMUNE_SKIPPED",
+                    extra_data={"action_type": ctx.action_type, "text_len": len(ctx.text)},
+                )
+                await next_fn()
+                return
+
+            # 只有代码生成/执行类任务才进行安全检查
             rule_ctx = RuleContext(session_id=ctx.session_id)
+            
             result = await self._immune.check_content(rule_ctx, ctx.text)
             _t_check = time.time() - _t0
             if result and not result.allowed:
                 ctx.short_circuit(f"⚠️ 规则检查发现违规: {result.message}\n\n请调整您的请求。")
                 PipelineObservability.get_instance().timer(f"[Timer] ImmuneSystem: total={_t_check:.3f}s (BLOCKED)",
                                                             action_type=ctx.action_type)
+                PipelineObservability.get_instance().log(
+                    "ImmuneSystem", f"BLOCKED: {result.message}",
+                    session_id=ctx.session_id, level="WARNING",
+                    event="IMMUNE_BLOCKED",
+                    extra_data={
+                        "action_type": ctx.action_type,
+                        "text_len": len(ctx.text),
+                        "rule_action": rule_ctx.current_action or "default",
+                        "violations": [
+                            {"rule": v.rule_name, "severity": v.severity}
+                            for v in (result.violations or [])
+                        ],
+                    },
+                )
                 return
+            
+            # 通过时的诊断日志
+            if result and result.violations:
+                # 有 WARNING 级违规但未 BLOCK（如 no_print_statements）
+                warnings = [v.rule_name for v in result.violations]
+                PipelineObservability.get_instance().log(
+                    "ImmuneSystem", f"PASS with warnings: {warnings}",
+                    session_id=ctx.session_id, level="DEBUG",
+                    event="IMMUNE_PASS_WARNINGS",
+                    extra_data={
+                        "action_type": ctx.action_type,
+                        "warnings": warnings,
+                    },
+                )
             PipelineObservability.get_instance().timer(f"[Timer] ImmuneSystem: total={_t_check:.3f}s",
                                                         action_type=ctx.action_type)
         except Exception as e:
@@ -444,7 +487,7 @@ class CapabilityRouterMiddleware(BaseMiddleware):
 
         # 优先使用 action_type（API 层已明确路由），避免文本检测误判
         # 例：coding 端点的 prompt 中含代码，detect_request_type 会误判为 code_execution
-        llm_types = {"chat", "ppt", "coding", "evaluation", "planning", "skill", "translate"}
+        llm_types = {"chat", "ppt", "coding", "code_review", "evaluation", "planning", "skill", "translate", "explain", "fix", "polish", "revision", "custom"}
         if ctx.action_type in llm_types:
             _t_detect = time.time() - _t0
             PipelineObservability.get_instance().timer(f"[Timer] CapabilityRouter: total={time.time()-_t0:.3f}s | detect={_t_detect:.3f}s type={ctx.action_type} → LLM (action_type)",

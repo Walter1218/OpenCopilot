@@ -17,6 +17,12 @@ from .ai_chat_widget import AICopilotChatWidget
 from .source_matcher import SourceMatcher
 from .suggestion_bubble import SuggestionBubble, SuggestionBubbleManager
 from .content_analysis_panel import ContentAnalysisPanel, AnalysisPanelManager
+from .pipeline import (
+    PPTGenerationPipeline, PipelineResult, Topic,
+    ContentMapping, ContentItem, FormatResult,
+)
+from .intent_router import IntentRouter
+from .storyline_view import StorylineView
 
 __all__ = [
     'CoCreationDialog',
@@ -31,4 +37,12 @@ __all__ = [
     'SuggestionBubbleManager',
     'ContentAnalysisPanel',
     'AnalysisPanelManager',
+    'PPTGenerationPipeline',
+    'PipelineResult',
+    'Topic',
+    'ContentMapping',
+    'ContentItem',
+    'FormatResult',
+    'IntentRouter',
+    'StorylineView',
 ]

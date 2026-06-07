@@ -1,6 +1,21 @@
 logging:
   format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
   level: INFO
+
+# action_type → persona 文件映射表
+# 当 action_type 对应的 persona 文件名与 action_type 不同时，在此配置映射
+# key = action_type, value = personas/ 下的文件名（不含 .md）
+persona_mapping:
+  ppt: "ppt"
+  coding: "code"
+  code_review: "code"
+  translate: "translate"
+  translation: "translate"
+  chat: "chat"
+  polish: "polish"
+  revision: "revision"
+  default: "default"
+
 skill_architecture:
   backoff_factor: 2.0
   cache_size: 100

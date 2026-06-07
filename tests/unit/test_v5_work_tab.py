@@ -306,16 +306,17 @@ class TestAIActionPlaceholder:
         assert "无内容" in result
 
     def test_fix_action(self, work_tab):
-        """fix 操作应有占位反馈"""
+        """fix 操作应启动 Agent Worker"""
         work_tab._selected_text = "buggy code"
         work_tab._on_action("fix")
         result = work_tab._result_area.toPlainText()
         assert "fix" in result
-        assert "trace_id" in result
+        assert "处理中" in result
 
     def test_polish_action(self, work_tab):
-        """polish 操作应有占位反馈"""
+        """polish 操作应启动 Agent Worker"""
         work_tab._selected_text = "rough text"
         work_tab._on_action("polish")
         result = work_tab._result_area.toPlainText()
         assert "polish" in result
+        assert "处理中" in result

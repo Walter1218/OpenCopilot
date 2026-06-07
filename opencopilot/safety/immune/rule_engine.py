@@ -545,6 +545,19 @@ class RuleEngine:
         Returns:
             Optional[RuleViolation]: 违规记录（如果有）
         """
+        # 内容生成任务跳过代码安全 pattern 规则（防止长文档误匹配）
+        # 例如：PPT/翻译/聊天的输入文本中可能包含 token="xxx" 等示例代码，
+        # 不应被 no_hardcoded_secrets 等代码安全规则拦截
+        if content and context.current_action and context.current_action.startswith("content_generation:"):
+            # 对有 pattern 的安全/约束类规则跳过（SECURITY 或 CONSTRAINT 类型 + BLOCK 动作）
+            # 包括：no_hardcoded_secrets (SECURITY)、dangerous_shell_commands (CONSTRAINT) 等
+            if rule.pattern and rule.rule_type in [RuleType.SECURITY.value, RuleType.CONSTRAINT.value]:
+                logger.debug(
+                    f"Skipping security/constraint pattern rule '{rule.name}' for "
+                    f"content generation action: {context.current_action}"
+                )
+                return None
+        
         # 模式匹配检查
         if rule.pattern and content:
             if re.search(rule.pattern, content):

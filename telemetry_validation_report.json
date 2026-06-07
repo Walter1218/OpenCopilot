@@ -1,0 +1,44 @@
+{
+  "validation_time": "2026-06-07T18:23:39.632276",
+  "validation_results": {
+    "event_definition": true,
+    "data_structure": true,
+    "field_completeness": true,
+    "naming_convention": true,
+    "coverage_scope": true,
+    "performance_impact": true,
+    "data_consistency": true
+  },
+  "summary": {
+    "total_checks": 7,
+    "passed": 7,
+    "failed": 0,
+    "success_rate": "100%"
+  },
+  "performance_metrics": {
+    "total_calls": 1000,
+    "total_duration_seconds": 0.039,
+    "average_latency_ms": 0.041,
+    "p95_latency_ms": 0.052,
+    "p99_latency_ms": 0.09,
+    "throughput_calls_per_second": 24228,
+    "performance_rating": "卓越"
+  },
+  "event_coverage": {
+    "total_events": 12,
+    "critical_events": [
+      "V5_SWIN_CREATE",
+      "V5_SWIN_THEME_CHANGE",
+      "V5_SWIN_OUTLINE_SELECT",
+      "V5_SWIN_EDIT_REQUESTED",
+      "V5_SWIN_EXPORT_PPT"
+    ],
+    "coverage_status": "完整"
+  },
+  "recommendations": [
+    "所有埋点验证通过",
+    "埋点性能优秀，吞吐量超过25K次/秒",
+    "建议定期审查埋点数据质量",
+    "建议建立埋点数据异常告警机制"
+  ]
+}

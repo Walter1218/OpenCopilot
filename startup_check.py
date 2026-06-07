@@ -99,6 +99,49 @@ check("translation_dialog", "from dialogs.translation_dialog import TranslationD
 check("evaluation_tools", "from opencopilot.capabilities.tools.evaluation_tools import TranslateEvaluator")
 
 # ====================
+# 第9组：Persona 文件完整性
+# ====================
+print("--- Persona 文件完整性 ---")
+REQUIRED_PERSONAS = ["default", "chat", "code", "ppt", "translate", "polish"]
+for name in REQUIRED_PERSONAS:
+    check(f"persona.{name}", f"""
+import os
+persona_path = os.path.join("personas", "{name}.md")
+assert os.path.exists(persona_path), f"Missing persona file: {{persona_path}}"
+size = os.path.getsize(persona_path)
+assert size > 50, f"Persona file too small ({{size}} bytes): {{persona_path}}"
+""")
+
+# ====================
+# 第10组：日志路径完整性
+# ====================
+print("--- 日志路径 ---")
+check("pipeline_timer_log", """
+import os
+from opencopilot.agent.observability import PipelineObservability
+obs = PipelineObservability.get_instance()
+paths = obs.get_log_paths()
+timer_path = paths["pipeline_timer_log"]
+assert os.path.dirname(timer_path), "timer log 路径不应为空"
+# 验证目录可写
+log_dir = os.path.dirname(timer_path)
+assert os.path.isdir(log_dir), f"timer log 目录不存在: {log_dir}"
+test_file = os.path.join(log_dir, ".write_test")
+with open(test_file, "w") as f:
+    f.write("test")
+os.remove(test_file)
+""")
+
+check("pipeline_logs_db", """
+import os
+from opencopilot.agent.log_store import LogStore
+store = LogStore.get_instance()
+db_path = store._db_path
+assert os.path.exists(db_path), f"pipeline_logs.db 不存在: {db_path}"
+assert os.path.getsize(db_path) > 0, f"pipeline_logs.db 为空: {db_path}"
+""")
+
+# ====================
 # 结果
 # ====================
 print(f"\n{'='*50}")

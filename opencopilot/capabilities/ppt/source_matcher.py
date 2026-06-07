@@ -3,13 +3,17 @@
 
 负责追踪幻灯片内容与原文的对应关系：
 - 匹配幻灯片标题和 items 到原文位置
+- 优先使用 LLM 提供的 source_excerpt 进行高质量映射
 - 计算已提炼范围
 - 支持双向联动
 """
 
 import re
+import logging
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -36,6 +40,7 @@ class SourceMapping:
     slide_index: int
     item_index: Optional[int]  # None 表示标题
     source_range: TextRange
+    mapping_source: str = "fallback"  # "llm" = source_excerpt 命中, "fallback" = 文本匹配
 
 
 class SourceMatcher:
@@ -47,24 +52,54 @@ class SourceMatcher:
         self.selected_ranges: List[TextRange] = []
     
     def build_mappings(self, original_text: str, slides: List[dict]) -> None:
-        """构建幻灯片内容与原文的映射关系"""
+        """构建幻灯片内容与原文的映射关系
+        
+        优先使用 LLM 提供的 source_excerpt 进行高质量映射，
+        回退到文本子串匹配。
+        """
         self.mappings.clear()
         self.extracted_ranges.clear()
         
+        # 统计指标
+        llm_hits = 0
+        fallback_hits = 0
+        total_slides = len(slides)
+        
         for slide_idx, slide in enumerate(slides):
-            # 匹配标题
-            title = slide.get('title', '')
-            if title:
-                ranges = self._find_text_in_source(original_text, title)
-                for r in ranges:
+            # ---- 优先尝试 source_excerpt（LLM 标记的原文片段）----
+            source_excerpt = slide.get('source_excerpt', '')
+            excerpt_range = None
+            if source_excerpt:
+                excerpt_range = self._find_excerpt_in_source(original_text, source_excerpt)
+                if excerpt_range:
+                    llm_hits += 1
+                    # 用 source_excerpt 的范围建立整页级映射
                     self.mappings.append(SourceMapping(
                         slide_index=slide_idx,
                         item_index=None,
-                        source_range=r
+                        source_range=excerpt_range,
+                        mapping_source="llm"
                     ))
-                    self.extracted_ranges.append(r)
+                    self.extracted_ranges.append(excerpt_range)
+                    logger.debug(f"[SourceMatcher] Slide {slide_idx}: source_excerpt 命中 "
+                                 f"(pos={excerpt_range.start}-{excerpt_range.end})")
             
-            # 匹配副标题
+            # ---- 标题匹配 ----
+            title = slide.get('title', '')
+            if title:
+                ranges = self._find_text_in_source(original_text, title)
+                if ranges:
+                    fallback_hits += (1 if not excerpt_range else 0)
+                    for r in ranges:
+                        self.mappings.append(SourceMapping(
+                            slide_index=slide_idx,
+                            item_index=None,
+                            source_range=r,
+                            mapping_source="fallback" if not excerpt_range else "llm_title"
+                        ))
+                        self.extracted_ranges.append(r)
+            
+            # ---- 副标题匹配 ----
             subtitle = slide.get('subtitle', '')
             if subtitle:
                 ranges = self._find_text_in_source(original_text, subtitle)
@@ -72,25 +107,97 @@ class SourceMatcher:
                     self.mappings.append(SourceMapping(
                         slide_index=slide_idx,
                         item_index=-1,  # -1 表示副标题
-                        source_range=r
+                        source_range=r,
+                        mapping_source="fallback"
                     ))
                     self.extracted_ranges.append(r)
             
-            # 匹配每个 item
+            # ---- 每个 item 匹配 ----
             for item_idx, item in enumerate(slide.get('items', [])):
                 item_text = item.get('text', '')
                 if item_text:
                     ranges = self._find_text_in_source(original_text, item_text)
+                    if ranges:
+                        fallback_hits += 1
                     for r in ranges:
                         self.mappings.append(SourceMapping(
                             slide_index=slide_idx,
                             item_index=item_idx,
-                            source_range=r
+                            source_range=r,
+                            mapping_source="fallback"
                         ))
                         self.extracted_ranges.append(r)
         
         # 合并重叠的已提炼范围
         self.extracted_ranges = self._merge_ranges(self.extracted_ranges)
+        
+        # 埋点：记录映射命中率
+        total_mappings = len(self.mappings)
+        print(f"[SourceMatcher] 映射完成: {total_mappings} 条映射 | "
+              f"LLM 命中 {llm_hits}/{total_slides} 页 ({llm_hits*100//max(total_slides,1)}%) | "
+              f"回退命中 {fallback_hits} 条 | "
+              f"已提炼范围 {len(self.extracted_ranges)} 段")
+        logger.info(f"[SourceMatcher] 映射完成: total={total_mappings}, "
+                    f"llm_hits={llm_hits}/{total_slides}, fallback={fallback_hits}, "
+                    f"extracted_ranges={len(self.extracted_ranges)}")
+    
+    def _find_excerpt_in_source(self, source: str, excerpt: str) -> Optional[TextRange]:
+        """在原文中查找 LLM 提供的 source_excerpt 片段
+        
+        LLM 摘录的片段可能不是原文的精确子串（可能略有改写），
+        所以采用渐进策略：精确匹配 → 去空格匹配 → 关键词锚定
+        """
+        if not excerpt or not source:
+            return None
+        
+        clean_excerpt = excerpt.strip()
+        if len(clean_excerpt) < 5:
+            return None
+        
+        # 策略 1: 精确子串匹配
+        pos = source.find(clean_excerpt)
+        if pos != -1:
+            return TextRange(start=pos, end=pos + len(clean_excerpt), text=clean_excerpt)
+        
+        # 策略 2: 忽略多余空格的匹配
+        # 将 excerpt 中的连续空白替换为单空格，在原文中逐段搜索
+        normalized_excerpt = re.sub(r'\s+', ' ', clean_excerpt)
+        normalized_source = re.sub(r'\s+', ' ', source)
+        pos = normalized_source.find(normalized_excerpt)
+        if pos != -1:
+            # 映射回原始 source 的位置（粗略）
+            # 通过计算 normalized_source[:pos] 中非空白字符数来定位
+            real_start = self._map_normalized_to_original(source, pos)
+            real_end = self._map_normalized_to_original(source, pos + len(normalized_excerpt))
+            return TextRange(start=real_start, end=real_end, 
+                             text=source[real_start:real_end])
+        
+        # 策略 3: 提取 excerpt 的前 15 字和后 15 字作为锚点，在原文中定位
+        head = clean_excerpt[:min(15, len(clean_excerpt) // 2)]
+        tail = clean_excerpt[-min(15, len(clean_excerpt) // 2):]
+        head_pos = source.find(head)
+        if head_pos != -1:
+            tail_pos = source.find(tail, head_pos + len(head))
+            if tail_pos != -1:
+                end_pos = tail_pos + len(tail)
+                # 扩展到自然边界
+                return TextRange(start=head_pos, end=end_pos,
+                                 text=source[head_pos:end_pos])
+        
+        return None
+    
+    @staticmethod
+    def _map_normalized_to_original(source: str, normalized_pos: int) -> int:
+        """将 normalized（压缩空格后）的位置映射回原始字符串的位置"""
+        count = 0
+        for i, ch in enumerate(source):
+            if count >= normalized_pos:
+                return i
+            if not ch.isspace() or (i > 0 and source[i-1] != ' ' and not source[i-1].isspace()):
+                count += 1 if not ch.isspace() else 0
+                if ch.isspace():
+                    count += 1
+        return len(source)
     
     def _find_text_in_source(self, source: str, target: str) -> List[TextRange]:
         """在原文中查找目标文本的位置"""

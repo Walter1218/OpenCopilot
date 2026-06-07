@@ -1,4 +1,13 @@
-"""gui/dialogs/ppt_preview.py module"""
+"""gui/dialogs/ppt_preview.py module
+
+.. deprecated::
+    此模块已废弃，请使用 opencopilot.capabilities.ppt 中的组件：
+    - OutlinePanel: 大纲面板，支持拖拽排序和表单编辑
+    - PreviewPanel: WYSIWYG预览面板，支持Click-to-Edit
+    - AICopilotChatWidget: AI对话共创组件，支持流式反馈和Undo/Redo
+    
+    新版组件已集成到 gui.v5.studio_window.StudioWindowV5 中。
+"""
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, QLabel, QSplitter, QWidget, QListWidget, QFormLayout, QLineEdit, QComboBox
 from PyQt6.QtCore import Qt
 class PPTPreviewDialog(QDialog):

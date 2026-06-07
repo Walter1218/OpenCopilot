@@ -143,7 +143,7 @@ class PPTGenerationPipeline:
             if topics and len(topics) >= self.MIN_TOPICS:
                 return topics
             obs.gui_log("PPT Topic Extract FALLBACK", session_id=sid, event="PPT_VALIDATION_FAIL",
-                        level="WARN", extra_data={"reason": "insufficient_topics"})
+                        level="WARN", data_json=json.dumps({"reason": "insufficient_topics"}))
             return self._fallback_topics(text)
         except Exception as e:
             logger.error(f"阶段1失败: {e}")
@@ -336,7 +336,8 @@ class PPTGenerationPipeline:
             sid = f"ppt_asm_{uuid.uuid4().hex[:8]}"
             prompt = json.dumps({"content_plan": assembly_input, "instruction": (
                 "根据 content_plan 组装 PPT slides JSON 数组。每个 topic 按 estimated_pages 分页。"
-                "保留已有的 content_type 不要改回 text。每页 items≤6。标题≤40字。只输出JSON数组。"
+                "保留已有的 content_type 不要改回 text。每页 items≤6。标题≤40字。"
+                "必须包含封面页（type=title）和结尾页（type=ending, layout=center, title='谢谢'）。只输出JSON数组。"
             )}, ensure_ascii=False, indent=2)[:4000]
 
             self._report_progress("阶段4", 80, "AI排版中...")
@@ -393,6 +394,8 @@ class PPTGenerationPipeline:
         if slides:
             slides.insert(0, {"id": uuid.uuid4().hex[:8], "type": "title", "layout": "center",
                              "title": mappings[0].topic_title[:40] if mappings else "演示文稿", "subtitle": ""})
+            slides.append({"id": uuid.uuid4().hex[:8], "type": "ending", "layout": "center",
+                          "title": "谢谢", "subtitle": "Q & A"})
         return slides
 
     @staticmethod

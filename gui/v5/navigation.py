@@ -80,16 +80,20 @@ class NavigationManager(QObject):
     # Studio Window（链路 B）
     # =========================================================================
 
-    def open_studio(self, text: str = ""):
+    def open_studio(self, text: str = "", slides: list = None):
         """打开 PPT 共创工作台（独立窗口，生命周期独立于 Smart Copilot）"""
         t = telemetry()
         t.nav_event("V5_NAV_STUDIO_OPEN", has_text=bool(text),
-                    text_len=len(text))
+                    text_len=len(text), has_slides=bool(slides))
         # 已有窗口且可见 → 直接激活
         if (self._studio_window is not None
                 and self._studio_window.isVisible()):
             self._studio_window.raise_()
             self._studio_window.activateWindow()
+            if text and text.strip():
+                QTimer.singleShot(50, lambda: self._studio_window.load_text(text))
+            if slides:
+                QTimer.singleShot(100, lambda: self._studio_window.load_slides(slides))
             return
 
         # 清理旧引用
@@ -107,6 +111,8 @@ class NavigationManager(QObject):
 
         if text and text.strip():
             QTimer.singleShot(100, lambda: self._studio_window.load_text(text))
+        if slides:
+            QTimer.singleShot(150, lambda: self._studio_window.load_slides(slides))
 
         self.studio_opened.emit()
 

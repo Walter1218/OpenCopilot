@@ -7,11 +7,13 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QTextEdit, QFrame, QApplication,
+    QComboBox,
 )
 
 from gui.v5 import tokens as T
 from gui.v5.telemetry import telemetry
 from gui.v5 import bridge
+from gui.v5.agent_worker import V5AgentWorker
 
 
 class WorkTabV5(QWidget):
@@ -24,6 +26,10 @@ class WorkTabV5(QWidget):
         self._selected_text = ""  # 当前数据源获取的文本
         self._session_id = telemetry().new_session_id()
         self._llm_ctx = None  # LLM trace context (active request)
+        self._agent_worker = None  # 当前运行的 Agent Worker
+        self._last_result = ""  # 最后一次 AI 生成结果
+        self._source_lang = "auto"  # 翻译源语言
+        self._target_lang = "zh"    # 翻译目标语言
         self._init_ui()
 
     def _init_ui(self):
@@ -75,7 +81,7 @@ class WorkTabV5(QWidget):
         primary_layout.addStretch()
         layout.addLayout(primary_layout)
 
-        # ── Secondary Actions（3 个小描边按钮）──
+        # ── Secondary Actions（3 个小描边按钮 + 翻译语言选择）──
         secondary_layout = QHBoxLayout()
         secondary_layout.setSpacing(6)
         for action_id, label, tip in T.SECONDARY_ACTIONS:
@@ -86,6 +92,16 @@ class WorkTabV5(QWidget):
             btn.setMinimumHeight(T.BTN_SMALL_HEIGHT)
             btn.clicked.connect(lambda checked, aid=action_id: self._on_action(aid))
             secondary_layout.addWidget(btn)
+
+        # 翻译语言选择（仅当 translate 操作时需要）
+        self._lang_combo = QComboBox()
+        self._lang_combo.setStyleSheet(self._lang_combo_style())
+        self._lang_combo.setToolTip("选择翻译方向")
+        for code, name in T.TRANSLATE_LANG_PAIRS:
+            self._lang_combo.addItem(name, code)
+        self._lang_combo.currentIndexChanged.connect(self._on_lang_changed)
+        secondary_layout.addWidget(self._lang_combo)
+
         secondary_layout.addStretch()
         layout.addLayout(secondary_layout)
 
@@ -183,17 +199,17 @@ class WorkTabV5(QWidget):
         print(f"[v5] WorkTab: 数据源 {source_id} → {char_count} 字符, status={status}")
 
     def _on_action(self, action_id: str):
-        """Primary/Secondary 按钮点击 → 非AI操作直接处理，AI操作标记TODO"""
+        """Primary/Secondary 按钮点击 → 非AI操作直接处理，AI操作通过 V5AgentWorker"""
         t = telemetry()
-        self._llm_ctx = t.llm_start(
-            source_tab="WORK",
-            action_type=action_id,
-            session_id=self._session_id,
-            text_len=len(self._selected_text),
-        )
         t.action_event("V5_WORK_ACTION", action_id=action_id,
                        source=self._current_source,
                        session_id=self._session_id)
+
+        # 翻译操作时，将语言选择信息传入 context_meta
+        context_meta = {"source_text": self._selected_text}
+        if action_id == "translate":
+            context_meta["source_lang"] = self._source_lang
+            context_meta["target_lang"] = self._target_lang
 
         if action_id == "more":
             # 非AI: 展示 More 操作列表
@@ -204,21 +220,97 @@ class WorkTabV5(QWidget):
             self._result_area.setPlainText("\n".join(lines))
             return
 
-        # AI 操作：标记待接入，给出视觉反馈
+        # 如果已有 Worker 在运行，先取消
+        if self._agent_worker is not None and self._agent_worker.isRunning():
+            self._agent_worker.stop()
+            # 使用 finished 信号异步清理，避免阻塞主线程
+            self._agent_worker.finished_signal.connect(lambda _: self._reset_worker())
+            t.emit("V5_WORK_CANCEL", action_id=action_id,
+                   session_id=self._session_id)
+            self._result_area.setPlainText(f"⏹️ [{action_id}] 已取消")
+            return
+
         char_count = len(self._selected_text)
-        if char_count > 0:
-            preview = self._selected_text[:150] + ("…" if char_count > 150 else "")
+        if char_count == 0:
             self._result_area.setPlainText(
-                f"🔄 [{action_id}] 处理中... (AI 能力待接入 Agent Pipeline)\n\n"
-                f"📄 选区内容 ({char_count} 字符):\n{preview}\n\n"
-                f"trace_id: {self._llm_ctx['trace_id']}"
+                f"⚠️ [{action_id}] 当前数据源无内容，请先切换数据源或选中内容。"
             )
-        else:
-            self._result_area.setPlainText(
-                f"🔄 [{action_id}] 处理中... (AI 能力待接入 Agent Pipeline)\n\n"
-                f"⚠️ 当前数据源无内容，请先切换数据源或选中内容。\n"
-                f"trace_id: {self._llm_ctx['trace_id']}"
+            return
+
+        # AI 操作：通过 V5AgentWorker 调用 Agent Pipeline
+        self._result_area.setPlainText(f"🔄 [{action_id}] 处理中...\n")
+
+        prompt = self._build_prompt(action_id, self._selected_text)
+        self._agent_worker = V5AgentWorker(
+            prompt=prompt,
+            action_type=action_id,
+            session_id=self._session_id,
+            context_source=self._current_source,
+            context_meta=context_meta,
+            is_new_task=True,
+        )
+        self._agent_worker.text_updated.connect(
+            lambda text: self._result_area.setPlainText(
+                f"🔄 [{action_id}] 处理中...\n\n{text}"
             )
+        )
+        self._agent_worker.finished_signal.connect(self._on_agent_finished)
+        self._agent_worker.error_signal.connect(self._on_agent_error)
+        self._agent_worker.start()
+
+    def _build_prompt(self, action_id: str, text: str) -> str:
+        """根据操作类型构建 prompt"""
+        if action_id == "translate":
+            lang_map = {
+                "auto": "自动检测", "zh": "中文", "en": "英文",
+                "ja": "日文", "ko": "韩文", "fr": "法文",
+                "de": "德文", "es": "西班牙文", "ru": "俄文",
+            }
+            src = lang_map.get(self._source_lang, self._source_lang)
+            tgt = lang_map.get(self._target_lang, self._target_lang)
+            return f"请将以下文本从{src}翻译为{tgt}:\n\n{text}"
+
+        templates = {
+            "explain": f"请解释以下代码/文本:\n\n{text}",
+            "fix": f"请修复以下代码中的问题:\n\n{text}",
+            "polish": f"请润色优化以下文本:\n\n{text}",
+            "code_review": f"请对以下代码进行审查:\n\n{text}",
+        }
+        return templates.get(action_id, text)
+
+    def _on_agent_finished(self, full_text: str):
+        """Agent Worker 完成回调"""
+        self._last_result = full_text
+        t = telemetry()
+        t.emit("V5_WORK_AGENT_DONE", session_id=self._session_id,
+               output_len=len(full_text),
+               action_id=getattr(self._agent_worker, 'action_type', 'unknown'))
+        print(f"[v5] WorkTab: Agent 完成 → {len(full_text)} 字符")
+        self._safely_reset_worker()
+
+    def _on_agent_error(self, error_msg: str):
+        """Agent Worker 错误回调"""
+        self._result_area.setPlainText(f"❌ {error_msg}")
+        self._safely_reset_worker()
+
+    def _reset_worker(self):
+        """重置 Worker 引用（供异步清理使用）"""
+        self._agent_worker = None
+
+    def _safely_reset_worker(self):
+        """安全重置 Worker：等待线程结束后再清理引用"""
+        if self._agent_worker is not None:
+            worker = self._agent_worker
+            self._agent_worker = None
+            if worker.isRunning():
+                # 等待线程自然结束（最多3秒），不强制quit
+                worker.finished.connect(worker.deleteLater)
+                if not worker.wait(3000):
+                    # 如果3秒后仍未结束，强制终止
+                    worker.terminate()
+                    worker.wait(1000)
+            else:
+                worker.deleteLater()
 
     def _on_action_bar(self, label: str):
         """Action Bar 按钮点击 → 通过 Bridge 执行非AI操作"""
@@ -299,6 +391,37 @@ class WorkTabV5(QWidget):
             QPushButton:hover {{
                 background-color: {T.BTN_SECONDARY_HOVER};
                 color: {T.TEXT_PRIMARY};
+            }}
+        """
+
+    def _on_lang_changed(self, index: int):
+        """翻译语言选择变更"""
+        code = self._lang_combo.itemData(index)
+        if code and "→" in code:
+            parts = code.split("→")
+            self._source_lang = parts[0]
+            self._target_lang = parts[1]
+            t = telemetry()
+            t.emit("V5_WORK_LANG_CHANGE", source_lang=self._source_lang,
+                   target_lang=self._target_lang, session_id=self._session_id)
+
+    @staticmethod
+    def _lang_combo_style():
+        return f"""
+            QComboBox {{
+                background-color: {T.BG_ELEVATED};
+                color: {T.TEXT_SECONDARY};
+                border: 1px solid {T.STROKE_SUBTLE};
+                border-radius: 4px;
+                padding: 2px 6px;
+                font-size: {T.FONT_CAPTION[0]}px;
+                min-width: 100px;
+            }}
+            QComboBox::drop-down {{ border: none; width: 16px; }}
+            QComboBox QAbstractItemView {{
+                background-color: {T.BG_ELEVATED};
+                color: {T.TEXT_SECONDARY};
+                selection-background-color: {T.BG_SELECTED};
             }}
         """
 

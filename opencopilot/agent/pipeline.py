@@ -152,6 +152,19 @@ class MiddlewarePipeline:
 
         async def dispatch(i: int):
             if i >= len(mws) or ctx.should_short_circuit:
+                if ctx.should_short_circuit and i < len(mws):
+                    # 记录是哪个中间件触发了 short_circuit
+                    blocker = mws[i - 1].__class__.__name__ if i > 0 else "unknown"
+                    obs.log(
+                        "Pipeline", f"Short-circuited by {blocker} at step {i}",
+                        session_id=ctx.session_id, level="WARNING",
+                        event="PIPELINE_SHORT_CIRCUIT",
+                        extra_data={
+                            "blocker": blocker,
+                            "action_type": ctx.action_type,
+                            "response_preview": (ctx.response_content or "")[:100],
+                        },
+                    )
                 return
 
             mw_name = mws[i].__class__.__name__

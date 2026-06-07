@@ -151,13 +151,13 @@ class MiMoProvider(BaseProvider):
         "mimo-v2-flash":   {"input": 0.002, "output": 0.006},
     }
 
-    def __init__(self, api_key: str = None, model: str = None):
+    def __init__(self, api_key: str = None, model: str = None, base_url: str = None):
         config = load_config()
         self.api_key = api_key or config.get("mimo_api_key") or os.environ.get("XIAOMI_API_KEY") or os.environ.get("xiaomi_api_key") or os.environ.get("MIMO_API_KEY")
         if not self.api_key:
             print("警告: 未找到 XIAOMI_API_KEY / MIMO_API_KEY 环境变量或配置，请在 .env 文件中设置。")
         self.default_model = model or config.get("mimo_model", "mimo-v2.5")
-        self.base_url = "https://api.xiaomimimo.com/v1/chat/completions"
+        self.base_url = base_url or config.get("mimo_base_url") or os.environ.get("MIMO_BASE_URL") or "https://api.xiaomimimo.com/v1/chat/completions"
         self._usage_stats = {"total_requests": 0, "total_input_tokens": 0, "total_output_tokens": 0, "total_cost_cny": 0.0}
 
         # LLM 可配置参数（从 ConfigManager 读取）

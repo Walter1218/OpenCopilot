@@ -92,8 +92,8 @@ WINDOW_SMART_COPILOT = (680, 520)
 WINDOW_WORKSPACE = (1000, 700)
 WINDOW_WORKSPACE_MIN = (800, 550)
 WINDOW_SETTINGS = (600, 500)
-WINDOW_STUDIO = (1200, 800)
-WINDOW_STUDIO_MIN = (900, 600)
+WINDOW_STUDIO = (1400, 900)  # 4-panel 布局需要更大空间
+WINDOW_STUDIO_MIN = (1100, 700)  # 最小尺寸也相应增大
 
 # 内部布局
 SIDEBAR_WIDTH = 180         # Workspace Sidebar
@@ -128,6 +128,31 @@ SECONDARY_ACTIONS = [
     ("translate", "🌐 Translate", "翻译"),
     ("code_review", "💻 Code Review", "代码审查"),
     ("more", "··· More", "更多操作"),
+]
+
+# =============================================================================
+# 翻译语言对定义（源语言→目标语言）
+# =============================================================================
+
+TRANSLATE_LANG_PAIRS = [
+    ("auto→zh", "🌐 Auto → 中文"),
+    ("auto→en", "🌐 Auto → English"),
+    ("zh→en", "中文 → English"),
+    ("en→zh", "English → 中文"),
+    ("zh→ja", "中文 → 日本語"),
+    ("ja→zh", "日本語 → 中文"),
+    ("zh→ko", "中文 → 한국어"),
+    ("ko→zh", "한국어 → 中文"),
+    ("zh→fr", "中文 → Français"),
+    ("fr→zh", "Français → 中文"),
+    ("zh→de", "中文 → Deutsch"),
+    ("de→zh", "Deutsch → 中文"),
+    ("zh→es", "中文 → Español"),
+    ("es→zh", "Español → 中文"),
+    ("zh→ru", "中文 → Русский"),
+    ("ru→zh", "Русский → 中文"),
+    ("en→ja", "English → 日本語"),
+    ("ja→en", "日本語 → English"),
 ]
 
 # =============================================================================

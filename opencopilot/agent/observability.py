@@ -61,6 +61,13 @@ class PipelineObservability:
         self._max_history = 100
         self._log_store = None     # LogStore 实例（延迟初始化）
 
+        # Timer 日志文件（pipeline_timer.log）
+        self._timer_log_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "pipeline_timer.log"
+        )
+        self._timer_file_lock = threading.Lock()
+
         # 尝试导入 ObservabilityModule
         try:
             from opencopilot.observability import (
@@ -197,6 +204,15 @@ class PipelineObservability:
             msg += f" ({status})"
 
         self._write_log(msg)
+        
+        # 写入 pipeline_timer.log 文件（追加模式，线程安全）
+        try:
+            with self._timer_file_lock:
+                with open(self._timer_log_path, "a", encoding="utf-8") as f:
+                    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                    f.write(f"[{timestamp}] {msg}\n")
+        except Exception:
+            pass  # 文件写入失败不影响主流程
 
         # 历史记录（内存，最近 100 条）
         entry = TimerEntry(
@@ -243,6 +259,15 @@ class PipelineObservability:
         """记录整条管线总耗时"""
         msg = f"[Timer] Pipeline TOTAL: {total:.3f}s | action={action_type} text={text[:40]}"
         self._write_log(msg)
+        
+        # 写入 pipeline_timer.log 文件
+        try:
+            with self._timer_file_lock:
+                with open(self._timer_log_path, "a", encoding="utf-8") as f:
+                    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                    f.write(f"[{timestamp}] {msg}\n")
+        except Exception:
+            pass
 
         # 上报 metrics
         if self._have_obs:
@@ -405,6 +430,15 @@ class PipelineObservability:
                 pass
 
     # ---- 查询接口 ----
+
+    def get_log_paths(self) -> Dict[str, str]:
+        """返回所有活跃日志文件的路径（供诊断/startup_check 使用）"""
+        log_store = self._get_log_store()
+        return {
+            "pipeline_timer_log": self._timer_log_path,
+            "pipeline_logs_db": getattr(log_store, "_db_path", "N/A"),
+            "stderr": "stderr (sys.stderr)",
+        }
 
     def get_recent_timers(self, n: int = 10) -> List[TimerEntry]:
         """获取最近 N 条计时记录"""

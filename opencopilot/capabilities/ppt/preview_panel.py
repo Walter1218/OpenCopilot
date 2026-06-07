@@ -654,7 +654,7 @@ class SlideRenderer(QWidget):
                 title
             )
         
-        # 检查是否有特殊内容类型（表格/图表）
+        # 检查是否有特殊内容类型（表格/图表/流程图）
         items = self.current_slide.get('items', [])
         
         # 检查第一个 item 是否为特殊类型
@@ -667,12 +667,41 @@ class SlideRenderer(QWidget):
                 if table_data.get('columns'):  # 有表格数据才绘制
                     self._draw_table(painter, table_data)
                     return
-            elif content_type in ('chart', 'flowchart'):
+            elif content_type == 'chart':
                 chart_data = first_item.get('chart_data', {})
-                if chart_data.get('labels') and chart_data.get('datasets'):  # 有图表数据才绘制
+                if chart_data.get('labels') and chart_data.get('datasets'):
                     self._draw_chart(painter, chart_data,
                                    first_item.get('chart_type', 'bar'))
                     return
+            elif content_type == 'flowchart':
+                flowchart_data = first_item.get('flowchart_data', {})
+                if flowchart_data.get('steps'):
+                    self._draw_flowchart(painter, flowchart_data)
+                    return
+                else:
+                    # flowchart_data 缺失，回退到占位符
+                    self._draw_flowchart_placeholder(painter, 150, 220, 1000, 450)
+                    return
+        
+        # 布局级回退：layout 字段指定了特殊类型但 items 中无 content_type
+        if layout_type == 'table' and items:
+            table_data = items[0].get('table_data', {})
+            if table_data.get('columns'):
+                self._draw_table(painter, table_data)
+                return
+        elif layout_type == 'chart' and items:
+            chart_data = items[0].get('chart_data', {})
+            if chart_data.get('labels') and chart_data.get('datasets'):
+                self._draw_chart(painter, chart_data, items[0].get('chart_type', 'bar'))
+                return
+        elif layout_type == 'flowchart' and items:
+            flowchart_data = items[0].get('flowchart_data', {})
+            if flowchart_data.get('steps'):
+                self._draw_flowchart(painter, flowchart_data)
+                return
+            else:
+                self._draw_flowchart_placeholder(painter, 150, 220, 1000, 450)
+                return
         
         # 常规布局
         if layout_type == 'three_columns':
@@ -869,6 +898,135 @@ class SlideRenderer(QWidget):
                     nx + node_width, int(y + h / 2),
                     nx + node_width + 50, int(y + h / 2)
                 )
+    
+    def _draw_flowchart(self, painter: QPainter, flowchart_data: dict):
+        """绘制流程图（基于 flowchart_data 的真实数据）
+        
+        支持 horizontal 和 vertical 布局。
+        """
+        steps = flowchart_data.get("steps", [])
+        layout = flowchart_data.get("layout", "horizontal")
+        fc_title = flowchart_data.get("title", "")
+        
+        if not steps:
+            return
+        
+        # 流程图标题
+        if fc_title:
+            font = QFont("Helvetica Neue", 20, QFont.Weight.Bold)
+            painter.setFont(font)
+            painter.setPen(self.title_color)
+            painter.drawText(
+                QRectF(150, 170, 1000, 40),
+                Qt.AlignmentFlag.AlignCenter,
+                fc_title
+            )
+        
+        num_steps = len(steps)
+        
+        if layout == "vertical" or (layout == "horizontal" and num_steps > 5):
+            # 垂直布局
+            node_width = 350
+            node_height = 40
+            gap = 30
+            total_height = num_steps * node_height + (num_steps - 1) * gap
+            start_x = int((self.SLIDE_WIDTH - node_width) / 2)
+            start_y = 230
+            
+            for i, step_text in enumerate(steps):
+                ny = start_y + i * (node_height + gap)
+                
+                # 节点背景（首尾用圆角矩形，中间用普通矩形）
+                painter.setPen(QPen(self.accent_color, 2))
+                if i == 0 or i == num_steps - 1:
+                    painter.setBrush(QColor(0, 82, 204))
+                    text_color = QColor(255, 255, 255)
+                else:
+                    painter.setBrush(QColor(235, 240, 248))
+                    text_color = self.title_color
+                painter.drawRoundedRect(start_x, ny, node_width, node_height, 8, 8)
+                
+                # 节点文字
+                font = QFont("Helvetica Neue", 12)
+                painter.setFont(font)
+                painter.setPen(text_color)
+                # 截断过长文字
+                display_text = step_text[:25] + "..." if len(step_text) > 25 else step_text
+                painter.drawText(
+                    QRectF(start_x, ny, node_width, node_height),
+                    Qt.AlignmentFlag.AlignCenter,
+                    display_text
+                )
+                
+                # 连接箭头
+                if i < num_steps - 1:
+                    arrow_x = start_x + node_width // 2
+                    painter.setPen(QPen(self.accent_color, 2))
+                    painter.drawLine(arrow_x, ny + node_height, arrow_x, ny + node_height + gap)
+                    # 箭头头部
+                    arrow_y = ny + node_height + gap
+                    painter.drawLine(arrow_x, arrow_y, arrow_x - 6, arrow_y - 8)
+                    painter.drawLine(arrow_x, arrow_y, arrow_x + 6, arrow_y - 8)
+        else:
+            # 水平布局
+            max_node_w = 180
+            node_height = 50
+            gap = 40
+            total_width = num_steps * max_node_w + (num_steps - 1) * gap
+            # 动态调整节点宽度
+            available_width = 1000
+            if total_width > available_width:
+                node_width = max(100, (available_width - (num_steps - 1) * gap) // num_steps)
+            else:
+                node_width = max_node_w
+            total_width = num_steps * node_width + (num_steps - 1) * gap
+            start_x = int((self.SLIDE_WIDTH - total_width) / 2)
+            start_y = 350
+            
+            for i, step_text in enumerate(steps):
+                nx = start_x + i * (node_width + gap)
+                
+                # 节点
+                painter.setPen(QPen(self.accent_color, 2))
+                if i == 0 or i == num_steps - 1:
+                    painter.setBrush(QColor(0, 82, 204))
+                    text_color = QColor(255, 255, 255)
+                else:
+                    painter.setBrush(QColor(235, 240, 248))
+                    text_color = self.title_color
+                painter.drawRoundedRect(nx, start_y, node_width, node_height, 8, 8)
+                
+                # 节点文字
+                font = QFont("Helvetica Neue", 11)
+                painter.setFont(font)
+                painter.setPen(text_color)
+                display_text = step_text[:15] + "..." if len(step_text) > 15 else step_text
+                painter.drawText(
+                    QRectF(nx, start_y, node_width, node_height),
+                    Qt.AlignmentFlag.AlignCenter,
+                    display_text
+                )
+                
+                # 连接箭头
+                if i < num_steps - 1:
+                    arrow_start_x = nx + node_width
+                    arrow_end_x = nx + node_width + gap
+                    arrow_y = start_y + node_height // 2
+                    painter.setPen(QPen(self.accent_color, 2))
+                    painter.drawLine(arrow_start_x, arrow_y, arrow_end_x, arrow_y)
+                    # 箭头头部
+                    painter.drawLine(arrow_end_x, arrow_y, arrow_end_x - 8, arrow_y - 5)
+                    painter.drawLine(arrow_end_x, arrow_y, arrow_end_x - 8, arrow_y + 5)
+        
+        # 步骤计数标签
+        font = QFont("Helvetica Neue", 11)
+        painter.setFont(font)
+        painter.setPen(QColor(150, 150, 155))
+        painter.drawText(
+            QRectF(150, 680, 1000, 25),
+            Qt.AlignmentFlag.AlignCenter,
+            f"共 {num_steps} 个步骤"
+        )
     
     def _draw_icon_placeholder(self, painter: QPainter, x: int, y: int, w: int, h: int):
         """绘制图标占位符"""

@@ -242,11 +242,12 @@ def call_agent_pipeline_sync(
 
     chunk_queue: SyncQueue = SyncQueue()
     _cancelled = cancel_event if cancel_event else threading.Event()
-    _chunk_count = 0
+    # 使用可变对象存储 chunk 计数，避免闭包生命周期问题
+    # 当异步协程在事件循环中执行时，外层函数可能已返回，nonlocal 变量会被垃圾回收
+    _chunk_counter = [0]
 
     # ---- 管线协程（运行在全局持久化 event loop 中） ----
     async def _run_pipeline():
-        nonlocal _chunk_count
         session_lock = _get_or_create_session_lock(result_session_id)
         # 会话锁：确保同一 session 同时只有一个 pipeline，防止数据竞争和"重复回复"
         async with session_lock:
@@ -310,7 +311,7 @@ def call_agent_pipeline_sync(
                             data = json.loads(data_str)
                             chunk = data.get("chunk", "")
                             if chunk:
-                                _chunk_count += 1
+                                _chunk_counter[0] += 1
                                 chunk_queue.put(("chunk", chunk))
                         except json.JSONDecodeError:
                             pass
@@ -322,8 +323,8 @@ def call_agent_pipeline_sync(
                     except (asyncio.TimeoutError, asyncio.CancelledError, Exception):
                         pass
 
-                obs.caller_log(caller_id, f"PIPELINE_DONE | chunks={_chunk_count}",
-                               session_id=result_session_id, event="DONE", chunk_count=_chunk_count)
+                obs.caller_log(caller_id, f"PIPELINE_DONE | chunks={_chunk_counter[0]}",
+                               session_id=result_session_id, event="DONE", chunk_count=_chunk_counter[0])
 
             except asyncio.CancelledError:
                 obs.caller_log(caller_id, "PIPELINE_CANCELLED",
@@ -344,8 +345,8 @@ def call_agent_pipeline_sync(
     try:
         while True:
             if _cancelled.is_set():
-                obs.caller_log(caller_id, f"SYNC_CANCELLED | chunks={_chunk_count}",
-                               session_id=result_session_id, event="CANCELLED", chunk_count=_chunk_count)
+                obs.caller_log(caller_id, f"SYNC_CANCELLED | chunks={_chunk_counter[0]}",
+                               session_id=result_session_id, event="CANCELLED", chunk_count=_chunk_counter[0])
                 future.cancel()
                 break
 
@@ -371,8 +372,8 @@ def call_agent_pipeline_sync(
         _cancelled.set()
         if not future.done():
             future.cancel()
-        obs.caller_log(caller_id, f"SYNC_END | chunks={_chunk_count}",
-                       session_id=result_session_id, event="SYNC_END", chunk_count=_chunk_count)
+        obs.caller_log(caller_id, f"SYNC_END | chunks={_chunk_counter[0]}",
+                       session_id=result_session_id, event="SYNC_END", chunk_count=_chunk_counter[0])
 
 
 async def call_agent_pipeline_async(

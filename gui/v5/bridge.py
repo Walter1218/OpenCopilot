@@ -14,8 +14,11 @@ import json
 import shutil
 import subprocess
 import tempfile
+import logging
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -91,11 +94,12 @@ def get_active_document() -> Dict[str, Any]:
                     "line_count": data.get("line_count", 0),
                     "status": "ok",
                 })
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"get_active_document: IDE doc info failed: {e}")
 
         return doc_info
     except Exception as e:
+        logger.error(f"get_active_document: failed: {e}")
         return {"text": "", "app_name": "", "status": f"error: {e}"}
 
 
@@ -108,13 +112,16 @@ def get_browser_content() -> Dict[str, Any]:
         try:
             dom = probe.get_browser_dom("Chrome")
             return {"text": dom, "source": "browser", "browser": "Chrome", "status": "ok" if dom else "empty"}
-        except Exception:
+        except Exception as e:
+            logger.debug(f"get_browser_content: Chrome not available: {e}")
             try:
                 dom = probe.get_browser_dom("Safari")
                 return {"text": dom, "source": "browser", "browser": "Safari", "status": "ok" if dom else "empty"}
-            except Exception:
+            except Exception as e2:
+                logger.debug(f"get_browser_content: Safari not available: {e2}")
                 return {"text": "", "source": "browser", "browser": "", "status": "no_browser"}
     except Exception as e:
+        logger.error(f"get_browser_content: failed: {e}")
         return {"text": "", "source": "browser", "status": f"error: {e}"}
 
 
@@ -174,8 +181,10 @@ def do_copy_to_clipboard(text: str) -> bool:
     try:
         process = subprocess.Popen(["pbcopy"], stdin=subprocess.PIPE)
         process.communicate(input=text.encode("utf-8"))
+        logger.info(f"do_copy_to_clipboard: copied {len(text)} chars")
         return True
-    except Exception:
+    except Exception as e:
+        logger.warning(f"do_copy_to_clipboard: failed: {e}")
         return False
 
 
@@ -191,14 +200,17 @@ def do_apply_to_ide(text: str, action: str = "insert") -> Dict[str, Any]:
             headers=probe.headers, timeout=5.0
         )
         if resp.status_code == 200:
+            logger.info(f"do_apply_to_ide: broker_insert success, text_len={len(text)}")
             return {"success": True, "method": "broker_insert", "action": action}
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"do_apply_to_ide: broker insert failed: {e}")
 
     # 降级到剪贴板
     if do_copy_to_clipboard(text):
+        logger.info(f"do_apply_to_ide: fallback to clipboard, text_len={len(text)}")
         return {"success": True, "method": "clipboard", "action": action,
                 "message": "已复制到剪贴板，请在 IDE 中 Cmd+V 粘贴"}
+    logger.error("do_apply_to_ide: all methods failed")
     return {"success": False, "message": "应用失败"}
 
 
@@ -213,9 +225,11 @@ def do_export_ppt(slides: list, filename: str = "") -> Dict[str, Any]:
         output_path = os.path.join(tempfile.gettempdir(), filename)
         generate_ppt_from_json(slides, output_path)
         file_size = os.path.getsize(output_path)
+        logger.info(f"do_export_ppt: exported {len(slides)} slides to {output_path}")
         return {"success": True, "file_path": output_path, "filename": filename,
                 "file_size": file_size, "slide_count": len(slides)}
     except Exception as e:
+        logger.error(f"do_export_ppt: failed: {e}")
         return {"success": False, "message": f"PPT 导出失败: {e}"}
 
 
@@ -227,8 +241,8 @@ def get_more_actions() -> List[Dict]:
         custom = config.get("work_actions")
         if custom and isinstance(custom, list):
             return custom
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"get_more_actions: failed: {e}")
     return DEFAULT_MORE_ACTIONS
 
 
@@ -241,7 +255,8 @@ def get_config() -> Dict[str, Any]:
     try:
         from llm_provider import load_config
         return load_config()
-    except Exception:
+    except Exception as e:
+        logger.warning(f"get_config: failed: {e}")
         return {}
 
 
@@ -251,7 +266,8 @@ def save_config(config: Dict[str, Any]) -> bool:
         from llm_provider import save_config as _save
         _save(config)
         return True
-    except Exception:
+    except Exception as e:
+        logger.warning(f"save_config: failed: {e}")
         return False
 
 
@@ -270,7 +286,8 @@ def save_engine_config(provider_type: str, api_key: str = "", model: str = "",
             config[f"{provider_type}_api_base"] = api_base
         _save(config)
         return True
-    except Exception:
+    except Exception as e:
+        logger.warning(f"save_engine_config: failed: {e}")
         return False
 
 
@@ -304,6 +321,7 @@ def test_llm_connection(provider_type: str, api_base: str = "",
     except httpx.TimeoutException:
         return {"success": False, "message": "连接超时"}
     except Exception as e:
+        logger.warning(f"test_llm_connection: failed: {e}")
         return {"success": False, "message": str(e)}
 
 
@@ -329,7 +347,8 @@ def save_appearance(theme: str = "", font_size: int = 0, language: str = "") -> 
             app["language"] = language
         _save(config)
         return True
-    except Exception:
+    except Exception as e:
+        logger.warning(f"save_appearance: failed: {e}")
         return False
 
 
@@ -343,7 +362,8 @@ def get_shortcuts() -> Dict[str, Any]:
                 return json.load(f)
         from core.shortcut_manager import DEFAULT_SHORTCUTS
         return {"shortcuts": {k: v.to_dict() for k, v in DEFAULT_SHORTCUTS.items()}}
-    except Exception:
+    except Exception as e:
+        logger.warning(f"get_shortcuts: failed: {e}")
         return {"shortcuts": {}}
 
 
@@ -354,7 +374,8 @@ def save_shortcuts(shortcuts: Dict[str, Any]) -> bool:
         with open(SHORTCUT_CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump({"shortcuts": shortcuts}, f, ensure_ascii=False, indent=2)
         return True
-    except Exception:
+    except Exception as e:
+        logger.warning(f"save_shortcuts: failed: {e}")
         return False
 
 
@@ -371,6 +392,7 @@ def do_export_config() -> Dict[str, Any]:
         shutil.copy2(CONFIG_FILE, dst)
         return {"success": True, "file_path": dst, "filename": name}
     except Exception as e:
+        logger.error(f"do_export_config: failed: {e}")
         return {"success": False, "message": str(e)}
 
 
@@ -390,6 +412,7 @@ def do_import_config(file_path: str) -> Dict[str, Any]:
     except json.JSONDecodeError:
         return {"success": False, "message": "JSON 解析失败"}
     except Exception as e:
+        logger.error(f"do_import_config: failed: {e}")
         return {"success": False, "message": str(e)}
 
 
@@ -422,6 +445,7 @@ def do_reset_config(section: str = "") -> Dict[str, Any]:
             _save(config)
             return {"success": True, "reset_sections": list(defaults_map.keys())}
     except Exception as e:
+        logger.error(f"do_reset_config: failed: {e}")
         return {"success": False, "message": str(e)}
 
 
@@ -438,8 +462,8 @@ def get_recent_files(limit: int = 20) -> List[Dict]:
             if isinstance(files, list):
                 files.sort(key=lambda x: x.get("modified", ""), reverse=True)
                 return files[:limit]
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"get_recent_files: failed: {e}")
     return []
 
 
@@ -469,8 +493,8 @@ def add_recent_file(file_path: str, source: str = "local"):
         os.makedirs(os.path.dirname(RECENT_FILES_PATH), exist_ok=True)
         with open(RECENT_FILES_PATH, "w", encoding="utf-8") as f:
             json.dump(files, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"add_recent_file: failed: {e}")
 
 
 def get_memory_stats() -> Dict[str, Any]:
@@ -492,16 +516,16 @@ def get_memory_stats() -> Dict[str, Any]:
                 "relations": len(kg.get("relations", [])),
                 "status": "ok",
             }
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"get_memory_stats: KG unavailable: {e}")
     # 翻译记忆 + 术语库
     try:
         from opencopilot.capabilities.memory.core import MemoryManager
         mm = MemoryManager()
         stats["translation_memory"] = {"entries": mm.count_memories(memory_type="translation"), "status": "ok"}
         stats["glossary"] = {"terms": mm.count_memories(memory_type="glossary"), "status": "ok"}
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"get_memory_stats: MemoryManager unavailable: {e}")
     return stats
 
 
@@ -514,5 +538,6 @@ def get_task_history(session_id: str = "", limit: int = 20) -> List[Dict]:
             tasks = [t for t in tasks if t.get("session_id") == session_id]
         tasks.sort(key=lambda x: x.get("created_at", ""), reverse=True)
         return tasks[:limit]
-    except Exception:
+    except Exception as e:
+        logger.debug(f"get_task_history: failed: {e}")
         return []

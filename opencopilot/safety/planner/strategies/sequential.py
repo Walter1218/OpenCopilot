@@ -144,7 +144,7 @@ class SequentialStrategy(PlanningStrategy):
             TaskStep(
                 step_id=generate_step_id(),
                 step_name="执行任务",
-                step_type=StepType.TOOL_CALL,
+                step_type=StepType.LLM_CALL,  # 使用 LLM_CALL 代替 TOOL_CALL，避免缺少 tool_id
                 description="执行主要任务"
             ),
             TaskStep(

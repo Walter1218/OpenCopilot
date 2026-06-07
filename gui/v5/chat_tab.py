@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
 from gui.v5 import tokens as T
 from gui.v5.telemetry import telemetry
 from gui.v5 import bridge
+from gui.v5.agent_worker import V5AgentWorker
 
 
 class ChatTabV5(QWidget):
@@ -23,6 +24,7 @@ class ChatTabV5(QWidget):
         self._session_id = telemetry().new_session_id()
         self._llm_ctx = None  # LLM trace context
         self._message_count = 0
+        self._agent_worker = None  # 当前运行的 Agent Worker
         self._init_ui()
 
     def _init_ui(self):
@@ -176,6 +178,19 @@ class ChatTabV5(QWidget):
                 f"📄 当前上下文（{len(text)} 字符，来源: {source}）:\n{preview}"
             )
 
+    def set_shared_text(self, text: str, source: str = "drag_drop"):
+        """接收从 SmartCopilot 拖放/导入的共享文本"""
+        t = telemetry()
+        t.emit("V5_CHAT_SHARED_TEXT", source=source, text_len=len(text),
+               session_id=self._session_id)
+        if text:
+            preview = text[:120] + ("…" if len(text) > 120 else "")
+            self.append_message(
+                "系统",
+                f"📄 已接收共享内容（{len(text)} 字符，来源: {source}）:\n{preview}\n\n"
+                f"您可以直接在下方输入框提问，或继续对话。"
+            )
+
     def append_message(self, role: str, text: str):
         """追加一条聊天消息"""
         color_map = {
@@ -197,13 +212,22 @@ class ChatTabV5(QWidget):
     # =========================================================================
 
     def _on_send(self):
-        """发送消息 → 本地 echo + 保存到历史 + LLM trace"""
+        """发送消息 → 本地 echo + 通过 V5AgentWorker 获取 AI 回复"""
         text = self._chat_input.text().strip()
         if not text:
             return
+
+        # 如果已有 Worker 在运行，先取消（发送按钮变为停止功能）
+        if self._agent_worker is not None and self._agent_worker.isRunning():
+            self._agent_worker.stop()
+            # 使用 finished 信号异步清理，避免阻塞主线程
+            self._agent_worker.finished_signal.connect(lambda _: self._reset_worker())
+            self._send_btn.setText("发送")
+            telemetry().emit("V5_CHAT_STOP", session_id=self._session_id)
+            return
+
         t = telemetry()
         self._message_count += 1
-        # LLM trace 开始
         self._llm_ctx = t.llm_start(
             source_tab="CHAT",
             action_type="chat",
@@ -216,13 +240,96 @@ class ChatTabV5(QWidget):
                trace_id=self._llm_ctx["trace_id"])
         self._chat_input.clear()
         self.append_message("你", text)
-        # 保存到本地历史
         self._save_message("user", text)
-        # 占位 AI 回复（LLM done/error 待实际接入后触发）
-        self.append_message("AI", f"🔄 收到: \"{text}\" (AI 能力待接入 Agent Pipeline)")
-        t.emit("V5_CHAT_LLM_DONE", session_id=self._session_id,
-               trace_id=self._llm_ctx["trace_id"],
-               output_len=len(text) + 20, chunk_count=1)
+
+        # 创建 AI 回复占位，后续流式更新
+        self.append_message("AI", "🔄 思考中...")
+
+        # 通过 V5AgentWorker 调用 Agent Pipeline
+        self._send_btn.setText("停止")
+        self._agent_worker = V5AgentWorker(
+            prompt=text,
+            action_type="chat",
+            session_id=self._session_id,
+            context_source="chat",
+            context_meta={},
+            is_new_task=False,
+        )
+        self._agent_worker.text_updated.connect(self._on_ai_chunk)
+        self._agent_worker.finished_signal.connect(self._on_ai_finished)
+        self._agent_worker.error_signal.connect(self._on_ai_error)
+        self._agent_worker.start()
+
+    def _on_ai_chunk(self, text: str):
+        """AI 流式 chunk 回调 — 更新最后一条 AI 消息"""
+        self._update_last_ai_message(text)
+
+    def _on_ai_finished(self, full_text: str):
+        """AI 完成回调"""
+        self._send_btn.setText("发送")
+        self._safely_reset_worker()
+        self._save_message("assistant", full_text)
+        t = telemetry()
+        if self._llm_ctx:
+            t.llm_done(self._llm_ctx, source_tab="CHAT",
+                       chunk_count=0, output_len=len(full_text))
+        else:
+            t.emit("V5_CHAT_LLM_DONE", session_id=self._session_id,
+                   output_len=len(full_text))
+        print(f"[v5] ChatTab: AI 完成 → {len(full_text)} 字符")
+
+    def _on_ai_error(self, error_msg: str):
+        """AI 错误回调"""
+        self._send_btn.setText("发送")
+        self._update_last_ai_message(f"❌ {error_msg}")
+        self._safely_reset_worker()
+        t = telemetry()
+        if self._llm_ctx:
+            t.llm_error(self._llm_ctx, source_tab="CHAT", error_msg=error_msg)
+        else:
+            t.emit("V5_CHAT_LLM_ERROR", session_id=self._session_id,
+                   error_msg=error_msg)
+
+    def _reset_worker(self):
+        """重置 Worker 引用（供异步清理使用）"""
+        self._agent_worker = None
+
+    def _safely_reset_worker(self):
+        """安全重置 Worker：等待线程结束后再清理引用"""
+        if self._agent_worker is not None:
+            worker = self._agent_worker
+            self._agent_worker = None
+            if worker.isRunning():
+                # 等待线程自然结束（最多3秒），不强制quit
+                worker.finished.connect(worker.deleteLater)
+                if not worker.wait(3000):
+                    # 如果3秒后仍未结束，强制终止
+                    worker.terminate()
+                    worker.wait(1000)
+            else:
+                worker.deleteLater()
+
+    def _update_last_ai_message(self, text: str):
+        """增量更新最后一条 AI 消息的内容（避免全量重绘）"""
+        # 使用 QTextCursor 定位到最后，删除旧的 AI 占位内容，插入新文本
+        from PyQt6.QtGui import QTextCursor
+
+        cursor = self._chat_display.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+
+        # 找到最后一条 AI 消息的位置（通过 HTML 特征定位）
+        # 策略：直接追加差异文本，利用 QTextEdit 的自动合并
+        # 更简单的方式：直接替换整个 AI 消息行
+        doc = self._chat_display.document()
+        block = doc.lastBlock()
+
+        # 删除最后一块（当前 AI 消息），重新插入
+        cursor.setPosition(block.position())
+        cursor.movePosition(QTextCursor.MoveOperation.End, QTextCursor.MoveMode.KeepAnchor)
+        cursor.removeSelectedText()
+
+        # 插入更新后的 AI 消息
+        self.append_message("AI", text)
 
     def _save_message(self, role: str, text: str):
         """保存消息到本地历史文件"""

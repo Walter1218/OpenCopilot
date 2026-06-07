@@ -179,12 +179,14 @@ class TestLoadText:
         assert "原文:0字符" in text
 
     def test_load_text_long(self, studio_window):
-        """load_text 超长文本应截断显示"""
+        """load_text 超长文本应显示实际字符数"""
         long_text = "A" * 10000
         studio_window.load_text(long_text)
         text = studio_window._stats_label.text()
-        # min(len(text), 5000)
-        assert "5000字符" in text
+        # 修复后显示实际字符数，不再截断
+        assert "10000字符" in text
+        # 同时验证文本已加载到 Source Panel
+        assert studio_window._source_text.toPlainText() == long_text
 
 
 # =============================================================================

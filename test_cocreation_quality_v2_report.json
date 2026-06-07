@@ -1,0 +1,134 @@
+{
+  "total_tests": 12,
+  "passed_tests": 12,
+  "failed_tests": 0,
+  "pass_rate": 100.0,
+  "avg_quality": 100.0,
+  "total_elapsed": 38.693198919296265,
+  "results": [
+    {
+      "id": "text_to_table",
+      "name": "文本转表格",
+      "success": true,
+      "quality_score": 100.0,
+      "attempts": 1,
+      "elapsed": 0,
+      "mode": "goal"
+    },
+    {
+      "id": "text_to_chart",
+      "name": "文本转图表",
+      "success": true,
+      "quality_score": 100.0,
+      "attempts": 1,
+      "elapsed": 0,
+      "mode": "goal"
+    },
+    {
+      "id": "text_to_flowchart",
+      "name": "文本转流程图",
+      "success": true,
+      "quality_score": 100.0,
+      "attempts": 1,
+      "elapsed": 0,
+      "mode": "goal"
+    },
+    {
+      "id": "image_change",
+      "name": "更换图片描述",
+      "success": true,
+      "quality_score": 100.0,
+      "attempts": 1,
+      "elapsed": 0,
+      "mode": "goal"
+    },
+    {
+      "id": "table_add_row",
+      "name": "表格添加行",
+      "success": true,
+      "quality_score": 100.0,
+      "checks": {
+        "rows数量增加": true
+      },
+      "elapsed": 3.517019748687744,
+      "mode": "normal"
+    },
+    {
+      "id": "table_format",
+      "name": "表格格式化",
+      "success": true,
+      "quality_score": 100.0,
+      "checks": {
+        "table_data存在": true
+      },
+      "elapsed": 3.2875959873199463,
+      "mode": "normal"
+    },
+    {
+      "id": "chart_change_type",
+      "name": "更换图表类型",
+      "success": true,
+      "quality_score": 100.0,
+      "checks": {
+        "图表类型改变": true
+      },
+      "elapsed": 3.41005277633667,
+      "mode": "normal"
+    },
+    {
+      "id": "chart_update_data",
+      "name": "更新图表数据",
+      "success": true,
+      "quality_score": 100.0,
+      "checks": {
+        "datasets数量增加": true
+      },
+      "elapsed": 4.272061824798584,
+      "mode": "normal"
+    },
+    {
+      "id": "flowchart_add_step",
+      "name": "流程图添加步骤",
+      "success": true,
+      "quality_score": 100.0,
+      "checks": {
+        "steps数量增加": true
+      },
+      "elapsed": 2.6189048290252686,
+      "mode": "normal"
+    },
+    {
+      "id": "optimize_title",
+      "name": "优化标题",
+      "success": true,
+      "quality_score": 100.0,
+      "checks": {
+        "title字段被更新": true
+      },
+      "elapsed": 2.813836097717285,
+      "mode": "normal"
+    },
+    {
+      "id": "add_bullet",
+      "name": "添加要点",
+      "success": true,
+      "quality_score": 100.0,
+      "checks": {
+        "items数量增加": true
+      },
+      "elapsed": 2.909780979156494,
+      "mode": "normal"
+    },
+    {
+      "id": "simplify",
+      "name": "精简内容",
+      "success": true,
+      "quality_score": 100.0,
+      "checks": {
+        "items文本变短或数量减少": true
+      },
+      "elapsed": 3.9110798835754395,
+      "mode": "normal"
+    }
+  ]
+}

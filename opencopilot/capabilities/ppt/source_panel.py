@@ -149,27 +149,31 @@ class SourceTextEdit(QTextEdit):
     def mousePressEvent(self, event):
         """鼠标点击事件"""
         super().mousePressEvent(event)
-        cursor = self.cursorForPosition(event.position().toPoint())
-        pos = cursor.position()
-        self.position_clicked.emit(pos)
-        
-        # 记录拖拽起始位置
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._drag_start_pos = event.position().toPoint()
-            # 获取选中文本或当前位置的文本
-            cursor = self.textCursor()
-            if cursor.hasSelection():
-                self._drag_text = cursor.selectedText()
-            else:
-                # 获取当前行文本
-                cursor.select(QTextCursor.SelectionType.LineUnderCursor)
-                self._drag_text = cursor.selectedText()
+        try:
+            # 使用 pos() 方法代替 position().toPoint() 以提高兼容性
+            cursor = self.cursorForPosition(event.pos())
+            pos = cursor.position()
+            self.position_clicked.emit(pos)
+            
+            # 记录拖拽起始位置
+            if event.button() == Qt.MouseButton.LeftButton:
+                self._drag_start_pos = event.pos()
+                # 获取选中文本或当前位置的文本
+                cursor = self.textCursor()
+                if cursor.hasSelection():
+                    self._drag_text = cursor.selectedText()
+                else:
+                    # 获取当前行文本
+                    cursor.select(QTextCursor.SelectionType.LineUnderCursor)
+                    self._drag_text = cursor.selectedText()
+        except Exception as e:
+            print(f"[ERROR] SourceTextEdit.mousePressEvent: {e}")
     
     def mouseMoveEvent(self, event):
         """鼠标移动事件 - 处理拖拽"""
         if self._drag_start_pos is not None and self._drag_text:
             # 检查是否超过拖拽阈值
-            distance = (event.position().toPoint() - self._drag_start_pos).manhattanLength()
+            distance = (event.pos() - self._drag_start_pos).manhattanLength()
             if distance >= 10:  # 拖拽阈值
                 self._start_drag()
                 return
@@ -180,32 +184,37 @@ class SourceTextEdit(QTextEdit):
         if not self._drag_text:
             return
         
-        drag = QDrag(self)
-        mime_data = QMimeData()
-        mime_data.setText(self._drag_text)
-        mime_data.setData("application/x-sourcetext", self._drag_text.encode('utf-8'))
-        drag.setMimeData(mime_data)
-        
-        # 创建拖拽图标
-        from PyQt6.QtGui import QPixmap
-        pixmap = QPixmap(200, 30)
-        pixmap.fill(QColor(255, 153, 51, 180))
-        from PyQt6.QtGui import QPainter as QP
-        painter = QP(pixmap)
-        painter.setPen(Qt.GlobalColor.white)
-        painter.setFont(QFont("Helvetica Neue", 11))
-        painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, 
-                        self._drag_text[:20] + "..." if len(self._drag_text) > 20 else self._drag_text)
-        painter.end()
-        drag.setPixmap(pixmap)
-        
-        # 发送信号
-        self.drag_started.emit(self._drag_text)
-        
-        # 执行拖拽
-        self._drag_start_pos = None
-        self._drag_text = None
-        drag.exec(Qt.DropAction.CopyAction)
+        try:
+            drag = QDrag(self)
+            mime_data = QMimeData()
+            mime_data.setText(self._drag_text)
+            mime_data.setData("application/x-sourcetext", self._drag_text.encode('utf-8'))
+            drag.setMimeData(mime_data)
+            
+            # 创建拖拽图标
+            from PyQt6.QtGui import QPixmap
+            pixmap = QPixmap(200, 30)
+            pixmap.fill(QColor(255, 153, 51, 180))
+            from PyQt6.QtGui import QPainter as QP
+            painter = QP(pixmap)
+            painter.setPen(Qt.GlobalColor.white)
+            painter.setFont(QFont("Helvetica Neue", 11))
+            painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, 
+                            self._drag_text[:20] + "..." if len(self._drag_text) > 20 else self._drag_text)
+            painter.end()
+            drag.setPixmap(pixmap)
+            
+            # 发送信号
+            self.drag_started.emit(self._drag_text)
+            
+            # 执行拖拽
+            self._drag_start_pos = None
+            self._drag_text = None
+            drag.exec(Qt.DropAction.CopyAction)
+        except Exception as e:
+            print(f"[ERROR] SourceTextEdit._start_drag: {e}")
+            self._drag_start_pos = None
+            self._drag_text = None
     
     def mouseReleaseEvent(self, event):
         """鼠标释放事件"""
@@ -244,6 +253,7 @@ class SourcePanel(QWidget):
     new_slide_requested = pyqtSignal(str, int, int)  # 请求创建新幻灯片, 起始位置, 结束位置
     position_clicked = pyqtSignal(int)  # 点击位置
     select_mode_changed = pyqtSignal(bool)  # 选中模式变化
+    regenerate_slide_requested = pyqtSignal(str, str)  # 请求重新生成幻灯片 (选中文本, 表达方式)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -380,6 +390,24 @@ class SourcePanel(QWidget):
         self.cancel_btn.clicked.connect(self._on_cancel_selection)
         self.action_bar.addWidget(self.cancel_btn)
         
+        # 重新生成当前幻灯片按钮
+        self.regenerate_btn = QPushButton("🔄 重新生成幻灯片")
+        self.regenerate_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #9c27b0;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #7b1fa2;
+            }
+        """)
+        self.regenerate_btn.clicked.connect(self._on_regenerate_slide)
+        self.action_bar.addWidget(self.regenerate_btn)
+        
         self.action_bar_widget = QWidget()
         self.action_bar_widget.setLayout(self.action_bar)
         self.action_bar_widget.setVisible(False)
@@ -447,6 +475,114 @@ class SourcePanel(QWidget):
             # 发送信号，由主对话框处理创建新幻灯片
             self.new_slide_requested.emit(text, last_range.start, last_range.end)
             self.text_selected.emit(text, last_range.start, last_range.end)
+    
+    def _on_regenerate_slide(self):
+        """重新生成当前幻灯片 - 弹出表达方式选择对话框"""
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QRadioButton, QButtonGroup
+        
+        selected_ranges = self.source_matcher.get_selected_ranges()
+        if not selected_ranges:
+            return
+        
+        # 获取选中的文本
+        last_range = selected_ranges[-1]
+        selected_text = self.text_edit.toPlainText()[last_range.start:last_range.end]
+        
+        # 创建表达方式选择对话框
+        dialog = QDialog(self)
+        dialog.setWindowTitle("🔄 选择表达方式")
+        dialog.setMinimumSize(350, 350)
+        dialog.setStyleSheet("""
+            QDialog {
+                background-color: #1e1e1e;
+                color: #d4d4d4;
+            }
+        """)
+        
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(12)
+        
+        # 提示
+        label = QLabel("请选择重新生成的表达方式：")
+        label.setStyleSheet("color: #aaa; font-size: 13px;")
+        layout.addWidget(label)
+        
+        # 预览选中的文本
+        preview_text = selected_text[:80] + "..." if len(selected_text) > 80 else selected_text
+        preview = QLabel(f"选中文本：{preview_text}")
+        preview.setStyleSheet("color: #888; font-size: 11px; border: 1px solid #3c3c3c; padding: 6px; border-radius: 4px;")
+        preview.setWordWrap(True)
+        layout.addWidget(preview)
+        
+        # 表达方式选项
+        button_group = QButtonGroup(dialog)
+        
+        options = [
+            ("text", "📝 纯文本", "以要点形式呈现"),
+            ("image_right", "🖼️ 图文混排（图右）", "右侧配图，左侧文字"),
+            ("image_left", "🖼️ 图文混排（图左）", "左侧配图，右侧文字"),
+            ("table", "📊 表格", "以表格形式呈现数据"),
+            ("chart", "📈 图表", "以柱状图/折线图呈现"),
+            ("flowchart", "🔀 流程图", "以流程图形式呈现"),
+            ("three_columns", "📋 三栏布局", "三列并排展示"),
+        ]
+        
+        for value, title, desc in options:
+            radio = QRadioButton(f"{title}\n{desc}")
+            radio.setStyleSheet("""
+                QRadioButton {
+                    color: #d4d4d4;
+                    font-size: 12px;
+                    padding: 6px;
+                }
+                QRadioButton::indicator {
+                    width: 16px;
+                    height: 16px;
+                }
+            """)
+            radio.setProperty("value", value)
+            button_group.addButton(radio)
+            layout.addWidget(radio)
+            
+            if value == "text":
+                radio.setChecked(True)
+        
+        # 按钮
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        
+        cancel_btn = QPushButton("取消")
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background: #555; color: #fff; border: none;
+                border-radius: 4px; padding: 6px 16px; font-size: 12px;
+            }
+            QPushButton:hover { background: #666; }
+        """)
+        cancel_btn.clicked.connect(dialog.reject)
+        btn_row.addWidget(cancel_btn)
+        
+        generate_btn = QPushButton("🔄 重新生成")
+        generate_btn.setStyleSheet("""
+            QPushButton {
+                background: #9c27b0; color: #fff; border: none;
+                border-radius: 4px; padding: 6px 16px; font-size: 12px; font-weight: bold;
+            }
+            QPushButton:hover { background: #7b1fa2; }
+        """)
+        generate_btn.clicked.connect(dialog.accept)
+        btn_row.addWidget(generate_btn)
+        
+        layout.addLayout(btn_row)
+        
+        # 执行对话框
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            # 获取选中的表达方式
+            selected_button = button_group.checkedButton()
+            if selected_button:
+                expression_type = selected_button.property("value")
+                # 发送信号
+                self.regenerate_slide_requested.emit(selected_text, expression_type)
     
     def apply_theme(self, theme: dict):
         """应用主题样式"""
@@ -516,6 +652,9 @@ class SourcePanel(QWidget):
     
     def highlight_slide_content(self, slide_index: int, item_index: int = None):
         """高亮对应的幻灯片内容（双向联动）"""
-        range = self.source_matcher.find_source_position_for_item(slide_index, item_index)
-        if range:
-            self.text_edit.highlight_range(range)
+        try:
+            text_range = self.source_matcher.find_source_position_for_item(slide_index, item_index)
+            if text_range:
+                self.text_edit.highlight_range(text_range)
+        except Exception as e:
+            print(f"[ERROR] SourcePanel.highlight_slide_content: slide={slide_index}, item={item_index}, err={e}")

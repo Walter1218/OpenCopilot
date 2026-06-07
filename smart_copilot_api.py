@@ -95,6 +95,7 @@ class TextProcessRequest(BaseModel):
     """文本处理请求"""
     text: str = Field(..., description="待处理文本")
     action: str = Field(..., description="处理类型: translate/polish/explain/summarize/code")
+    source_language: Optional[str] = Field("auto", description="源语言（翻译时使用，auto 表示自动检测）")
     target_language: Optional[str] = Field("zh", description="目标语言（翻译时使用）")
     custom_instruction: Optional[str] = Field(None, description="自定义指令")
 

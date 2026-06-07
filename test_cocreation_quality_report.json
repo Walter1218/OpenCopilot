@@ -1,0 +1,177 @@
+{
+  "total_tests": 12,
+  "passed_tests": 8,
+  "failed_tests": 4,
+  "pass_rate": 66.66666666666666,
+  "avg_quality": 92.5925925925926,
+  "total_elapsed": 0,
+  "results": [
+    {
+      "id": "text_to_table",
+      "name": "文本转表格",
+      "success": false,
+      "quality_score": 0.0,
+      "passed_checks": 0,
+      "total_checks": 3,
+      "actions_count": 2,
+      "elapsed": 4.228714942932129,
+      "quality_checks": {
+        "table_data有columns字段": false,
+        "table_data有rows字段": false,
+        "rows数量>=3": false
+      }
+    },
+    {
+      "id": "text_to_chart",
+      "name": "文本转图表",
+      "success": false,
+      "quality_score": 33.33333333333333,
+      "passed_checks": 1,
+      "total_checks": 3,
+      "actions_count": 2,
+      "elapsed": 3.009104013442993,
+      "quality_checks": {
+        "chart_data有labels字段": false,
+        "chart_data有datasets字段": true,
+        "labels数量>=3": false
+      }
+    },
+    {
+      "id": "text_to_flowchart",
+      "name": "文本转流程图",
+      "success": false,
+      "quality_score": 0.0,
+      "passed_checks": 0,
+      "total_checks": 2,
+      "actions_count": 3,
+      "elapsed": 2.613065004348755,
+      "quality_checks": {
+        "flowchart_data有steps字段": false,
+        "steps数量>=3": false
+      }
+    },
+    {
+      "id": "table_add_row",
+      "name": "表格添加行",
+      "success": true,
+      "quality_score": 100.0,
+      "passed_checks": 2,
+      "total_checks": 2,
+      "actions_count": 1,
+      "elapsed": 2.670936107635498,
+      "quality_checks": {
+        "rows数量增加": true,
+        "新行包含正确数据": true
+      }
+    },
+    {
+      "id": "table_format",
+      "name": "表格格式化",
+      "success": true,
+      "quality_score": 100.0,
+      "passed_checks": 2,
+      "total_checks": 2,
+      "actions_count": 1,
+      "elapsed": 2.2474148273468018,
+      "quality_checks": {
+        "columns字段被更新": true,
+        "格式更专业": true
+      }
+    },
+    {
+      "id": "chart_change_type",
+      "name": "更换图表类型",
+      "success": true,
+      "quality_score": 100.0,
+      "passed_checks": 1,
+      "total_checks": 1,
+      "actions_count": 2,
+      "elapsed": 1.9070053100585938,
+      "quality_checks": {
+        "图表类型改变": true
+      }
+    },
+    {
+      "id": "chart_update_data",
+      "name": "更新图表数据",
+      "success": true,
+      "quality_score": 100.0,
+      "passed_checks": 1,
+      "total_checks": 1,
+      "actions_count": 1,
+      "elapsed": 2.577003002166748,
+      "quality_checks": {
+        "datasets数量增加": true
+      }
+    },
+    {
+      "id": "flowchart_add_step",
+      "name": "流程图添加步骤",
+      "success": true,
+      "quality_score": 100.0,
+      "passed_checks": 2,
+      "total_checks": 2,
+      "actions_count": 1,
+      "elapsed": 1.953510046005249,
+      "quality_checks": {
+        "steps数量增加": true,
+        "新步骤包含'监控'": true
+      }
+    },
+    {
+      "id": "image_change",
+      "name": "更换图片描述",
+      "success": false,
+      "quality_score": 0.0,
+      "passed_checks": 0,
+      "total_checks": 2,
+      "actions_count": 2,
+      "elapsed": 3.2796201705932617,
+      "quality_checks": {
+        "image_desc字段存在": false,
+        "描述内容相关": false
+      }
+    },
+    {
+      "id": "optimize_title",
+      "name": "优化标题",
+      "success": true,
+      "quality_score": 100.0,
+      "passed_checks": 2,
+      "total_checks": 2,
+      "actions_count": 1,
+      "elapsed": 1.8688890933990479,
+      "quality_checks": {
+        "title字段被更新": true,
+        "新标题不同于原标题": true
+      }
+    },
+    {
+      "id": "add_bullet",
+      "name": "添加要点",
+      "success": true,
+      "quality_score": 100.0,
+      "passed_checks": 2,
+      "total_checks": 2,
+      "actions_count": 1,
+      "elapsed": 1.9403257369995117,
+      "quality_checks": {
+        "items数量增加": true,
+        "新要点包含'售后'相关内容": true
+      }
+    },
+    {
+      "id": "simplify",
+      "name": "精简内容",
+      "success": true,
+      "quality_score": 100.0,
+      "passed_checks": 1,
+      "total_checks": 1,
+      "actions_count": 4,
+      "elapsed": 3.5224690437316895,
+      "quality_checks": {
+        "items文本变短或数量减少": true
+      }
+    }
+  ]
+}

@@ -26,7 +26,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QPushButton,
     QLabel, QLineEdit, QScrollArea, QFrame, QSizePolicy,
     QListWidget, QListWidgetItem, QProgressBar, QMessageBox,
-    QFileDialog, QApplication, QDialog,
+    QFileDialog, QApplication, QDialog, QCheckBox,
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QTimer, QSize
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QBrush, QKeySequence, QShortcut, QGuiApplication
@@ -35,6 +35,7 @@ from .outline_panel import SlideListWidget, OutlinePanel
 from .source_panel import SourcePanel
 from .preview_panel import SlideRenderer, InlineEditor
 from ppt_generator import generate_ppt_from_json, clean_markdown
+from ppt_generator_via_html import generate_ppt_via_html
 
 
 # ============================================================
@@ -297,6 +298,9 @@ class CoCreationWidget(QWidget):
 
         # Sync guard — prevents recursive signal loops with OutlinePanel
         self._syncing: bool = False
+
+        # SourceMatcher — 双向联动核心（load_slides 时初始化）
+        self.source_matcher = None
 
         self._init_ui()
         self._connect_signals()
@@ -640,6 +644,41 @@ class CoCreationWidget(QWidget):
         sep2.setStyleSheet("background: #555; border: none;")
         h.addWidget(sep2)
 
+        # Goal模式开关
+        self.goal_mode_checkbox = QCheckBox("🎯 Goal模式")
+        self.goal_mode_checkbox.setChecked(False)  # 默认关闭
+        self.goal_mode_checkbox.setToolTip("开启后，AI会自动重试直到生成高质量产物（最多99次）")
+        self.goal_mode_checkbox.setStyleSheet("""
+            QCheckBox {
+                color: #888;
+                font-size: 11px;
+                border: none;
+                spacing: 4px;
+            }
+            QCheckBox::indicator {
+                width: 14px;
+                height: 14px;
+                border-radius: 3px;
+                border: 1px solid #555;
+                background: #3c3c3c;
+            }
+            QCheckBox::indicator:checked {
+                background: #007acc;
+                border-color: #007acc;
+            }
+            QCheckBox::indicator:hover {
+                border-color: #007acc;
+            }
+        """)
+        self.goal_mode_checkbox.toggled.connect(self._on_goal_mode_toggled)
+        h.addWidget(self.goal_mode_checkbox)
+
+        # Goal模式状态指示器
+        self.goal_status_label = QLabel("")
+        self.goal_status_label.setStyleSheet("color: #888; font-size: 10px; border: none;")
+        self.goal_status_label.setVisible(False)
+        h.addWidget(self.goal_status_label)
+
         # Export button
         export_btn = QPushButton("💾 导出")
         export_btn.setStyleSheet("""
@@ -672,6 +711,12 @@ class CoCreationWidget(QWidget):
         self.outline_panel.slide_deleted.connect(self._on_outline_slide_deleted)
         self.outline_panel.slide_moved.connect(self._on_outline_slide_moved)
 
+        # 原文面板信号 → 双向联动：点击原文时跳转到对应幻灯片
+        self.source_panel.position_clicked.connect(self._on_source_position_clicked)
+        
+        # 原文面板信号 → 重新生成幻灯片
+        self.source_panel.regenerate_slide_requested.connect(self._on_regenerate_slide)
+
     def _check_agent_health(self):
         """轻量级 Pipeline 探活"""
         try:
@@ -685,6 +730,25 @@ class CoCreationWidget(QWidget):
         else:
             self.agent_status.setStyleSheet("color: #f44336; font-size: 11px; border: none;")
             self.agent_status.setToolTip("🔴 Agent Pipeline 未就绪")
+
+    def _on_goal_mode_toggled(self, checked: bool):
+        """Goal模式开关切换"""
+        from opencopilot.agent.observability import PipelineObservability
+        obs = PipelineObservability.get_instance()
+        
+        if checked:
+            self.goal_status_label.setText("🎯 已开启")
+            self.goal_status_label.setStyleSheet("color: #4caf50; font-size: 10px; border: none;")
+            self.goal_status_label.setVisible(True)
+            obs.gui_log("Goal模式已开启", session_id=self._session_id, event="GOAL_MODE_ON")
+        else:
+            self.goal_status_label.setText("")
+            self.goal_status_label.setVisible(False)
+            obs.gui_log("Goal模式已关闭", session_id=self._session_id, event="GOAL_MODE_OFF")
+
+    def is_goal_mode_enabled(self) -> bool:
+        """检查Goal模式是否开启"""
+        return self.goal_mode_checkbox.isChecked()
 
     def _toggle_source_panel(self, checked: bool):
         """Toggle source panel visibility"""
@@ -714,6 +778,16 @@ class CoCreationWidget(QWidget):
 
         # Sync to SourcePanel (always visible, placeholder when empty)
         self.source_panel.set_original_text(text or "")
+
+        # 构建原文与幻灯片的映射关系（双向联动核心）
+        if text and self.slides_data:
+            from .source_matcher import SourceMatcher
+            self.source_matcher = SourceMatcher()
+            self.source_matcher.build_mappings(text, self.slides_data)
+            self.source_panel.set_source_matcher(self.source_matcher)
+            print(f"[CoCreation] SourceMatcher 初始化完成，映射数: {len(self.source_matcher.mappings)}")
+        else:
+            self.source_matcher = None
 
     def get_slides_data(self) -> list:
         return self.slides_data
@@ -1261,6 +1335,72 @@ class CoCreationWidget(QWidget):
     def _on_inline_edit_cancel(self):
         self.inline_editor.hide()
 
+    def _on_source_position_clicked(self, pos: int):
+        """原文面板中点击某个位置 → 跳转到对应的幻灯片"""
+        if not self.slides_data or not self.source_matcher:
+            return
+        
+        try:
+            # find_slide_for_position 返回 Optional[Tuple[int, Optional[int]]]
+            result = self.source_matcher.find_slide_for_position(pos)
+            if result is None:
+                return
+
+            slide_index, item_index = result
+            if slide_index < 0 or slide_index >= len(self.slides_data):
+                return
+            
+            # 更新当前幻灯片索引
+            self.current_index = slide_index
+            
+            # 更新大纲列表选中状态（blockSignals 防止循环触发）
+            self.slide_list.blockSignals(True)
+            self.slide_list.setCurrentRow(slide_index)
+            self.slide_list.blockSignals(False)
+            
+            # 刷新预览面板
+            self._refresh_all()
+            
+            # 高亮原文对应内容（双向联动）
+            self.source_panel.highlight_slide_content(slide_index, item_index)
+            
+            # 显示提示
+            self.stats_label.setText(f"📍 已跳转到幻灯片 {slide_index + 1}")
+            print(f"[CoCreation] 原文点击 → 幻灯片 {slide_index+1} (pos={pos})")
+        except Exception as e:
+            print(f"[ERROR] CoCreation._on_source_position_clicked: {e}")
+
+    def _on_regenerate_slide(self, selected_text: str, expression_type: str):
+        """原文面板请求重新生成当前幻灯片"""
+        if not self.slides_data or not selected_text:
+            return
+        
+        # 获取当前幻灯片索引
+        slide_index = self.current_index
+        if slide_index < 0 or slide_index >= len(self.slides_data):
+            return
+        
+        # 构建AI指令，要求根据选中文本和指定表达方式重新生成当前幻灯片
+        instruction = f"""请根据以下选中的原文内容，重新生成第 {slide_index + 1} 页幻灯片。
+
+要求：
+1. 使用选中的原文内容作为核心素材
+2. 采用"{expression_type}"的表达方式
+3. 保持与原有大纲的逻辑一致性
+4. 生成适合当前表达方式的结构化内容
+
+选中的原文内容：
+{selected_text}
+
+当前幻灯片索引：{slide_index}
+请返回修改该幻灯片的JSON指令。"""
+        
+        # 调用AI进行重新生成
+        self._do_ai_request(instruction)
+        
+        # 显示提示
+        self.stats_label.setText(f"🔄 正在根据选中文本重新生成幻灯片 {slide_index + 1}...")
+
     # ============================================================
     # AI interaction
     # ============================================================
@@ -1689,7 +1829,7 @@ class CoCreationWidget(QWidget):
             obs = PipelineObservability.get_instance()
             obs.gui_log(f"PPT Tab5 EXPORT START | slides={len(self.slides_data)} | path={save_path}",
                         session_id=self._session_id, event="PPT_TAB5_EXPORT_START")
-            generate_ppt_from_json(self.slides_data, save_path)
+            generate_ppt_via_html(self.slides_data, save_path)
             obs.gui_log(f"PPT Tab5 EXPORT DONE | path={save_path}",
                         session_id=self._session_id, event="PPT_TAB5_EXPORT_DONE")
             self.export_requested.emit(self.slides_data)

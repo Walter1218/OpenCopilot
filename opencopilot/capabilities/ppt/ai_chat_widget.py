@@ -286,6 +286,7 @@ class AICopilotChatWidget(QWidget):
         self.current_index = -1
         self.worker = None
         self._session_id = f"ppt_cocreation_{uuid.uuid4().hex[:8]}"  # 稳定会话 ID，支持多轮对话
+        self._last_instruction = ""  # 保存最近一次用户指令，用于 undo 描述
         
         # Undo/Redo 操作栈
         self._undo_stack = []       # [(slides_data_deepcopy, description), ...]
@@ -650,6 +651,39 @@ class AICopilotChatWidget(QWidget):
         """执行快捷指令"""
         self.input_edit.setText(command)
         self._on_send()
+
+    def send_instruction(self, instruction: str):
+        """程序化发送指令（供外部组件调用，如 SourcePanel 重新生成）"""
+        if not instruction:
+            return
+        # 添加用户消息（标记来源）
+        self._add_message(f"🔄 {instruction[:100]}{'...' if len(instruction) > 100 else ''}", is_user=True)
+
+        # 禁用输入
+        self.input_edit.setEnabled(False)
+        self.send_btn.setEnabled(False)
+
+        # 断开旧工作线程信号，防止信号泄漏
+        if hasattr(self, 'worker') and self.worker is not None:
+            try:
+                self.worker.response_ready.disconnect(self._on_ai_response)
+            except TypeError:
+                pass
+            try:
+                self.worker.error_occurred.disconnect(self._on_ai_error)
+            except TypeError:
+                pass
+            if self.worker.isRunning():
+                self.worker.quit()
+                self.worker.wait(2000)
+
+        # 创建 AI 工作线程
+        self.worker = AIWorker(self.agent_url)
+        self.worker.response_ready.connect(self._on_ai_response)
+        self.worker.error_occurred.connect(self._on_ai_error)
+        self.worker.set_task(instruction, self.slides_data, self.current_index, self._session_id)
+        self._last_instruction = instruction
+        self.worker.start()
     
     def _build_shortcut_command(self, label: str) -> str:
         """根据当前幻灯片上下文构建快捷指令"""
@@ -675,6 +709,12 @@ class AICopilotChatWidget(QWidget):
         instruction = self.input_edit.text().strip()
         if not instruction:
             return
+        
+        # 埋点：记录发送的指令
+        from opencopilot.agent.observability import PipelineObservability
+        obs = PipelineObservability.get_instance()
+        obs.gui_log(f"PPT_COCREATION_SEND | instruction_len={len(instruction)} | slide_count={len(self.slides_data)} | current_index={self.current_index}",
+                    session_id=self._session_id, event="PPT_COCREATION_SEND")
         
         # 添加用户消息
         self._add_message(instruction, is_user=True)
@@ -702,18 +742,29 @@ class AICopilotChatWidget(QWidget):
         self.worker.response_ready.connect(self._on_ai_response)
         self.worker.error_occurred.connect(self._on_ai_error)
         self.worker.set_task(instruction, self.slides_data, self.current_index, self._session_id)
+        self._last_instruction = instruction  # 保存指令用于 undo 描述
         self.worker.start()
     
     def _on_ai_response(self, response: str):
         """AI 响应 — 支持处理多个 JSON 动作"""
         try:
+            # 埋点：记录 AI 响应
+            from opencopilot.agent.observability import PipelineObservability
+            obs = PipelineObservability.get_instance()
+            obs.gui_log(f"PPT_COCREATION_RESPONSE | response_len={len(response)} | preview={response[:100]}",
+                        session_id=self._session_id, event="PPT_COCREATION_RESPONSE")
+            
             # 提取所有 JSON 对象（AI 可能返回多个操作指令）
             json_objects = self._extract_all_json(response)
             if not json_objects:
                 raise ValueError("无法找到 JSON 数据")
             
+            # 埋点：记录提取到的 JSON 对象数量
+            obs.gui_log(f"PPT_COCREATION_JSON_EXTRACTED | json_count={len(json_objects)}",
+                        session_id=self._session_id, event="PPT_COCREATION_JSON_EXTRACTED")
+            
             # 保存操作前状态（用于撤销）
-            self._push_undo_state(self.instruction[:40] + ("..." if len(self.instruction) > 40 else ""))
+            self._push_undo_state(self._last_instruction[:40] + ("..." if len(self._last_instruction) > 40 else ""))
             
             success_msgs = []
             first_error = None
@@ -946,6 +997,12 @@ class AICopilotChatWidget(QWidget):
         """应用更新（支持局部更新和全量更新），返回 diff 字典"""
         action = data.get("action")
         
+        # 埋点：记录应用的更新类型
+        from opencopilot.agent.observability import PipelineObservability
+        obs = PipelineObservability.get_instance()
+        obs.gui_log(f"PPT_COCREATION_APPLY_UPDATE | action={action} | data_keys={list(data.keys())}",
+                    session_id=self._session_id, event="PPT_COCREATION_APPLY_UPDATE")
+        
         # 局部更新模式
         if action == "update":
             return self._apply_field_update(data)
@@ -1025,6 +1082,13 @@ class AICopilotChatWidget(QWidget):
         
         # 内容转换项：本地 ETL 校验 & 补全
         item = self._normalize_content_item(item)
+        
+        # 埋点：记录添加的内容类型
+        content_type = item.get("content_type", "text")
+        from opencopilot.agent.observability import PipelineObservability
+        obs = PipelineObservability.get_instance()
+        obs.gui_log(f"PPT_COCREATION_ADD_ITEM | slide_idx={slide_idx} | content_type={content_type}",
+                    session_id=self._session_id, event="PPT_COCREATION_ADD_ITEM")
         
         old_count = len(self.slides_data[slide_idx].get("items", []))
         self.slides_data[slide_idx].setdefault("items", []).append(item)

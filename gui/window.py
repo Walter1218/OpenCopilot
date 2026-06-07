@@ -1115,7 +1115,7 @@ class AICardWindow(QWidget):
             
             full_text = ""
             for chunk in call_agent_pipeline_sync(
-                text[:3000],
+                text,  # 不再硬截断到 3000 字符
                 action_type="chat",
                 session_id=session_id,
                 is_new_task=True,

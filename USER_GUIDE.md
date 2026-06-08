@@ -214,6 +214,21 @@ python3 -m uvicorn smart_copilot_api:app --host 127.0.0.1 --port 8010 --reload
 - `chat / explain / coding / ppt / translate` 的 capability 路由
 - `On Timeout / On Protocol Error` 的 fallback policy
 
+如果你要在 UI 中启用第三方智能体，推荐按下面顺序操作：
+
+1. 打开 `Settings -> Engine`
+2. 将 `Agent Mode` 切到 `Third-Party Agent`
+3. 在 `Agent Provider` 中选择当前内置 preset
+4. 需要时设置 `Agent Model`
+5. 用 `Capability Routes` 决定哪些能力继续走默认路由，哪些能力单独指定到第三方
+6. 用 `Fallback Policy` 决定第三方超时或协议异常时是否自动回退
+
+当前需要注意：
+
+- UI 已支持第三方智能体模式这个统一入口
+- 当前内置的第三方 provider preset 以 `Hermes Local` 为主
+- 如果你要接入新的第三方 provider，除了模型连接信息，还需要研发侧补 provider adapter 和 UI preset
+
 ---
 
 ## 五、上下文与数据来源

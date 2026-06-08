@@ -1,5 +1,7 @@
 # OpenCopilot 文档全文联动修订功能 —— 验证测试报告
 
+> 说明：本文是历史测试报告，保留当时测试环境信息用于回溯；当前系统级主链路已切换到 `V5AgentWorker -> Agent Runtime -> /vnext/*`，不再以 `18888` 作为默认运行前提。
+
 > **测试时间**：2026-05-26 13:40-14:00（基础）+ 19:55-20:15（极端案例）  
 > **测试版本**：asu_custom_agent.py + personas/revision.md + Broker office_probe.py  
 > **AI 模型**：MiniMax-M2.7  
@@ -14,7 +16,7 @@
 
 | 项目 | 详情 |
 |------|------|
-| Agent 服务 | `127.0.0.1:18888`，`python3 asu_custom_agent.py` |
+| Agent 运行时基线 | 当时为 `127.0.0.1:18888`，`python3 asu_custom_agent.py`；当前主链路请以 `docs/STARTUP_GUIDE.md` 为准 |
 | 修订 Persona | `personas/revision.md`（新建） |
 | 请求格式 | `POST /v1/agent/chat` + `context_envelope`（content=全文, selection=选中文本） |
 | 模拟操作 | 模拟用户在 IDE 中选中文本后拖拽到 OpenCopilot 卡片触发全文修订 |

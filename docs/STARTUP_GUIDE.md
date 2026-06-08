@@ -104,6 +104,36 @@ bash scripts/start_ui.sh
   - `Capability Routes`: 可对 `chat / explain / coding / ppt / translate` 单独指定 `Default / Self Agent / Hermes Local`
   - `Fallback Policy`: 可开启自动 fallback，并分别配置 `On Timeout` 与 `On Protocol Error`
 
+### 1.2 通过 UI 接入第三方智能体
+
+当前 UI 已经固定为一套 `V5 UI`，第三方智能体接入入口统一放在 `Settings -> Engine -> Agent Runtime`。
+
+对使用者来说，最小接入流程是：
+
+1. 打开 `Settings -> Engine`
+2. 将 `Agent Mode` 设为 `Third-Party Agent`
+3. 在 `Agent Provider` 中选择当前已内置的第三方 provider preset
+   - 当前内置 preset 是 `Hermes Local`
+4. 按需设置 `Agent Model`
+5. 如果只想让部分能力走第三方，在 `Capability Routes` 中单独指定 `chat / explain / coding / ppt / translate`
+6. 如果希望第三方失败后自动切回自研，在 `Fallback Policy` 中开启 fallback
+7. 确认本地 `vnext API` 与目标 provider 实例探活正常
+
+当前能力边界需要明确：
+
+- UI 侧已经支持“第三方智能体模式”这一抽象入口
+- 当前内置的第三方 provider preset 仍以 `Hermes Local` 为主
+- 如果要接入新的第三方 provider，除了填写连接配置，还需要补对应的 provider adapter 与 UI preset，不能只改文档或只改模型地址
+
+研发侧接入新的第三方 provider，建议按这条最小路径推进：
+
+1. 在运行时侧补 provider adapter，统一接到 `/vnext/*` 任务协议
+2. 补健康检查、任务创建、事件流、错误映射
+3. 在 `gui/v5/agent_runtime.py` 中增加 preset / provider 标识
+4. 在 `gui/v5/settings_dialog.py` 中补 provider 选项与说明
+5. 补最小回归测试，至少覆盖 route 解析、fallback 与 Settings 保存
+6. 同步更新本文档与 `docs/AGENT_RUNTIME_TARGET_ARCHITECTURE.md`
+
 ### 2. 验证 `gui_next` 交互测试窗
 
 这只是 `vnext` 验证入口，不是系统级正式 UI：

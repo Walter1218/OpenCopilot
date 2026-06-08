@@ -305,6 +305,50 @@ agent_runtime/protocols/
 
 ---
 
+## 10.1 当前 UI 的第三方智能体接入流程
+
+为了避免“UI 看起来支持第三方，实际只能写死 Hermes”的假象，当前接入流程应明确区分为两层：
+
+### A. 使用层接入
+
+这是面向最终使用者或联调同学的最小流程：
+
+1. 打开 `Settings -> Engine -> Agent Runtime`
+2. 将 `Agent Mode` 设为 `Third-Party Agent`
+3. 选择一个已内置的 `Agent Provider` preset
+4. 视情况设置 `Agent Model`
+5. 用 `Capability Routes` 指定哪些能力走第三方
+6. 用 `Fallback Policy` 指定超时或协议异常时的回退策略
+
+当前这条流程已经落地，但内置第三方 preset 仍主要是 `Hermes Local`。
+
+### B. 研发层接入
+
+这是面向新增 provider 的最小工程流程：
+
+1. 在 Runtime / `vnext` 层补 provider adapter
+2. 补健康检查、任务创建、事件流映射、错误映射
+3. 在 `gui/v5/agent_runtime.py` 中注册 preset 与 provider 标识
+4. 在 `gui/v5/settings_dialog.py` 中补 UI 选项和保存逻辑
+5. 补 route / fallback / settings 的最小回归测试
+6. 补用户文档与架构文档
+
+如果只做 A 不做 B，UI 只是“看起来能选第三方”；
+如果只做 B 不做 A，能力存在但用户无法稳定配置。
+
+### 两种实现路径对比
+
+1. `Provider Preset` 路径
+   - 优点：接入快、UI 简单、适合先落一个稳定第三方
+   - 风险：provider 数量变多后，preset 容易膨胀
+2. `Provider Registry + Dynamic Form` 路径
+   - 优点：长期可扩展，适合多个第三方并存
+   - 风险：实现复杂度更高，需要补 schema、校验、表单生成和错误反馈
+
+当前阶段建议继续采用 `Provider Preset` 路径，等多个第三方 provider 真正进入仓库后，再升级到 `Provider Registry + Dynamic Form`。
+
+---
+
 ## 11. 为什么这是最理想架构
 
 ### 11.1 技术层

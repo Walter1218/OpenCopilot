@@ -356,6 +356,17 @@ For a more detailed startup matrix, see [docs/STARTUP_GUIDE.md](docs/STARTUP_GUI
 
 After launch, the v5 UI is opened through `smart_copilot.py` → `gui/main.py`. Smart Copilot / Workspace / Studio are shown by the v5 navigation layer.
 
+### Third-Party Agent Integration
+
+The UI is now fixed as one `V5 UI`, and third-party agents are integrated through `Settings -> Engine -> Agent Runtime`:
+
+- select `Third-Party Agent` in `Agent Mode`
+- choose the current built-in third-party provider preset in `Agent Provider`
+- use `Capability Routes` to decide which capabilities stay on default routing vs. the third-party path
+- use `Fallback Policy` to define automatic recovery when the third-party path fails
+
+The current built-in third-party preset is still centered on `Hermes Local`. Adding a new provider requires updating the runtime adapter, the UI preset, tests, and documentation together. See `docs/STARTUP_GUIDE.md` and `docs/AGENT_RUNTIME_TARGET_ARCHITECTURE.md`.
+
 ---
 
 ## Project Structure

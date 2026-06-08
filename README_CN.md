@@ -376,6 +376,17 @@ python3 -m uvicorn smart_copilot_api:app --host 127.0.0.1 --port 8010 --reload
 
 启动后，v5 UI 通过 `smart_copilot.py` → `gui/main.py` 进入；Smart Copilot / Workspace / Studio 由 v5 导航层调度。
 
+### 第三方智能体接入
+
+当前 UI 已固定为一套 `V5 UI`，第三方智能体通过 `Settings -> Engine -> Agent Runtime` 接入：
+
+- `Agent Mode` 选择 `Third-Party Agent`
+- `Agent Provider` 选择当前内置的第三方 provider preset
+- `Capability Routes` 控制不同能力是否走第三方
+- `Fallback Policy` 控制第三方失败后的自动回退
+
+当前内置第三方 preset 仍以 `Hermes Local` 为主；如果要接入新的第三方 provider，需要同时补运行时 adapter、UI preset、测试与文档。详细步骤见 `docs/STARTUP_GUIDE.md` 与 `docs/AGENT_RUNTIME_TARGET_ARCHITECTURE.md`。
+
 ---
 
 ## 项目结构

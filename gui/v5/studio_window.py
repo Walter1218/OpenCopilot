@@ -292,6 +292,11 @@ class StudioWindowV5(QWidget):
 
             # 更新AI Chat组件
             self._ai_chat_widget.set_slides_data(slides)
+            
+            # 设置原文文本到 AI Chat 组件（用于渲染指令系统）
+            source_text = self._source_panel.text_edit.toPlainText()
+            if source_text:
+                self._ai_chat_widget.set_original_text(source_text)
 
             # 更新统计标签
             char_count = len(self._source_panel.text_edit.toPlainText())

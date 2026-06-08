@@ -340,7 +340,7 @@ PY
 
 开发时要有这个预期：
 
-- Workspace 的 Task / Chat / Files / Memory 面板目前更多是骨架结构。
+- Workspace 的 Task / Chat 面板已具备实际交互能力，但 Files / Memory 面板目前更多是骨架结构。
 - 但 Studio（PPT 共创）已完整实现核心链路。
 
 所以不要在文档或 PR 描述里把这些能力写成“全部完成”。

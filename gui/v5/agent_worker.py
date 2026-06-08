@@ -57,6 +57,7 @@ class V5AgentWorker(QThread):
         context_envelope: dict = None,
         image_base64: str = None,
         is_new_task: bool = True,
+        enable_web_search: bool = False,
     ):
         """
         Args:
@@ -68,6 +69,7 @@ class V5AgentWorker(QThread):
             context_envelope: 上下文信封（IDE/文档全文+选中文本等）
             image_base64: 图片 Base64 编码
             is_new_task: 是否新任务（影响会话记忆重置）
+            enable_web_search: 是否启用联网搜索（调研模式自动开启）
         """
         super().__init__()
         V5AgentWorker._next_id += 1
@@ -81,6 +83,7 @@ class V5AgentWorker(QThread):
         self.context_envelope = context_envelope
         self.image_base64 = image_base64
         self.is_new_task = is_new_task
+        self.enable_web_search = enable_web_search
 
         self._is_running = True
         self._cancel_event = threading.Event()
@@ -120,6 +123,7 @@ class V5AgentWorker(QThread):
                 context_meta=self.context_meta,
                 context_envelope=self.context_envelope,
                 image_base64=self.image_base64,
+                enable_web_search=self.enable_web_search,
                 cancel_event=self._cancel_event,
             ):
                 if not self._is_running:

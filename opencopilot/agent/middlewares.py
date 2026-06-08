@@ -35,6 +35,9 @@ class SessionSetupMiddleware(BaseMiddleware):
         self._load_persona = load_persona
         self._build_context_prefix = build_context_prefix
         self._sanitize_persona_for_context = sanitize_persona_for_context
+        # 延迟加载 SkillLoader，注入 SKILL.md 工具描述
+        self._skill_loader = None
+        self._tools_prompt_cache = None
 
     async def process(self, ctx: PipelineContext, next_fn: Callable[[], object]) -> None:
         _t0 = time.time()
@@ -130,6 +133,17 @@ class SessionSetupMiddleware(BaseMiddleware):
                 ctx.enriched_system = f"{context_prefix}\n\n{persona_prompt}"
             else:
                 ctx.enriched_system = persona_prompt
+
+            # 注入 SKILL.md 工具描述到 system prompt（延迟加载，缓存复用）
+            tools_prompt = self._get_tools_prompt()
+            if tools_prompt:
+                ctx.enriched_system = f"{ctx.enriched_system}\n\n{tools_prompt}"
+                PipelineObservability.get_instance().log(
+                    "SessionSetup", f"Injected tools prompt ({len(tools_prompt)} chars)",
+                    session_id=session_id, level="DEBUG",
+                    event="SKILL_TOOLS_INJECTED",
+                    extra_data={"tools_prompt_len": len(tools_prompt)},
+                )
             _t_prefix = time.time() - _t4
 
             _t5 = time.time()
@@ -225,6 +239,23 @@ class SessionSetupMiddleware(BaseMiddleware):
             persona_prompt = f"{persona_prompt}\n\n{direction_line}"
 
         return persona_prompt
+
+    def _get_tools_prompt(self) -> str:
+        """延迟加载 SkillLoader 并缓存工具描述（注入 System Prompt）"""
+        if self._tools_prompt_cache is not None:
+            return self._tools_prompt_cache
+        try:
+            from .skill_loader import SkillLoader
+            self._skill_loader = SkillLoader(skills_dir="skills/")
+            eligible = self._skill_loader.load_eligible()
+            if eligible:
+                self._tools_prompt_cache = self._skill_loader.build_tools_prompt(eligible)
+            else:
+                self._tools_prompt_cache = ""
+        except Exception as e:
+            print(f"[Pipeline] SkillLoader failed: {e}", flush=True)
+            self._tools_prompt_cache = ""
+        return self._tools_prompt_cache
 
 
 class SecurityGuardMiddleware(BaseMiddleware):
@@ -385,8 +416,21 @@ class PlannerMiddleware(BaseMiddleware):
     def __init__(self, planner):
         self._planner = planner
 
+    # 这些 action_type 明确不需要 Planner（避免 PPT prompt 中"步骤""设计"等词触发误判）
+    _skip_planner_types = {"ppt", "translate", "polish", "fix", "evaluation", "revision", "custom"}
+
     async def process(self, ctx: PipelineContext, next_fn: Callable[[], object]) -> None:
         _t0 = time.time()
+
+        # 按 action_type 快速跳过不需要 Planner 的请求
+        if ctx.action_type in self._skip_planner_types:
+            PipelineObservability.get_instance().timer(
+                f"[Timer] Planner: total={time.time()-_t0:.3f}s (skipped, action_type={ctx.action_type})",
+                action_type=ctx.action_type,
+            )
+            await next_fn()
+            return
+
         try:
             if self._is_complex_task(ctx.text):
                 _t1 = time.time()

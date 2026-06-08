@@ -597,6 +597,13 @@ def detect_request_type(text: str) -> str:
         "项目结构", "模块关系", "代码依赖"
     ]
     
+    # PPT相关关键词（优先级高：避免 PPT prompt 中含"规划"等词时被 planning/security 抢先命中）
+    ppt_keywords = [
+        "ppt", "幻灯片", "演示文稿", "大纲",
+        "ppt编辑", "ppt共创", "ppt建议", "ppt生成",
+        "slide", "presentation"
+    ]
+    
     # 搜索关键词
     search_keywords = [
         "搜索", "查找", "查一下", "搜一下",
@@ -615,13 +622,6 @@ def detect_request_type(text: str) -> str:
         "访问控制", "rate limit", "速率限制"
     ]
     
-    # PPT相关关键词
-    ppt_keywords = [
-        "ppt", "幻灯片", "演示文稿", "大纲",
-        "ppt编辑", "ppt共创", "ppt建议", "ppt生成",
-        "slide", "presentation"
-    ]
-    
     # 编码辅助关键词
     coding_keywords = [
         "代码审查", "code review", "bug修复", "代码解释",
@@ -635,6 +635,8 @@ def detect_request_type(text: str) -> str:
         "evaluate", "score", "quality"
     ]
     
+    # 检测优先级：code → knowledge → ppt → search → planning → security → coding → evaluation
+    # PPT 检测提前到第 3 位，避免 PPT prompt 中含"规划""安全"等词时被误路由
     for keyword in code_keywords:
         if keyword in text_lower:
             return "code_execution"
@@ -642,6 +644,10 @@ def detect_request_type(text: str) -> str:
     for keyword in knowledge_keywords:
         if keyword in text_lower:
             return "knowledge_query"
+    
+    for keyword in ppt_keywords:
+        if keyword in text_lower:
+            return "ppt"
     
     for keyword in search_keywords:
         if keyword in text_lower:
@@ -654,10 +660,6 @@ def detect_request_type(text: str) -> str:
     for keyword in security_keywords:
         if keyword in text_lower:
             return "security"
-    
-    for keyword in ppt_keywords:
-        if keyword in text_lower:
-            return "ppt"
     
     for keyword in coding_keywords:
         if keyword in text_lower:

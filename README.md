@@ -154,7 +154,7 @@ The v5 redesign is **partially shipped in code, not fully feature-complete**. Cu
 | **Smart Copilot** | 3-Tab shell (`Work / Chat / Studio`), drag & drop sharing, direct Agent calls via `V5AgentWorker` | Further polish on markdown rendering, command palette, richer context chips |
 | **Work / Chat** | Core interaction loop is usable: context fetch, streaming AI output, session handling, cancel | More advanced contextual actions and richer session management |
 | **Studio** | PPT co-creation is fully implemented: 4-Panel workbench, thumbnail strip, diff preview edit, AI chat flow, unified undo stack, export & fullscreen | ✅ Fully Implemented |
-| **Workspace** | Sidebar + 5-panel shell, settings entry, refresh hooks | Task / Chat / Files / Memory business logic is still largely placeholder-based |
+| **Workspace** | Sidebar + 5-panel shell, settings entry, Task/Chat business logic | Files / Memory business logic is still largely placeholder-based |
 | **Settings** | Unified settings dialog with Engine / Appearance / Shortcuts / Advanced and bridge persistence | More validation, richer summaries, broader config coverage |
 
 ---
@@ -206,6 +206,7 @@ The v5 codebase already includes a **fully implemented Studio PPT Co-creation Wo
 - 4-region shell: `Source`, `Outline`, `Preview`, and bottom AI area
 - Thumbnail strip with navigation support
 - WYSIWYG preview and diff preview editing
+- Advanced chart and native flowchart rendering support
 - Natural language AI dialogue for slide modifications
 - Unified Undo/Redo stack
 - Full pipeline for text/slides loading, PPT export, and fullscreen preview

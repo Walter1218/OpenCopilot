@@ -254,8 +254,63 @@ class AIWorker(QThread):
             parts.append(f"\n后一页（第 {idx + 2} 页）摘要：{next_summary}")
         
         parts.append(f"\n用户指令：{self.instruction}")
-        parts.append("\n请优先使用局部修改模式，只返回修改指令 JSON（不要返回完整数据）：")
         
+        # 渲染指令格式说明（新格式）- 使用动态 Prompt 生成器
+        try:
+            from .render_prompt_generator import generate_render_prompt
+            prompt_section = generate_render_prompt(
+                instruction=self.instruction,
+                current_slide=current_slide,
+                original_text="",
+                selected_text=""
+            )
+            parts.append(f"\n{prompt_section}")
+        except Exception:
+            # 回退到静态 Prompt
+            parts.append("""
+## 输出格式（推荐：渲染指令）
+
+返回 JSON 格式的渲染指令数组：
+
+```json
+{
+  "render_commands": [
+    {
+      "source_text": "原文片段（用于定位）",
+      "render_type": "chart",
+      "render_params": {
+        "chart_type": "bar",
+        "title": "图表标题"
+      },
+      "slide_index": -1,
+      "slot": "body"
+    }
+  ]
+}
+```
+
+支持的 render_type：
+- text: 纯文本（默认）
+- table: 表格（需提供 table_data）
+- chart: 图表（需指定 chart_type: bar/line/pie，提供 chart_data）
+- flowchart: 流程图（需提供 flowchart_data）
+- image_right/image_left: 图文混排
+
+## 旧格式（向后兼容）
+
+如果无法使用渲染指令格式，可以返回 JSON 操作序列：
+
+```json
+{
+  "action": "update",
+  "slide_index": 0,
+  "field": "title",
+  "value": "新标题"
+}
+```
+
+请优先使用渲染指令格式。
+""")
         return "\n".join(parts)
     
     def _summarize_slide(self, idx: int) -> str:
@@ -296,6 +351,10 @@ class AICopilotChatWidget(QWidget):
         # 新增：智能建议和分析面板
         self.suggestion_manager = None
         self.analysis_manager = None
+        
+        # 渲染指令系统支持
+        self._render_dispatcher = None
+        self.original_text = ""  # 原文文本，用于渲染指令解析
         
         self._init_ui()
     
@@ -589,9 +648,33 @@ class AICopilotChatWidget(QWidget):
         self.slides_data = slides
         self.current_index = current_index
         
+        # 如果已有原文文本，初始化渲染指令调度器
+        if self.original_text and slides:
+            try:
+                from .render_executor import RenderDispatcher
+                self._render_dispatcher = RenderDispatcher(slides, self.original_text)
+                print(f"[v5] AICopilotChatWidget: 渲染指令调度器已初始化，原文长度={len(self.original_text)}")
+            except Exception as e:
+                print(f"[v5] AICopilotChatWidget: 渲染指令调度器初始化失败: {e}")
+                self._render_dispatcher = None
+        
         # 如果分析面板可见，自动分析当前幻灯片
         if self.analysis_panel.isVisible() and current_index >= 0:
             self._analyze_current_slide()
+    
+    def set_original_text(self, text: str):
+        """设置原文文本并初始化渲染指令调度器"""
+        self.original_text = text
+        
+        # 初始化渲染指令调度器
+        if text and self.slides_data:
+            try:
+                from .render_executor import RenderDispatcher
+                self._render_dispatcher = RenderDispatcher(self.slides_data, text)
+                print(f"[v5] AICopilotChatWidget: 渲染指令调度器已初始化，原文长度={len(text)}")
+            except Exception as e:
+                print(f"[v5] AICopilotChatWidget: 渲染指令调度器初始化失败: {e}")
+                self._render_dispatcher = None
     
     def _analyze_current_slide(self):
         """分析当前幻灯片内容（TODO: 迁移到 Pipeline 模式）"""
@@ -746,7 +829,13 @@ class AICopilotChatWidget(QWidget):
         self.worker.start()
     
     def _on_ai_response(self, response: str):
-        """AI 响应 — 支持处理多个 JSON 动作"""
+        """AI 响应 — 支持渲染指令（新格式）和 JSON 动作（旧格式）
+        
+        处理优先级：
+        1. 批量操作（关键词触发）
+        2. 渲染指令（render_commands 格式）
+        3. JSON 操作序列（action 格式，向后兼容）
+        """
         try:
             # 埋点：记录 AI 响应
             from opencopilot.agent.observability import PipelineObservability
@@ -754,7 +843,101 @@ class AICopilotChatWidget(QWidget):
             obs.gui_log(f"PPT_COCREATION_RESPONSE | response_len={len(response)} | preview={response[:100]}",
                         session_id=self._session_id, event="PPT_COCREATION_RESPONSE")
             
-            # 提取所有 JSON 对象（AI 可能返回多个操作指令）
+            # 0. 检查是否是批量操作
+            from .render_command import BatchOperationParser
+            if BatchOperationParser.is_batch_operation(self._last_instruction):
+                batch_commands = BatchOperationParser.parse_batch_operation(
+                    self._last_instruction, self.slides_data, self.original_text
+                )
+                if batch_commands and self._render_dispatcher:
+                    # 批量操作埋点
+                    obs.gui_log(
+                        f"BATCH_OPERATION | count={len(batch_commands)} instruction={self._last_instruction[:30]}",
+                        session_id=self._session_id,
+                        event="BATCH_OPERATION"
+                    )
+                    
+                    # 执行批量渲染
+                    results = self._render_dispatcher.dispatch_from_render_commands(
+                        batch_commands, self.current_index
+                    )
+                    
+                    success_count = sum(1 for r in results if r.success)
+                    if success_count > 0:
+                        self._push_undo_state(f"批量操作: {self._last_instruction[:30]}")
+                        self.slides_updated.emit(self.slides_data)
+                        
+                        obs.gui_log(
+                            f"BATCH_OPERATION_APPLIED | success={success_count} total={len(results)}",
+                            session_id=self._session_id,
+                            event="BATCH_OPERATION_APPLIED"
+                        )
+                        
+                        self._add_message(f"✅ 批量操作完成: {success_count} 项", is_user=False)
+                        
+                        # 触发建议气泡
+                        self._trigger_suggestions_for_current_slide()
+                        
+                        # 恢复输入
+                        self.input_edit.setEnabled(True)
+                        self.send_btn.setEnabled(True)
+                        return
+            
+            # 1. 优先尝试解析为渲染指令（新格式）
+            if self._render_dispatcher:
+                from .render_command import RenderCommandParser
+                
+                render_commands = RenderCommandParser.parse(response, self.original_text)
+                if render_commands:
+                    # 设置默认 slide_index
+                    for cmd in render_commands:
+                        if cmd.slide_index < 0:
+                            cmd.slide_index = self.current_index
+                        cmd.instruction = self._last_instruction
+                    
+                    # 埋点
+                    obs.gui_log(
+                        f"RENDER_COMMANDS_PARSED | count={len(render_commands)} types={[c.render_type for c in render_commands]}",
+                        session_id=self._session_id,
+                        event="RENDER_COMMANDS_PARSED"
+                    )
+                    
+                    # 执行渲染指令
+                    results = self._render_dispatcher.dispatch_from_render_commands(
+                        render_commands, self.current_index
+                    )
+                    
+                    # 应用结果
+                    success_count = sum(1 for r in results if r.success)
+                    if success_count > 0:
+                        self._push_undo_state(self._last_instruction[:40] if self._last_instruction else "AI 渲染")
+                        self.slides_updated.emit(self.slides_data)
+                        
+                        # 埋点
+                        obs.gui_log(
+                            f"RENDER_COMMANDS_APPLIED | success={success_count} total={len(results)}",
+                            session_id=self._session_id,
+                            event="RENDER_COMMANDS_APPLIED"
+                        )
+                        
+                        self._add_message(f"✅ 已应用 {success_count} 项渲染指令", is_user=False)
+                        
+                        # 触发建议气泡
+                        self._trigger_suggestions_for_current_slide()
+                        
+                        # 更新分析面板
+                        if self.analysis_panel.isVisible():
+                            self._analyze_current_slide()
+                        
+                        # 恢复输入
+                        self.input_edit.setEnabled(True)
+                        self.send_btn.setEnabled(True)
+                        return
+                    else:
+                        # 渲染指令执行失败，回退到旧格式
+                        pass
+            
+            # 2. 回退到旧格式（JSON 操作序列）
             json_objects = self._extract_all_json(response)
             if not json_objects:
                 raise ValueError("无法找到 JSON 数据")

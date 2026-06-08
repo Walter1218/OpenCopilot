@@ -125,3 +125,161 @@ async def export_slides(request: ExportSlidesRequest):
     except Exception as e:
         print(f"[V5-API] export-slides error: {e}")
         raise HTTPException(status_code=500, detail=f"PPT 导出失败: {str(e)}")
+
+
+# =============================================================================
+# 渲染指令系统端点
+# =============================================================================
+
+class RenderCommandRequest(BaseModel):
+    """渲染指令请求"""
+    render_commands: List[Dict[str, Any]] = Field(..., description="渲染指令列表")
+    slides_data: List[Dict[str, Any]] = Field(..., description="当前幻灯片数据")
+    original_text: Optional[str] = Field("", description="原始文档文本")
+    current_index: int = Field(0, description="当前幻灯片索引")
+    session_id: Optional[str] = Field(None, description="会话ID")
+
+
+class RenderCommandResponse(BaseModel):
+    """渲染指令响应"""
+    success: bool
+    results: List[Dict[str, Any]]
+    slides_data: List[Dict[str, Any]]
+    message: str
+
+
+@router.post("/render-commands")
+async def execute_render_commands(request: RenderCommandRequest):
+    """
+    执行渲染指令
+
+    接收渲染指令列表，执行并返回更新后的幻灯片数据。
+    用于 AI 指令驱动的声明式渲染架构。
+    """
+    from opencopilot.capabilities.ppt.render_command import RenderCommand
+    from opencopilot.capabilities.ppt.render_executor import RenderExecutor
+    
+    session_id = request.session_id or f"api_render_{uuid.uuid4().hex[:8]}"
+    print(f"[V5-API] POST /api/ppt/render-commands | commands={len(request.render_commands)}, session={session_id}")
+    
+    try:
+        # 创建渲染执行器
+        executor = RenderExecutor(request.slides_data, request.original_text)
+        
+        # 解析渲染指令
+        commands = []
+        for cmd_data in request.render_commands:
+            cmd = RenderCommand.from_dict(cmd_data)
+            if cmd.slide_index < 0:
+                cmd.slide_index = request.current_index
+            commands.append(cmd)
+        
+        # 执行渲染指令
+        results = []
+        for cmd in commands:
+            result = executor.execute(cmd)
+            results.append({
+                "success": result.success,
+                "slide_index": result.slide_index,
+                "message": result.message,
+                "trace_id": result.trace_id,
+            })
+        
+        # 埋点
+        try:
+            from opencopilot.agent.observability import PipelineObservability
+            obs = PipelineObservability.get_instance()
+            obs.gui_log(
+                f"API_RENDER_COMMANDS | commands={len(commands)} success={sum(1 for r in results if r['success'])}",
+                session_id=session_id,
+                event="API_RENDER_COMMANDS"
+            )
+        except Exception:
+            pass
+        
+        return RenderCommandResponse(
+            success=True,
+            results=results,
+            slides_data=request.slides_data,
+            message=f"已执行 {len(commands)} 条渲染指令"
+        )
+    except Exception as e:
+        print(f"[V5-API] render-commands error: {e}")
+        raise HTTPException(status_code=500, detail=f"渲染指令执行失败: {str(e)}")
+
+
+class ParseRenderCommandRequest(BaseModel):
+    """解析渲染指令请求"""
+    response: str = Field(..., description="AI 响应文本")
+    original_text: Optional[str] = Field("", description="原始文档文本")
+
+
+class ParseRenderCommandResponse(BaseModel):
+    """解析渲染指令响应"""
+    success: bool
+    render_commands: List[Dict[str, Any]]
+    count: int
+    message: str
+
+
+@router.post("/parse-render-commands")
+async def parse_render_commands(request: ParseRenderCommandRequest):
+    """
+    解析渲染指令
+
+    从 AI 响应中提取渲染指令。
+    用于调试和测试。
+    """
+    from opencopilot.capabilities.ppt.render_command import RenderCommandParser
+    
+    print(f"[V5-API] POST /api/ppt/parse-render-commands | response_len={len(request.response)}")
+    
+    try:
+        commands = RenderCommandParser.parse(request.response, request.original_text)
+        
+        return ParseRenderCommandResponse(
+            success=True,
+            render_commands=[cmd.to_dict() for cmd in commands],
+            count=len(commands),
+            message=f"解析到 {len(commands)} 条渲染指令"
+        )
+    except Exception as e:
+        print(f"[V5-API] parse-render-commands error: {e}")
+        raise HTTPException(status_code=500, detail=f"解析渲染指令失败: {str(e)}")
+
+
+class QuickActionsRequest(BaseModel):
+    """快捷指令请求"""
+    selected_text: str = Field(..., description="选中的文本")
+    slide_index: Optional[int] = Field(0, description="当前幻灯片索引")
+
+
+class QuickActionsResponse(BaseModel):
+    """快捷指令响应"""
+    success: bool
+    actions: List[Dict[str, str]]
+    count: int
+
+
+@router.post("/quick-actions")
+async def get_quick_actions(request: QuickActionsRequest):
+    """
+    获取快捷指令
+
+    根据选中文本生成快捷指令建议。
+    """
+    from opencopilot.capabilities.ppt.render_command import QuickActionGenerator
+    
+    print(f"[V5-API] POST /api/ppt/quick-actions | text_len={len(request.selected_text)}")
+    
+    try:
+        actions = QuickActionGenerator.generate_actions(request.selected_text)
+        
+        return QuickActionsResponse(
+            success=True,
+            actions=actions,
+            count=len(actions)
+        )
+    except Exception as e:
+        print(f"[V5-API] quick-actions error: {e}")
+        raise HTTPException(status_code=500, detail=f"生成快捷指令失败: {str(e)}")

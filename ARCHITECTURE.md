@@ -108,7 +108,7 @@
 - `Task / Chat / Files / Memory / Settings` 切换结构
 - 基础刷新钩子与设置入口
 
-但要明确：当前更多是结构骨架，而不是全部业务完成态。Task / Chat / Files / Memory 面板仍有较多占位式内容和待接入逻辑。
+但要明确：当前更多是结构骨架，而不是全部业务完成态。Files / Memory 面板仍有较多占位式内容和待接入逻辑，但 Task 与 Chat 面板已经具备实际的业务能力。
 
 ### 3.4 Studio v5
 

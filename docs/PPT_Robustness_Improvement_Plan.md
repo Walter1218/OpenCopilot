@@ -169,7 +169,36 @@ if slides is None:
 
 ---
 
-## 四、实施优先级
+## 四、运行态补充
+
+### 2026-06-08: `StudioWindow.load_slides` 字符串 payload 兜底已落地
+
+**现象**:
+- 运行时曾出现 `StudioWindow.load_slides: 'str' object has no attribute 'get'`
+
+**真实根因**:
+- `Studio` 打开链路中，`slides` 列表或 `slide.items` 内可能混入字符串元素
+- `StudioWindow.load_slides()` 会先调用 `SourceMatcher.build_mappings()`，后者对 `slide/item` 直接执行 `.get()`，因此会在原文映射阶段先崩溃
+
+**已落地修复**:
+- `gui/v5/studio_window.py`
+  - 新增 `slides` 归一化逻辑
+  - 字符串 slide 优先尝试解析为 JSON dict，失败则收敛为最小合法 content slide
+  - 字符串 item 收敛为文本 item
+  - 补齐 `type/layout/title/subtitle/source_excerpt/items` 默认值
+- `opencopilot/capabilities/ppt/source_matcher.py`
+  - 对异常 slide/item 增加跳过兜底，避免其他入口再次因脏数据崩溃
+
+**验证**:
+- 定向单测通过：`tests/unit/test_v5_studio.py`
+- 合成坏数据验证通过：
+  - `slides=[{...}, \"bad slide string\"]`
+  - `slides=[{\"items\": [\"bad item string\"]}]`
+  - 两种 case 均不再触发 `StudioWindow.load_slides` 异常
+
+---
+
+## 五、实施优先级
 
 ```
 P0-1 (json_repair)  ─┐

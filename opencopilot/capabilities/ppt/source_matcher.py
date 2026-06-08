@@ -66,6 +66,9 @@ class SourceMatcher:
         total_slides = len(slides)
         
         for slide_idx, slide in enumerate(slides):
+            if not isinstance(slide, dict):
+                logger.warning("[SourceMatcher] skip invalid slide at index %s: %s", slide_idx, type(slide).__name__)
+                continue
             # ---- 优先尝试 source_excerpt（LLM 标记的原文片段）----
             source_excerpt = slide.get('source_excerpt', '')
             excerpt_range = None
@@ -113,7 +116,19 @@ class SourceMatcher:
                     self.extracted_ranges.append(r)
             
             # ---- 每个 item 匹配 ----
-            for item_idx, item in enumerate(slide.get('items', [])):
+            items = slide.get('items', [])
+            if not isinstance(items, list):
+                logger.warning("[SourceMatcher] slide %s has invalid items type: %s", slide_idx, type(items).__name__)
+                continue
+            for item_idx, item in enumerate(items):
+                if not isinstance(item, dict):
+                    logger.warning(
+                        "[SourceMatcher] skip invalid item at slide %s item %s: %s",
+                        slide_idx,
+                        item_idx,
+                        type(item).__name__,
+                    )
+                    continue
                 item_text = item.get('text', '')
                 if item_text:
                     ranges = self._find_text_in_source(original_text, item_text)

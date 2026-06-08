@@ -1,4 +1,5 @@
 """StudioWindowV5 — PPT 共创工作台 4-Panel 窗口壳 (~1200×800)"""
+import json
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QPalette
 from PyQt6.QtWidgets import (
@@ -271,27 +272,28 @@ class StudioWindowV5(QWidget):
             return
 
         try:
-            self.slides_data = slides
+            normalized_slides = self._normalize_slides_payload(slides)
+            self.slides_data = normalized_slides
 
             # 构建原文与幻灯片的映射关系（双向联动核心）
             source_text = self._source_panel.text_edit.toPlainText()
-            if source_text and slides:
+            if source_text and normalized_slides:
                 from opencopilot.capabilities.ppt.source_matcher import SourceMatcher
                 self._source_matcher = SourceMatcher()
-                self._source_matcher.build_mappings(source_text, slides)
+                self._source_matcher.build_mappings(source_text, normalized_slides)
                 self._source_panel.set_source_matcher(self._source_matcher)
                 print(f"[v5] StudioWindow: SourceMatcher 初始化完成，映射数: {len(self._source_matcher.mappings)}")
             else:
                 self._source_matcher = None
 
             # 更新大纲面板
-            self._outline_panel_widget.set_slides_data(slides)
+            self._outline_panel_widget.set_slides_data(normalized_slides)
 
             # 更新预览面板
-            self._preview_panel_widget.set_slides_data(slides)
+            self._preview_panel_widget.set_slides_data(normalized_slides)
 
             # 更新AI Chat组件
-            self._ai_chat_widget.set_slides_data(slides)
+            self._ai_chat_widget.set_slides_data(normalized_slides)
             
             # 设置原文文本到 AI Chat 组件（用于渲染指令系统）
             source_text = self._source_panel.text_edit.toPlainText()
@@ -301,12 +303,92 @@ class StudioWindowV5(QWidget):
             # 更新统计标签
             char_count = len(self._source_panel.text_edit.toPlainText())
             self._stats_label.setText(
-                f"幻灯片:{len(slides)}  要点:{len(slides)}  原文:{char_count}字符"
+                f"幻灯片:{len(normalized_slides)}  要点:{len(normalized_slides)}  原文:{char_count}字符"
             )
-            print(f"[v5] StudioWindow: 加载 slides → {len(slides)} 页")
+            print(f"[v5] StudioWindow: 加载 slides → {len(normalized_slides)} 页")
         except Exception as e:
             print(f"[ERROR] StudioWindow.load_slides: {e}")
             self._stats_label.setText(f"❌ 加载失败: {str(e)[:50]}")
+
+    def _normalize_slides_payload(self, slides: list) -> list:
+        """将异常 slide/item 形态收敛为 Studio 可消费的最小结构。"""
+        if not isinstance(slides, list):
+            return []
+        return [self._normalize_slide(slide, index) for index, slide in enumerate(slides)]
+
+    def _normalize_slide(self, slide, index: int) -> dict:
+        if isinstance(slide, dict):
+            normalized = dict(slide)
+        else:
+            normalized = self._coerce_slide_from_non_dict(slide, index)
+
+        slide_type = normalized.get("type", "content")
+        if slide_type == "cover":
+            slide_type = "title"
+        if not isinstance(slide_type, str) or not slide_type:
+            slide_type = "content"
+        normalized["type"] = slide_type
+
+        default_layout = "center" if slide_type == "title" else "text_only"
+        layout = normalized.get("layout", default_layout)
+        normalized["layout"] = layout if isinstance(layout, str) and layout else default_layout
+
+        for key in ("title", "subtitle", "source_excerpt"):
+            value = normalized.get(key, "")
+            normalized[key] = value if isinstance(value, str) else ("" if value is None else str(value))
+
+        items = normalized.get("items", [])
+        if isinstance(items, dict):
+            items = [items]
+        elif not isinstance(items, list):
+            items = [items] if items else []
+        normalized["items"] = [
+            item for item in (self._normalize_slide_item(item) for item in items) if item is not None
+        ]
+        return normalized
+
+    def _coerce_slide_from_non_dict(self, slide, index: int) -> dict:
+        if isinstance(slide, str):
+            raw_text = slide.strip()
+            if raw_text:
+                try:
+                    parsed = json.loads(raw_text)
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    parsed = None
+                if isinstance(parsed, dict):
+                    return parsed
+            text = raw_text
+        else:
+            text = "" if slide is None else str(slide).strip()
+
+        items = [{"text": text, "level": 0, "content_type": "text"}] if text else []
+        return {
+            "type": "content",
+            "layout": "text_only",
+            "title": f"幻灯片 {index + 1}",
+            "subtitle": "",
+            "items": items,
+        }
+
+    def _normalize_slide_item(self, item):
+        if isinstance(item, dict):
+            normalized = dict(item)
+            text = normalized.get("text", "")
+            normalized["text"] = text if isinstance(text, str) else ("" if text is None else str(text))
+            level = normalized.get("level", 0)
+            try:
+                normalized["level"] = int(level)
+            except (TypeError, ValueError):
+                normalized["level"] = 0
+            content_type = normalized.get("content_type", "text")
+            normalized["content_type"] = content_type if isinstance(content_type, str) and content_type else "text"
+            return normalized
+
+        text = item if isinstance(item, str) else ("" if item is None else str(item))
+        text = text.strip()
+        if not text:
+            return None
+        return {"text": text, "level": 0, "content_type": "text"}
 
     # =========================================================================
     # 信号处理方法

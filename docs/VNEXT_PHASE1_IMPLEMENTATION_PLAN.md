@@ -308,7 +308,7 @@ HERMES_API_KEY=
 
 当前仍应记住的基线结论是：
 
-- 第一阶段统一使用 `Hermes` 作为 `V5` 同款 UI 背后的第三方智能体
+- 当前 `Phase1` 真实执行链路仍以 `Hermes` 作为 `V5` 同款 UI 背后的第三方智能体，但这只是过渡实现，不代表长期终局；长期目标架构见 `docs/AGENT_RUNTIME_TARGET_ARCHITECTURE.md`
 - 双击右键仍进入 `SmartCopilotV5`，不再显示新造的测试弹层
 - `V5AgentWorker` 负责把 Work / Chat / Studio / Workspace Chat 的 AI 调用切到 `vnext/Hermes`
 - `Studio` 共创窗口内部的 AI 编辑、重生成与建议分析链路也已统一复用 `V5AgentWorker(chat + ppt_editor)`，与外层 `V5 UI` 保持同一 Hermes 执行后端
@@ -373,6 +373,7 @@ HERMES_API_KEY=
 
 ### 6.2 当前 TODO
 
+- 收敛“长期理想架构”到正式 Runtime 演进路线：固定 `V5 UI`，引入统一 `Agent Runtime`、能力协议中心与配置化智能体路由，避免把 `Hermes local` 过渡实现固化为长期终局
 - 重新跑一轮 `PPT` 共创 6-case 基准，验证第一批“当前页命中 / 标题位 / 旧动作兼容”修复后的真实收益
 - 在共创链路里补“最小完成条件校验 + 轻量 reprompt”，至少覆盖：
   - 当前页命中

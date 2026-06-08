@@ -444,6 +444,7 @@ OpenCopilot/
 │   ├── VNEXT_MODULE_BOUNDARIES.md # vnext 目录与依赖边界
 │   ├── VNEXT_DATA_MODEL.md # vnext 数据模型与状态机
 │   ├── VNEXT_PHASE1_IMPLEMENTATION_PLAN.md # vnext 第一阶段实施清单
+│   ├── AGENT_RUNTIME_TARGET_ARCHITECTURE.md # 理想 Agent Runtime 目标架构
 │   ├── VNEXT_SMART_COPILOT_UI_SPEC.md # vnext Smart Copilot UI 交互方案
 │   ├── VNEXT_AGENT_GATEWAY_DESIGN.md # vnext Agent Gateway 与 Provider Adapter 设计
 │   ├── VNEXT_MIGRATION_PLAYBOOK.md # vnext 迁移作战手册

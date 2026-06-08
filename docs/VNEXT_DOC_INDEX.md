@@ -27,6 +27,7 @@
 |------|------|
 | `docs/VNEXT_REBUILD_BLUEPRINT.md` | 总蓝图，定义目标、边界、总体架构、迁移原则 |
 | `docs/VNEXT_PHASE1_IMPLEMENTATION_PLAN.md` | 第一阶段实施清单，定义阶段顺序、里程碑、Go/No-Go 条件 |
+| `docs/AGENT_RUNTIME_TARGET_ARCHITECTURE.md` | 长期理想目标架构，定义固定 UI、统一 Runtime、能力协议中心与配置化路由 |
 
 ### 2.2 协议与边界
 
@@ -62,10 +63,11 @@
 
 1. `docs/VNEXT_REBUILD_BLUEPRINT.md`
 2. `docs/VNEXT_PHASE1_IMPLEMENTATION_PLAN.md`
-3. `docs/VNEXT_MODULE_BOUNDARIES.md`
-4. `docs/VNEXT_AGENT_GATEWAY_DESIGN.md`
-5. `docs/VNEXT_SMART_COPILOT_UI_SPEC.md`
-6. `docs/VNEXT_TEST_AND_ACCEPTANCE.md`
+3. `docs/AGENT_RUNTIME_TARGET_ARCHITECTURE.md`
+4. `docs/VNEXT_MODULE_BOUNDARIES.md`
+5. `docs/VNEXT_AGENT_GATEWAY_DESIGN.md`
+6. `docs/VNEXT_SMART_COPILOT_UI_SPEC.md`
+7. `docs/VNEXT_TEST_AND_ACCEPTANCE.md`
 
 ### 3.2 如果你是 UI 开发
 
@@ -104,6 +106,7 @@
 ```text
 VNEXT_REBUILD_BLUEPRINT
   -> VNEXT_PHASE1_IMPLEMENTATION_PLAN
+  -> AGENT_RUNTIME_TARGET_ARCHITECTURE
   -> VNEXT_UNIFIED_AGENT_API
   -> VNEXT_MODULE_BOUNDARIES
   -> VNEXT_SMART_COPILOT_UI_SPEC
@@ -117,6 +120,7 @@ VNEXT_REBUILD_BLUEPRINT
 理解方式：
 
 - `蓝图` 定方向
+- `目标架构` 定长期终局边界
 - `契约` 定接口
 - `边界` 定纪律
 - `数据模型` 定状态真相

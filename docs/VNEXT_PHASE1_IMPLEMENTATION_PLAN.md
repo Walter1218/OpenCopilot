@@ -310,11 +310,11 @@ HERMES_API_KEY=
 
 - 当前 `Phase1` 真实执行链路仍以 `Hermes` 作为 `V5` 同款 UI 背后的第三方智能体，但这只是过渡实现，不代表长期终局；长期目标架构见 `docs/AGENT_RUNTIME_TARGET_ARCHITECTURE.md`
 - 双击右键仍进入 `SmartCopilotV5`，不再显示新造的测试弹层
-- `V5AgentWorker` 负责把 Work / Chat / Studio / Workspace Chat 的 AI 调用切到 `vnext/Hermes`
-- `Studio` 共创窗口内部的 AI 编辑、重生成与建议分析链路也已统一复用 `V5AgentWorker(chat + ppt_editor)`，与外层 `V5 UI` 保持同一 Hermes 执行后端
+- `V5AgentWorker` 已完成第一期“统一执行门面”收口：默认仍走 `/vnext/* -> hermes_local -> Hermes API Server`，但已新增 `agent_runtime` 配置解析与路由能力，可按 `action_type` 切换到 `self_agent`，并支持 capability 级覆盖与 fallback policy
+- `Studio` 共创窗口内部的 AI 编辑、重生成与建议分析链路也已统一复用 `V5AgentWorker(chat + ppt_editor)`，并改为复用同一套动态路由与动态埋点，而不是在 UI 里继续写死 Hermes
 - `V5AgentWorker` 对长任务的 UI 侧 read timeout 已改为按输入体量动态估算，降低超长文本被前端提前打断的概率
 - `vnext` 任务事件现由后台线程持续消费 provider 事件并落库，前台 `/events` 只读取已落库结果，降低长任务阻塞风险
-- `V5` 埋点继续保留，并显式写入 `ui_version=v5`、`ui_surface=desktop`、`agent_backend=hermes_vnext`、`provider=hermes_local`
+- `V5` 埋点继续保留，并显式写入 `ui_version=v5`、`ui_surface=desktop`，其中 `agent_backend / provider / routing_mode` 已改为按运行时动态记录
 - 已补一轮 `PPT` 共创 6-case 双智能体基准，结论不是“单边绝对胜出”，而是：自研更强在结论页/动作页叙事，`Hermes` 更强在图文与版式表达；当前共性优化点集中在“当前页命中、标题位协议、图片/版式共创、旧动作 JSON 兼容”
 - 已完成第一批 `PPT` 共创收口：补强 `ppt_editor` 的“当前页命中/标题位”提示词约束，在 `AICopilotChatWidget` 中增加 render command 与旧 `action/update` JSON 的当前页归一化、标题位提升与数组兼容，并让 `RenderExecutor` 在图文页指令下同步落 `slide.layout`
 
@@ -366,10 +366,19 @@ HERMES_API_KEY=
 - `platform_next/api/unified`、`stores_next`、`agent_gateway`、`broker_gateway` 已落地
 - `Hermes local provider` 已完成 profile 自动发现、gateway 自动拉起和统一错误映射
 - 系统级桌面入口已恢复为 `SmartCopilotV5`，不再使用新造测试弹层替代正式 UI
-- `V5AgentWorker` 已统一切到 `/vnext/* -> hermes_local -> Hermes API Server`
-- `Studio` 共创内 AI 编辑、重生成、建议分析已统一走 `V5AgentWorker(chat + ppt_editor)`
+- `V5AgentWorker` 已支持统一 Agent Runtime 路由：默认执行链路仍是 `/vnext/* -> hermes_local -> Hermes API Server`，但已支持通过 `agent_runtime` 配置切到 `self_agent`
+- `Settings -> Engine` 已补齐 `Agent Runtime` 可视化配置，覆盖：
+  - 默认智能体模式
+  - 默认 provider
+  - `chat / explain / coding / ppt / translate` 的 capability 路由
+  - timeout / protocol error 两类 fallback 策略
+- `Studio` 共创内 AI 编辑、重生成、建议分析已统一走 `V5AgentWorker(chat + ppt_editor)`，并复用同一套路由与动态埋点
+- `StudioTabV5` 的快速创建已收紧剪贴板兜底策略：仅在用户输入极短时才尝试补充剪贴板，避免明确输入被历史日志或无关内容污染
+- `StudioWindowV5` 已补齐旧 `_source_text` 兼容别名，并在全屏预览时同步反馈当前页数，减少 UI 重构带来的兼容性回归
+- `AICopilotChatWidget` 的共创错误前缀已改为按当前运行时路由自适应，避免走自研路由时仍误提示 `Hermes`
 - 长任务已改为“动态 read timeout + 后台事件消费”模式，降低 `ppt / translate` 被前端提前打断的概率
 - `PPT` 共创 6-case 双智能体基准已完成，第一批稳定性修复已落地
+- 针对 `Settings / Bridge / AgentWorker / PPT 共创 / Studio / Navigation / Workspace / Chat / Work` 的组合业务回归已通过，当前基线为 `319 passed`
 
 ### 6.2 当前 TODO
 
@@ -400,7 +409,7 @@ HERMES_API_KEY=
 - 可人工验证 `context -> task -> task events -> apply preview -> commit`
 - 系统级双击右键入口当前保持 `SmartCopilotV5`
 - `V5AgentWorker` 已连接到 `vnext/Hermes`
-- 仍待持续回归的是宿主 Broker 真回写与整机人工交互验收
+- 当前组合业务回归已通过，仍待持续回归的是宿主 Broker 真回写与整机人工交互验收
 
 ### 7.1 功能验收
 

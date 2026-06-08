@@ -204,8 +204,9 @@ class StudioTabV5(QWidget):
             self._status_label.setText("⏹️ 已取消生成")
             return
 
-        # 尝试从剪贴板补充（仅当用户输入非常短时）
-        if len(text) < 50:
+        # 仅在输入极短、看起来更像占位词时，才允许用剪贴板兜底。
+        # 避免把用户已经明确输入的主题替换成历史日志等脏数据。
+        if len(text) <= 3:
             clip = bridge.get_clipboard_text()
             clip_text = clip.get("text", "")
             if clip_text and len(clip_text) > len(text):

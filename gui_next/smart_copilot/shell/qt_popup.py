@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from gui.v5.agent_runtime import resolve_agent_route
 from ..runtime import SmartCopilotApiRuntime
 from ..services import UnifiedApiClient
 from .floating_panel import FloatingPanel
@@ -156,11 +157,12 @@ class SmartCopilotPopupVNext(QWidget):
         try:
             self._ensure_context_snapshot()
             panel = self._ensure_panel()
+            route = resolve_agent_route(self.action_selector.currentText())
             panel.task_vm.create_task(
                 action=self.action_selector.currentText(),
                 context_snapshot_id=panel.ui_state.latest_context_id,
                 user_input=self.instruction_input.toPlainText().strip(),
-                provider="hermes_local",
+                provider=route.provider,
             )
             self._render_state()
             self._poll_timer.start()

@@ -50,11 +50,11 @@
         │                                │
         ▼                                ▼
 ┌────────────────────────────┐  ┌────────────────────────────────┐
-│ Desktop Direct Path         │  │ HTTP / Service Path            │
+│ Desktop Runtime Path        │  │ HTTP / API Path                │
 │ gui/v5/agent_worker.py      │  │ smart_copilot_api.py           │
 │ gui/workers/*.py            │  │ api/routers/*                  │
-│ -> opencopilot.agent.caller │  │ -> 调用独立 Agent 服务 :18888   │
-│ -> 直接复用 Pipeline 实现    │  │ -> 对外提供 /api/* / docs      │
+│ -> agent_runtime 路由解析    │  │ -> /vnext/* 与 /api/*          │
+│ -> self_agent / vnext_provider │ │ -> 对外提供 API / docs       │
 └───────────────┬────────────┘  └────────────────┬───────────────┘
                 │                                 │
                 └───────────────┬─────────────────┘
@@ -81,8 +81,8 @@
 
 ### 2.1 核心结论
 
-- 桌面 UI 的 AI 调用并不只依赖 HTTP，`V5AgentWorker` 和旧版 `AIWorker / ChatWorker` 都会通过 `opencopilot.agent.caller` 直接复用 Pipeline 实现。
-- 独立 Agent 服务仍然重要，`AgentHealthWorker`、API Gateway、部分兼容链路和对外 HTTP 调用依赖 `:18888`。
+- 当前系统级主链路已经收口为 `V5 UI -> V5AgentWorker -> Agent Runtime`；默认执行路径是 `/vnext/* -> hermes_local -> Hermes API Server`，也支持切到 `self_agent`。
+- 桌面 UI 的 AI 调用不再把 `:18888` 视为主入口；`asu_custom_agent.py` 仅保留为历史兼容服务形态，不是当前 v5 主链路依赖。
 - Broker 是系统级交互底座，选区读取、活动文档、浏览器内容、文本回写等能力都建立在 `:18889` 之上。
 
 ---
@@ -150,6 +150,7 @@ Studio 由两层组成：
 - `Engine / Appearance / Shortcuts / Advanced` 四分区
 - 配置持久化通过 `gui/v5/bridge.py`
 - LLM 连接测试采用子线程，避免阻塞 UI
+- `Engine` 页已补齐 `Agent Runtime` 可视化配置，覆盖默认后端、provider、model、capability routes 与 fallback policy
 
 ---
 
@@ -248,7 +249,7 @@ OpenCopilot/
 │   └── providers/               # LLM providers
 ├── api/
 │   └── routers/                 # chat / system / studio / workspace / config ...
-├── asu_custom_agent.py          # 独立 Agent 服务入口 (:18888)
+├── asu_custom_agent.py          # 历史兼容 Agent 服务入口 (:18888)
 ├── asu_broker/                  # 独立 Broker 服务入口 (:18889)
 ├── smart_copilot_api.py         # API Gateway (:8000)
 └── docs/                        # 维护文档
@@ -284,7 +285,7 @@ OpenCopilot/
 ```text
 HTTP Client
   -> smart_copilot_api.py / api/routers/*
-  -> 独立 Agent 服务 :18888 或本地业务模块
+  -> /vnext/* 运行时链路 或本地业务模块
   -> JSON / SSE 返回
 ```
 
@@ -294,18 +295,19 @@ HTTP Client
 
 ### 8.1 当前真实运行形态
 
-当前仓库不是“单一网关承载一切”的纯收敛架构，而是以下形态并存：
+当前仓库的真实形态是：
 
-- 桌面进程内直调 Pipeline
-- 独立 Agent 服务
-- API Gateway
+- 系统级桌面主链路：`V5 UI -> V5AgentWorker -> Agent Runtime`
+- 默认 provider 链路：`/vnext/* -> hermes_local -> Hermes API Server`
+- 可选自研链路：`self_agent`
 - 独立 Broker
+- 旧 `:18888` 兼容服务仍在仓库中，但不再作为当前主链路前提
 
 ### 8.2 推荐理解方式
 
 - 关注桌面交互，看 `gui/v5/`、`bridge.py`、`agent_worker.py`
-- 关注 AI 执行链路，看 `opencopilot/agent/`、`asu_custom_agent.py`
-- 关注 HTTP 能力，看 `smart_copilot_api.py`、`api/routers/`
+- 关注运行时路由，看 `gui/v5/agent_runtime.py`、`config_manager.py`
+- 关注 HTTP 与 `vnext` 能力，看 `smart_copilot_api.py`、`api/routers/`、`platform_next/`
 - 关注系统级采集与注入，看 `asu_broker/` 与 Broker client
 
 ---

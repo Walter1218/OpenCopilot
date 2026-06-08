@@ -151,7 +151,7 @@ The v5 redesign is **partially shipped in code, not fully feature-complete**. Cu
 | Area | Already implemented in code | Still in progress |
 |------|-----------------------------|-------------------|
 | **Navigation** | `NavigationManager` centralizes Smart Copilot / Workspace / Studio / Settings lifecycle | More legacy windows still coexist in compatibility paths |
-| **Smart Copilot** | 3-Tab shell (`Work / Chat / Studio`), drag & drop sharing, direct Agent calls via `V5AgentWorker` | Further polish on markdown rendering, command palette, richer context chips |
+| **Smart Copilot** | 3-Tab shell (`Work / Chat / Studio`), drag & drop sharing, runtime-routed AI calls via `V5AgentWorker` | Further polish on markdown rendering, command palette, richer context chips |
 | **Work / Chat** | Core interaction loop is usable: context fetch, streaming AI output, session handling, cancel | More advanced contextual actions and richer session management |
 | **Studio** | PPT co-creation is fully implemented: 4-Panel workbench, thumbnail strip, diff preview edit, AI chat flow, unified undo stack, export & fullscreen | ✅ Fully Implemented |
 | **Workspace** | Sidebar + 5-panel shell, settings entry, Task/Chat/Files/Memory business logic | Files shows recent files list; Memory shows knowledge graph / translation memory / glossary statistics |
@@ -316,9 +316,10 @@ OpenClaw's Pipeline + Agent Loop architecture solves three core problems in Agen
 
 **Current v5 UI integration note**:
 
-- `Work` and `Chat` already call the shared Agent Pipeline implementation directly through `gui/v5/agent_worker.py`
+- `Work`, `Chat`, and `Studio/PPT` all use the shared runtime entry in `gui/v5/agent_worker.py`
+- `V5AgentWorker` now resolves `agent_runtime` dynamically: default route is `/vnext/* -> hermes_local`, while `self_agent`, capability overrides, and fallback policy are configurable
 - non-AI UI actions go through `gui/v5/bridge.py`
-- `API Gateway (:8000)` remains the HTTP/OpenAPI surface and also hosts some v5 routes such as `/api/studio/*`
+- detailed runtime and startup behavior is maintained in `docs/STARTUP_GUIDE.md`
 
 ---
 
@@ -341,17 +342,14 @@ pip install -e .
 ### Launch
 
 ```bash
-# Terminal 1: Agent Pipeline (:18888) - recommended for health check / HTTP compatibility
-python3 asu_custom_agent.py
-
-# Terminal 2: Privileged Broker (:18889) - required for selection / active doc / apply-back
+# Terminal 1: Privileged Broker (:18889) - required for selection / active doc / apply-back
 bash start_broker.sh
 
-# Terminal 3: API Gateway (:8000) - optional but recommended for OpenAPI + HTTP routes + /api/studio/*
-python3 -m uvicorn smart_copilot_api:app --host 0.0.0.0 --port 8000 --reload
-
-# Terminal 4: UI
+# Terminal 2: UI
 bash scripts/start_ui.sh
+
+# Optional: preheat vnext API manually if you want stable API logs
+python3 -m uvicorn smart_copilot_api:app --host 127.0.0.1 --port 8010 --reload
 ```
 
 For a more detailed startup matrix, see [docs/STARTUP_GUIDE.md](docs/STARTUP_GUIDE.md).
@@ -384,7 +382,7 @@ OpenCopilot/
 │   ├── providers/                #   LLM providers
 │   ├── observability/            #   Observability module
 │   └── shared/                   #   Shared utilities (prompt building/context normalization)
-├── api/                          # API Gateway (:8000)
+├── api/                          # API Gateway / vnext API (8010 preferred, 8000 fallback)
 │   ├── app.py                    #   Route factory
 │   └── routers/                  #   16+ independent route modules
 ├── gui/                          # PyQt6 desktop app
@@ -395,7 +393,7 @@ OpenCopilot/
 │   ├── workers/                  #   QThread Workers
 │   └── dialogs/                  #   Translation/Persona dialogs
 ├── widgets/                      # PyQt6 widgets (skill panel, settings dialog, etc.)
-├── asu_custom_agent.py           # Agent Pipeline service (:18888)
+├── asu_custom_agent.py           # Legacy/compat Agent service entry (:18888), not required for current v5 mainline
 ├── asu_broker/                   # Privileged Broker service (:18889)
 ├── coding_agent/                 # Coding agent implementation
 ├── context_manager/              # Context management system

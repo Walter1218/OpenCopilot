@@ -37,6 +37,18 @@ def settings_dialog(qapp, mock_nav):
         "cloud_api_key": "sk-test",
         "cloud_model": "MiniMax-M1",
         "cloud_api_base": "https://api.minimax.chat/v1",
+    }), patch("gui.v5.bridge.get_agent_runtime_config", return_value={
+        "default_backend": "vnext_provider",
+        "default_provider": "hermes_local",
+        "default_model": "default",
+        "capability_routes": {
+            "ppt": {"backend": "self_agent", "provider": "self_agent"},
+        },
+        "fallback_policy": {
+            "enabled": True,
+            "on_timeout": "self_agent",
+            "on_protocol_error": "",
+        },
     }), patch("gui.v5.bridge.get_appearance", return_value={
         "theme": "dark", "font_size": 12, "language": "zh",
     }), patch("gui.v5.bridge.get_shortcuts", return_value={
@@ -127,14 +139,16 @@ class TestEngineSection:
 
     def test_save_engine_success(self, settings_dialog):
         """保存引擎配置成功应显示 Saved"""
-        with patch("gui.v5.bridge.save_engine_config", return_value=True):
+        with patch("gui.v5.bridge.save_engine_config", return_value=True), \
+             patch("gui.v5.bridge.save_agent_runtime_config", return_value=True):
             settings_dialog._on_save_engine()
         status = settings_dialog._engine_status.text()
         assert "Saved" in status
 
     def test_save_engine_failure(self, settings_dialog):
         """保存引擎配置失败应显示 Save Failed"""
-        with patch("gui.v5.bridge.save_engine_config", return_value=False):
+        with patch("gui.v5.bridge.save_engine_config", return_value=False), \
+             patch("gui.v5.bridge.save_agent_runtime_config", return_value=True):
             settings_dialog._on_save_engine()
         status = settings_dialog._engine_status.text()
         assert "Failed" in status
@@ -142,7 +156,8 @@ class TestEngineSection:
     def test_save_engine_provider_detection_cloud(self, settings_dialog):
         """Backend index=0 应识别为 cloud"""
         settings_dialog._engine_backend.setCurrentIndex(0)
-        with patch("gui.v5.bridge.save_engine_config", return_value=True) as mock_save:
+        with patch("gui.v5.bridge.save_engine_config", return_value=True) as mock_save, \
+             patch("gui.v5.bridge.save_agent_runtime_config", return_value=True):
             settings_dialog._on_save_engine()
         call_args = mock_save.call_args
         assert call_args[0][0] == "cloud"
@@ -150,10 +165,79 @@ class TestEngineSection:
     def test_save_engine_provider_detection_local(self, settings_dialog):
         """Backend index=1 应识别为 local"""
         settings_dialog._engine_backend.setCurrentIndex(1)
-        with patch("gui.v5.bridge.save_engine_config", return_value=True) as mock_save:
+        with patch("gui.v5.bridge.save_engine_config", return_value=True) as mock_save, \
+             patch("gui.v5.bridge.save_agent_runtime_config", return_value=True):
             settings_dialog._on_save_engine()
         call_args = mock_save.call_args
         assert call_args[0][0] == "local"
+
+    def test_runtime_defaults_loaded(self, settings_dialog):
+        """Engine 页应加载 Agent Runtime 默认配置"""
+        assert settings_dialog._agent_runtime_backend.currentData() == "vnext_provider"
+        assert settings_dialog._agent_runtime_provider.currentData() == "hermes_local"
+        assert settings_dialog._agent_runtime_model.text() == "default"
+        assert settings_dialog._capability_route_combos["ppt"].currentData() == "self_agent"
+        assert settings_dialog._fallback_enabled.isChecked() is True
+        assert settings_dialog._fallback_timeout_route.currentData() == "self_agent"
+        assert settings_dialog._fallback_protocol_route.currentData() == ""
+
+    def test_save_engine_also_saves_agent_runtime(self, settings_dialog):
+        """保存 Engine 时应同步保存 Agent Runtime 路由配置"""
+        settings_dialog._agent_runtime_backend.setCurrentIndex(
+            settings_dialog._agent_runtime_backend.findData("self_agent")
+        )
+        settings_dialog._agent_runtime_provider.setCurrentIndex(
+            settings_dialog._agent_runtime_provider.findData("self_agent")
+        )
+        settings_dialog._agent_runtime_model.setText("runtime-default")
+        settings_dialog._capability_route_combos["chat"].setCurrentIndex(
+            settings_dialog._capability_route_combos["chat"].findData("hermes_local")
+        )
+        settings_dialog._capability_route_combos["ppt"].setCurrentIndex(
+            settings_dialog._capability_route_combos["ppt"].findData("self_agent")
+        )
+        settings_dialog._fallback_enabled.setChecked(True)
+        settings_dialog._fallback_timeout_route.setCurrentIndex(
+            settings_dialog._fallback_timeout_route.findData("self_agent")
+        )
+        settings_dialog._fallback_protocol_route.setCurrentIndex(
+            settings_dialog._fallback_protocol_route.findData("")
+        )
+
+        with patch("gui.v5.bridge.save_engine_config", return_value=True), \
+             patch("gui.v5.bridge.save_agent_runtime_config", return_value=True) as mock_runtime_save:
+            settings_dialog._on_save_engine()
+
+        mock_runtime_save.assert_called_once_with(
+            default_backend="self_agent",
+            default_provider="self_agent",
+            default_model="runtime-default",
+            capability_routes={
+                "chat": {"backend": "vnext_provider", "provider": "hermes_local"},
+                "ppt": {"backend": "self_agent", "provider": "self_agent"},
+            },
+            fallback_policy={
+                "enabled": True,
+                "on_timeout": "self_agent",
+                "on_protocol_error": "",
+            },
+        )
+
+    def test_agent_runtime_backend_change_disables_provider_for_self_agent(self, settings_dialog):
+        settings_dialog._agent_runtime_backend.setCurrentIndex(
+            settings_dialog._agent_runtime_backend.findData("self_agent")
+        )
+        settings_dialog._on_agent_runtime_backend_changed()
+        assert settings_dialog._agent_runtime_provider.isEnabled() is False
+        assert settings_dialog._agent_runtime_provider.currentData() == "self_agent"
+
+    def test_collect_capability_routes_skips_default(self, settings_dialog):
+        settings_dialog._capability_route_combos["chat"].setCurrentIndex(
+            settings_dialog._capability_route_combos["chat"].findData("default")
+        )
+        routes = settings_dialog._collect_capability_routes()
+        assert "chat" not in routes
+        assert routes["ppt"]["backend"] == "self_agent"
 
     def test_test_connection_starts_worker(self, settings_dialog):
         """Test Connection 应启动异步 worker"""

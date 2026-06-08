@@ -89,6 +89,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QTimer
 from PyQt6.QtGui import QColor, QFont, QTextCursor, QKeyEvent
+from gui.v5.agent_runtime import resolve_agent_route
 
 # 导入新的UI组件
 from .suggestion_bubble import SuggestionBubble, SuggestionBubbleManager
@@ -205,7 +206,7 @@ class AIWorker(QThread):
         self.session_id = session_id
 
     def run(self):
-        """执行任务 - 通过 V5AgentWorker 复用 Hermes/vnext 链路"""
+        """执行任务 - 通过 V5AgentWorker 复用统一 Agent Runtime 路由"""
         try:
             from opencopilot.agent.observability import PipelineObservability
             from gui.v5.agent_worker import V5AgentWorker
@@ -213,15 +214,17 @@ class AIWorker(QThread):
             user_message = self._build_user_message()
             session_id = self.session_id or f"ppt_cocreation_{uuid.uuid4().hex[:8]}"
             current_slide = self.slides_data[self.current_index] if 0 <= self.current_index < len(self.slides_data) else {}
+            route = resolve_agent_route("chat")
 
             obs = PipelineObservability.get_instance()
             obs.gui_log(
-                f"PPT Cocreation START | text_len={len(user_message)} | backend=hermes_vnext | provider=hermes_local",
+                f"PPT Cocreation START | text_len={len(user_message)} | backend={route.agent_backend} | provider={route.provider}",
                 session_id=session_id,
                 event="PPT_COCREATION_START",
                 data_json=json.dumps({
-                    "agent_backend": "hermes_vnext",
-                    "provider": "hermes_local",
+                    "agent_backend": route.agent_backend,
+                    "provider": route.provider,
+                    "routing_mode": route.routing_mode,
                     "slides_count": len(self.slides_data),
                     "current_index": self.current_index,
                 }, ensure_ascii=False),
@@ -254,12 +257,13 @@ class AIWorker(QThread):
             if finished_payloads and finished_payloads[-1]:
                 full_text = finished_payloads[-1]
                 obs.gui_log(
-                    f"PPT Cocreation DONE | output_len={len(full_text)} | backend=hermes_vnext | provider=hermes_local",
+                    f"PPT Cocreation DONE | output_len={len(full_text)} | backend={route.agent_backend} | provider={route.provider}",
                     session_id=session_id,
                     event="PPT_COCREATION_DONE",
                     data_json=json.dumps({
-                        "agent_backend": "hermes_vnext",
-                        "provider": "hermes_local",
+                        "agent_backend": route.agent_backend,
+                        "provider": route.provider,
+                        "routing_mode": route.routing_mode,
                         "output_len": len(full_text),
                     }, ensure_ascii=False),
                 )
@@ -267,24 +271,41 @@ class AIWorker(QThread):
                 return
 
             obs.gui_log(
-                "PPT Cocreation EMPTY response | backend=hermes_vnext | provider=hermes_local",
+                f"PPT Cocreation EMPTY response | backend={route.agent_backend} | provider={route.provider}",
                 session_id=session_id,
                 event="PPT_COCREATION_EMPTY",
                 level="WARN",
                 data_json=json.dumps({
-                    "agent_backend": "hermes_vnext",
-                    "provider": "hermes_local",
+                    "agent_backend": route.agent_backend,
+                    "provider": route.provider,
+                    "routing_mode": route.routing_mode,
                 }, ensure_ascii=False),
             )
-            self.error_occurred.emit("Hermes 返回空响应，可能是模型配置问题")
+            self.error_occurred.emit("智能体返回空响应，可能是模型或路由配置问题")
 
         except Exception as e:
-            self.error_occurred.emit(f"调用 Hermes 共创链路失败: {str(e)}")
+            self.error_occurred.emit(f"{self._build_delegate_error_prefix()}失败: {str(e)}")
         finally:
             self._delegate_worker = None
 
+    @staticmethod
+    def _build_delegate_error_prefix() -> str:
+        """按当前路由返回更准确的错误前缀，兼容旧的 Hermes 口径。"""
+        try:
+            route = resolve_agent_route("chat")
+        except Exception:
+            route = None
+
+        provider = getattr(route, "provider", "")
+        backend = getattr(route, "backend", "")
+        if provider == "hermes_local":
+            return "调用 Hermes 共创链路"
+        if backend == "self_agent":
+            return "调用自研智能体共创链路"
+        return "调用共创链路"
+
     def stop(self):
-        """停止当前共创请求，优先向 Hermes 任务传播取消信号"""
+        """停止当前共创请求，优先向底层执行链路传播取消信号"""
         delegate = self._delegate_worker
         if delegate is not None:
             try:
@@ -836,7 +857,7 @@ class AICopilotChatWidget(QWidget):
         session_id: str,
         event_name: str,
     ) -> str:
-        """在 Studio 共创内同步执行一条 Hermes/vnext 请求。"""
+        """在 Studio 共创内同步执行一条统一 Agent Runtime 请求。"""
         from gui.v5.agent_worker import V5AgentWorker
 
         current_slide = self.slides_data[self.current_index] if 0 <= self.current_index < len(self.slides_data) else {}
@@ -898,7 +919,8 @@ class AICopilotChatWidget(QWidget):
                 event_name="ppt_analyze",
             )
             if result and self.analysis_manager:
-                obs.gui_log(f"PPT Analyze DONE | output_len={len(result)} | backend=hermes_vnext | provider=hermes_local",
+                route = resolve_agent_route("ppt")
+                obs.gui_log(f"PPT Analyze DONE | output_len={len(result)} | backend={route.agent_backend} | provider={route.provider}",
                             session_id=session_id, event="PPT_ANALYZE_DONE")
                 self.analysis_manager.update_analysis_debounced({"analysis": result})
         except Exception as e:
@@ -1370,7 +1392,8 @@ class AICopilotChatWidget(QWidget):
             )
             
             if result.strip():
-                obs.gui_log(f"PPT Suggest DONE | output_len={len(result)} | backend=hermes_vnext | provider=hermes_local",
+                route = resolve_agent_route("ppt")
+                obs.gui_log(f"PPT Suggest DONE | output_len={len(result)} | backend={route.agent_backend} | provider={route.provider}",
                             session_id=session_id, event="PPT_SUGGEST_DONE")
                 suggestion = {"title": "AI优化建议", "content": result[:200]}
                 if not self.suggestion_manager:

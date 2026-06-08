@@ -51,14 +51,11 @@
 # 终端 1：Broker（必须用原生终端）
 bash start_broker.sh
 
-# 终端 2：Agent 服务（推荐，便于探活与 HTTP 兼容链路）
-python3 asu_custom_agent.py
-
-# 终端 3：API Gateway（调 /api/*、Swagger、Studio API 时需要）
-python3 -m uvicorn smart_copilot_api:app --host 0.0.0.0 --port 8000 --reload
-
-# 终端 4：UI
+# 终端 2：UI
 bash scripts/start_ui.sh
+
+# 可选：需要稳定抓 API 日志时，再手动预热 vnext API
+python3 -m uvicorn smart_copilot_api:app --host 127.0.0.1 --port 8010 --reload
 ```
 
 ### 2.3 最小桌面开发组合
@@ -70,11 +67,7 @@ bash start_broker.sh
 bash scripts/start_ui.sh
 ```
 
-但为了保持健康检查、兼容链路与服务侧行为一致，开发时仍然**推荐同时启动**：
-
-```bash
-python3 asu_custom_agent.py
-```
+如果你在调 `/vnext/*` 或需要稳定抓 API 进程日志，建议额外手动启动 `8010`；否则当前桌面主链路通常直接 `Broker + UI` 就够了。
 
 ---
 
@@ -125,9 +118,9 @@ UI / API
 
 | 服务 | 端口 | 作用 |
 |------|------|------|
-| `asu_custom_agent.py` | `18888` | 独立 Agent 服务、健康检查、HTTP/SSE 兼容链路 |
 | `asu_broker` | `18889` | 系统级选区/文档/浏览器/回写 |
-| `smart_copilot_api.py` | `8000` | OpenAPI、HTTP 路由、部分 v5 API |
+| `smart_copilot_api.py` | `8010` 优先，`8000` 回退 | `/vnext/*`、OpenAPI、HTTP 路由、部分 v5 API |
+| `asu_custom_agent.py` | `18888` | 历史兼容 Agent 服务形态，不是当前 v5 主链路前提 |
 
 ---
 
@@ -161,7 +154,7 @@ OpenCopilot/
 │   └── providers/               # LLM providers
 ├── api/
 │   └── routers/                 # chat / config / studio / workspace / system ...
-├── asu_custom_agent.py          # 独立 Agent 服务入口
+├── asu_custom_agent.py          # 历史兼容 Agent 服务入口
 ├── asu_broker/                  # 独立 Broker 服务入口
 ├── smart_copilot_api.py         # API Gateway
 └── tests/
@@ -313,11 +306,11 @@ python -m pytest tests/unit/test_v5_* -v
 ### 7.1 端口与健康检查
 
 ```bash
-lsof -i :18888   # Agent
 lsof -i :18889   # Broker
-lsof -i :8000    # API Gateway
+lsof -i :8010    # vnext API（优先）
+lsof -i :8000    # API Gateway fallback / 兼容环境
 
-curl http://127.0.0.1:18888/health
+curl http://127.0.0.1:8010/health
 curl http://127.0.0.1:8000/health
 curl -H "Authorization: Bearer $(cat ~/.asu_broker_token)" http://127.0.0.1:18889/health
 ```
@@ -366,12 +359,13 @@ PY
 
 所有面板均已实现具体业务功能，不再是骨架结构。
 
-### 8.3 Agent 服务与共享 Pipeline 要区分
+### 8.3 Agent Runtime 与兼容服务要区分
 
 - 共享 Pipeline 实现是核心逻辑中心
-- `:18888` 是独立服务形态
+- `agent_runtime` 决定当前走 `self_agent` 还是 `vnext_provider`
+- `:18888` 只是历史兼容服务形态
 
-开发时不要把“服务进程”和“核心实现”混为一谈。
+开发时不要把“当前运行时主链路”和“历史兼容服务进程”混为一谈。
 
 ---
 
@@ -380,7 +374,7 @@ PY
 | 问题 | 解决方式 |
 |------|----------|
 | 双击右键没反应 | 先检查辅助功能权限和 Broker 是否运行 |
-| UI 能打开但 AI 不正常 | 检查 `gui/v5/agent_worker.py` 链路、LLM 配置和 Agent 探活状态 |
+| UI 能打开但 AI 不正常 | 检查 `gui/v5/agent_worker.py` 链路、`agent_runtime` 配置、`8010/8000` API 与 Hermes 探活状态 |
 | API 路由正常但桌面行为异常 | 区分是 HTTP 路径问题还是桌面直调 Pipeline 问题 |
 | Workspace 功能问题 | Workspace 已实现完整业务逻辑，检查具体面板功能是否正常 |
 | Qt 插件或 UI 闪退 | 优先使用 `bash scripts/start_ui.sh` 启动 |

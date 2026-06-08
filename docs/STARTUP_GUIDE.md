@@ -1,7 +1,7 @@
 # OpenCopilot 启动方式说明
 
 > 本文档已按当前桌面主链路更新。  
-> 当前系统级入口是 `V5 UI`，底层智能体执行统一走 `vnext/Hermes`，不再按旧 `18888` Agent Pipeline 口径理解。
+> 当前系统级入口是 `V5 UI`，底层智能体执行已经统一收口到 `V5AgentWorker`；默认仍走 `vnext/Hermes`，但已支持通过 `agent_runtime` 配置切到自研智能体，不再按旧 `18888` Agent Pipeline 口径理解。
 
 ## 零、先记住当前真实链路
 
@@ -22,16 +22,18 @@ smart_copilot.py
 
 - 双击右键弹出的仍然是 `SmartCopilotV5`
 - `WorkTabV5 / ChatTabV5 / StudioTabV5` 交互保持 `V5` 形态
-- `V5AgentWorker` 负责把 AI 请求转发到 `vnext/Hermes`
+- `V5AgentWorker` 是统一 AI 入口：默认把请求转发到 `vnext/Hermes`，也可按配置切到 `self_agent`
 - `V5` 埋点继续沿用，并额外标注：
   - `ui_version=v5`
   - `ui_surface=desktop`
-  - `agent_backend=hermes_vnext`
-  - `provider=hermes_local`
+  - `agent_backend=<运行时动态值>`
+  - `provider=<运行时动态值>`
+- `StudioTabV5` 的“快速创建”当前只会在用户输入极短时才尝试剪贴板兜底，避免把明确输入的主题误替换成历史日志或其他脏数据
 - `PPT` 共创第一批收口已完成：
   - 当前页命中与标题位约束已补强
   - 旧 `action/update` JSON 数组已兼容
   - 图文页指令会同步落 `slide.layout`
+  - 共创报错文案会按运行时路由自适应：默认 Hermes 路由仍提示 `Hermes 共创链路`，切到自研时不再误报 Hermes
 
 ## 一、推荐启动方式
 
@@ -56,7 +58,51 @@ bash scripts/start_ui.sh
 - 若 Hermes API Server 未在线，`hermes_local` provider 会按 profile 自动尝试拉起 gateway
 - `V5AgentWorker` 会按输入体量动态估算 UI 侧 read timeout；当前默认下限约 `45s`，`translate` 不低于 `60s`，`ppt` 不低于 `90s`，并对超长文本继续上调
 - `/vnext/tasks/{id}/events` 现已改为返回后台线程已落库的事件，不再在请求线程里同步长时间等待 Hermes 流完成
-- `Studio` 共创窗口中的 AI 编辑、重新生成、建议分析也已复用 `V5AgentWorker -> vnext/Hermes`，不再单独走旧 `asu_custom_agent.pipeline`
+- `Studio` 共创窗口中的 AI 编辑、重新生成、建议分析也已复用同一个 `V5AgentWorker` 路由入口，不再单独走旧 `asu_custom_agent.pipeline`
+
+### 1.1 可选：通过配置切换智能体后端
+
+默认情况下，`agent_runtime` 不配置时会继续走当前 `Hermes/vnext` 主链路。
+
+如果要切到自研智能体，可在 `config.json` 中加入：
+
+```json
+{
+  "agent_runtime": {
+    "default_backend": "self_agent",
+    "default_provider": "self_agent"
+  }
+}
+```
+
+如果要按能力路由，例如仅把 `chat` 切到自研、`ppt` 继续走 Hermes：
+
+```json
+{
+  "agent_runtime": {
+    "default_backend": "vnext_provider",
+    "default_provider": "hermes_local",
+    "capability_routes": {
+      "chat": {
+        "backend": "self_agent",
+        "provider": "self_agent"
+      }
+    }
+  }
+}
+```
+
+说明：
+
+- 当前默认值仍是 `vnext_provider + hermes_local`
+- `V5 UI` 入口不变，切换只发生在运行时路由层
+- `Studio/PPT/Chat/Work` 都通过同一个 `V5AgentWorker` 入口受这个配置影响
+- 当前也可以直接在 `Settings -> Engine` 中配置：
+  - `Agent Mode`: `Third-Party Agent` / `Self Agent`
+  - `Agent Provider`: `Hermes Local` / `Self Agent`
+  - `Agent Model`: 默认为 `default`
+  - `Capability Routes`: 可对 `chat / explain / coding / ppt / translate` 单独指定 `Default / Self Agent / Hermes Local`
+  - `Fallback Policy`: 可开启自动 fallback，并分别配置 `On Timeout` 与 `On Protocol Error`
 
 ### 2. 验证 `gui_next` 交互测试窗
 
@@ -80,7 +126,7 @@ bash scripts/start_vnext_smart_copilot.sh
 - 默认连接 `http://127.0.0.1:8010`
 - 若 `:8010` 已存在但未挂载 `vnext`，脚本会回退探测 `http://127.0.0.1:8000`
 - 若目标地址不可用，会自动拉起 `smart_copilot_api:app`
-- 当前仍统一使用 `Hermes local provider`
+- 当前默认仍使用 `Hermes local provider`，除非显式配置 `agent_runtime`
 
 无界面冒烟方式：
 

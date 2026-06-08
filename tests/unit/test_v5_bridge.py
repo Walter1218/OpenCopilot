@@ -330,6 +330,37 @@ class TestConfigManagement:
         assert saved_config["cloud_api_key"] == "sk-test"
         assert saved_config["cloud_model"] == "gpt-4"
 
+    def test_get_agent_runtime_config(self):
+        from gui.v5.bridge import get_agent_runtime_config
+        mock_cfg = MagicMock()
+        mock_cfg.get_agent_runtime.return_value = {"default_backend": "self_agent"}
+        with patch("config_manager.ConfigManager.get_instance", return_value=mock_cfg):
+            result = get_agent_runtime_config()
+        assert result["default_backend"] == "self_agent"
+
+    def test_save_agent_runtime_config(self):
+        from gui.v5.bridge import save_agent_runtime_config
+        mock_load = MagicMock(return_value={})
+        mock_save = MagicMock()
+        with patch.dict("sys.modules", {"llm_provider": MagicMock()}):
+            import sys
+            sys.modules["llm_provider"].load_config = mock_load
+            sys.modules["llm_provider"].save_config = mock_save
+            result = save_agent_runtime_config(
+                default_backend="self_agent",
+                default_provider="self_agent",
+                default_model="default",
+                capability_routes={"chat": {"backend": "self_agent", "provider": "self_agent"}},
+                fallback_policy={"enabled": True, "on_timeout": "self_agent", "on_protocol_error": ""},
+            )
+        assert result is True
+        saved_config = mock_load.return_value
+        assert saved_config["agent_runtime"]["default_backend"] == "self_agent"
+        assert saved_config["agent_runtime"]["default_provider"] == "self_agent"
+        assert saved_config["agent_runtime"]["default_model"] == "default"
+        assert saved_config["agent_runtime"]["capability_routes"]["chat"]["backend"] == "self_agent"
+        assert saved_config["agent_runtime"]["fallback_policy"]["enabled"] is True
+
 
 class TestAppearance:
     """外观配置测试"""

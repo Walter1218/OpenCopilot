@@ -1,5 +1,7 @@
 # OpenCopilot 伴生智能体：PPT 人机共创引擎设计方案
 
+> 本文已按当前 `Studio V5` 实现更新，旧的 `PPTPreviewDialog / asu_custom_agent` 口径已废弃。
+
 ## 一、 核心定位与设计理念
 将现有的“单向格式转换工具”升级为“**伴生式 AI 策划师与排版助理**”。
 核心理念：**对话驱动状态更新 (Conversation-driven State Update)**。用户只需用自然语言发号施令，AI 在后台实时更新结构化数据，并在前端实时渲染大纲预览。只有在自然语言遇到瓶颈时，才提供轻量级的手动干预作为兜底。
@@ -14,7 +16,7 @@
 3. **入口弹出**：当 AI 完成输出后，系统利用底层的正则与解析引擎 (`extract_json_from_text`) 自动扫描内容。一旦识别出合法的 JSON 结构或标准的 Markdown 大纲，界面右下角会自动弹出 **[💾 导出为 PPT]** 按钮，提供人机共创交互的入口。
 
 ### 阶段 2：可视化人机共创排版 (Interactive Editing)
-这是人机共创的核心。用户点击导出按钮后，不会直接生成死板的 PPT，而是进入一个独立的 **PPT 人机共创编辑器 (`PPTPreviewDialog`)**。
+这是人机共创的核心。用户点击入口后，不会直接生成死板的 PPT，而是进入独立的 **PPT 人机共创工作台 (`StudioWindowV5`)**。
 1. **左侧大纲导航**：直观展示总页数和各页主标题，用户可以快速点击切换幻灯片。
 2. **右侧表单编辑**：用户可以对当前选中的幻灯片进行细粒度修改：
    - 修改标题、副标题。
@@ -36,7 +38,7 @@
 
 ### 2. AI 策划引擎 (Prompt & LLM Logic)
 - **职责**：将模糊的自然语言转化为确定的 JSON 状态修改。
-- **机制**：在 `asu_custom_agent.py` 中预置 `ppt_planner` 角色。要求其输出必须严格遵循内部 JSON 协议。例如：
+- **机制**：当前统一通过 `V5AgentWorker + agent_runtime` 执行，默认走 `vnext/Hermes`，也可按配置切到 `self_agent`。PPT 场景的提示词和上下文约束由 `ppt_editor` 上下文描述、渲染指令生成器与运行时路由共同控制。输出仍要求遵循内部 JSON / render command 协议。例如：
   ```json
   [
     {"type": "title", "layout": "center", "title": "...", "subtitle": "..."},

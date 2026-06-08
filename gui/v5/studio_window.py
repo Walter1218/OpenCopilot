@@ -138,6 +138,7 @@ class StudioWindowV5(QWidget):
 
         # Panel 1: Source (原文) - 使用SourcePanel组件实现双向联动
         self._source_panel = SourcePanel()
+        self._source_text = self._source_panel.text_edit  # 向后兼容旧测试和旧调用
         # 连接信号：原文位置点击 → 跳转到对应幻灯片
         self._source_panel.position_clicked.connect(self._on_source_position_clicked)
         # 连接信号：原文选中文本 → 加入当前幻灯片
@@ -832,6 +833,7 @@ class StudioWindowV5(QWidget):
 
         # 调用PreviewPanel的全屏预览
         self._preview_panel_widget._on_fullscreen()
+        self._stats_label.setText(f"🔍 全屏预览: {len(self.slides_data)} 张")
 
     # =========================================================================
     # 工厂方法

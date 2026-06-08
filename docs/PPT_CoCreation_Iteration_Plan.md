@@ -286,7 +286,7 @@ PPT 共创工作台是一个 PyQt6 桌面三面板编辑器：
 
 ### 4.1 中央化状态管理
 
-**现状**：`json_data` 在 `CoCreationDialog` 中作为 list 被各面板直接 mutate。
+**现状**：`slides_data` / `json_data` 仍会在 `StudioWindowV5` 相关面板中被直接 mutate，状态收口还可以继续加强。
 
 **改进**：
 ```
@@ -322,9 +322,9 @@ class EventBus(QObject):
 
 ### 4.4 废弃遗留入口
 
-`gui/dialogs/ppt_preview.py` (PPTPreviewDialog) 是旧版双面板编辑器，与 `CoCreationDialog` 功能重叠。应统一为 `CoCreationDialog` 唯一入口，并移除 `PPTPreviewDialog` 引用。
+当前主入口已经统一为 `StudioWindowV5`。`gui/dialogs/ppt_preview.py` (PPTPreviewDialog) 与旧 `CoCreationDialog` 口径都应视为历史遗留，不再作为现行方案描述。
 
-**涉及文件**：`gui/dialogs/ppt_preview.py`, `gui/window.py`, `smart_copilot.py`, `smart_copilot_api.py`
+**涉及文件**：`gui/dialogs/ppt_preview.py`, `gui/v5/studio_tab.py`, `gui/v5/studio_window.py`, `smart_copilot.py`
 
 ---
 
@@ -337,7 +337,7 @@ class EventBus(QObject):
 | 接通 Undo/Redo/Zoom 空实现 | Low | 修复快捷键失效问题 | ✅ AI 对话层已接通 Ctrl+Z/Y + 按钮 |
 | 流式 AI 反馈（打字指示器 + 进度条 + Cancel） | Medium | 核心体验提升 | ⏳ 待实现 |
 | 统一 Undo Stack（合并手动+AI 编辑） | Medium | 撤销行为一致性 | 🔄 AI 对话层已完成，dialog 层待统一 |
-| 废弃 PPTPreviewDialog | Low | 减少维护成本 | ⏳ 待实现 |
+| 清理遗留 PPTPreviewDialog / CoCreationDialog 口径 | Low | 减少维护成本 | 🔄 文档口径已统一到 `StudioWindowV5`，代码清理可继续推进 |
 
 ### Sprint 2 — Core Interaction（2-3 周）
 

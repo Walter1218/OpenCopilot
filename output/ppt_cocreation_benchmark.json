@@ -1,0 +1,532 @@
+{
+  "generated_at": "2026-06-08 23:08:17",
+  "cases": [
+    {
+      "case_id": "exec_summary",
+      "label": "Executive Summary With Chart And Table",
+      "summary": "Self agent wins on expression quality, but target accuracy should be checked.",
+      "self_agent": {
+        "mode": "self_agent",
+        "latency_sec": 10.62,
+        "raw_length": 2108,
+        "render_command_count": 6,
+        "parse_success": true,
+        "current_page_hit_rate": 1.0,
+        "expected_type_hit_rate": 1.0,
+        "title_slot_hit": true,
+        "recommendation_hit": true,
+        "layout_hit": false,
+        "source_anchor_rate": 1.0,
+        "execution_success_rate": 1.0,
+        "total_score": 11.0,
+        "preview": "```json {   \"render_commands\": [     {       \"source_text\": \"Business Overview\",       \"render_type\": \"text\",       \"render_params\": {         \"title\": \"2026上半年业务增长显著，企业级产品成为核心驱动力\"       },       \"slide_index\": -1,       \"slot\": \"title\"     },     {       \"source_text\": \"Q1 revenue was 380M RMB and Q2 revenue was 470M RMB.\",       \"render_type\": \"chart\",       \"render_params\": {         \"chart_type\": \"bar\",         \"chart_data\": {           \"title\": \"季度营收对比\",           \"labels\": [\"Q1\", \"Q2\"],           \"datasets\": [             {               \"label\": \"营收（百万人民币）\",               \"data\": [380, 470],               \"color\": \"#007bff\"             }           ]         }       },       \"slide_index\": -1,       \"slot\": \"body\"     },     {       \"source_text\": \"Copilot Pro, Knowledge Hub, and Mee",
+        "title_after": "2026上半年业务增长显著，企业级产品成为核心驱动力",
+        "item_types_after": [
+          "text",
+          "text",
+          "text",
+          "text",
+          "chart",
+          "table",
+          "text",
+          "text"
+        ],
+        "command_brief": [
+          {
+            "slide_index": 1,
+            "slot": "title",
+            "render_type": "text",
+            "title": "2026上半年业务增长显著，企业级产品成为核心驱动力",
+            "source_text": "Business Overview"
+          },
+          {
+            "slide_index": 1,
+            "slot": "body",
+            "render_type": "chart",
+            "title": "",
+            "source_text": "Q1 revenue was 380M RMB and Q2 revenue was 470M RMB."
+          },
+          {
+            "slide_index": 1,
+            "slot": "body",
+            "render_type": "table",
+            "title": "",
+            "source_text": "Copilot Pro, Knowledge Hub, and Meeting Bot showed different retention patterns."
+          },
+          {
+            "slide_index": 1,
+            "slot": "body",
+            "render_type": "text",
+            "title": "关键行动建议",
+            "source_text": "We should expand enterprise sales and improve Meeting Bot conversion."
+          },
+          {
+            "slide_index": 1,
+            "slot": "body",
+            "render_type": "text",
+            "title": "1. 加速企业级销售扩张，聚焦大客户定制化解决方案，目标Q3企业收入占比提升至65%",
+            "source_text": "Revenue grew 32 percent year over year and enterprise plans led growth."
+          },
+          {
+            "slide_index": 1,
+            "slot": "body",
+            "render_type": "text",
+            "title": "2. 优化Meeting Bot产品体验，重点提升会议记录准确率和智能摘要功能，目标Q4留存率提升15个百分点",
+            "source_text": "We should expand enterprise sales and improve Meeting Bot conversion."
+          }
+        ],
+        "error": ""
+      },
+      "hermes": {
+        "mode": "hermes",
+        "latency_sec": 20.99,
+        "raw_length": 2175,
+        "render_command_count": 4,
+        "parse_success": true,
+        "current_page_hit_rate": 0.0,
+        "expected_type_hit_rate": 1.0,
+        "title_slot_hit": true,
+        "recommendation_hit": true,
+        "layout_hit": false,
+        "source_anchor_rate": 1.0,
+        "execution_success_rate": 1.0,
+        "total_score": 9.0,
+        "preview": "```json {   \"render_commands\": [     {       \"source_text\": \"Business Overview\",       \"render_type\": \"text\",       \"render_params\": {         \"title\": \"32% YoY Growth: Enterprise Plans Lead the Way\"       },       \"slide_index\": 2,       \"slot\": \"title\"     },     {       \"source_text\": \"Revenue grew 32 percent year over year and enterprise plans led growth.\\nQ1 revenue was 380M RMB and Q2 revenue was 470M RMB.\",       \"render_type\": \"chart\",       \"render_params\": {         \"chart_type\": \"bar\",         \"title\": \"Quarterly Revenue (M RMB)\",         \"chart_data\": {           \"categories\": [\"Q1 2026\", \"Q2 2026\"],           \"series\": [             {               \"name\": \"Revenue (M RMB)\",               \"values\": [380, 470]             }           ]         },         \"annotations\": \"+23.7% ",
+        "title_after": "Business Overview",
+        "item_types_after": [
+          "text",
+          "text",
+          "text",
+          "text"
+        ],
+        "command_brief": [
+          {
+            "slide_index": 2,
+            "slot": "title",
+            "render_type": "text",
+            "title": "32% YoY Growth: Enterprise Plans Lead the Way",
+            "source_text": "Business Overview"
+          },
+          {
+            "slide_index": 2,
+            "slot": "body",
+            "render_type": "chart",
+            "title": "Quarterly Revenue (M RMB)",
+            "source_text": "Revenue grew 32 percent year over year and enterprise plans led growth.\nQ1 revenue was 380M RMB and Q2 revenue was 470M RMB."
+          },
+          {
+            "slide_index": 2,
+            "slot": "body",
+            "render_type": "table",
+            "title": "Product Line Retention Comparison",
+            "source_text": "Copilot Pro, Knowledge Hub, and Meeting Bot showed different retention patterns."
+          },
+          {
+            "slide_index": 2,
+            "slot": "body",
+            "render_type": "text",
+            "title": "Recommended Actions",
+            "source_text": "We should expand enterprise sales and improve Meeting Bot conversion."
+          }
+        ],
+        "error": ""
+      }
+    },
+    {
+      "case_id": "flowchart_update",
+      "label": "Onboarding Flow Update",
+      "summary": "Both models tie on the current heuristics.",
+      "self_agent": {
+        "mode": "self_agent",
+        "latency_sec": 3.66,
+        "raw_length": 879,
+        "render_command_count": 1,
+        "parse_success": true,
+        "current_page_hit_rate": 1.0,
+        "expected_type_hit_rate": 1.0,
+        "title_slot_hit": false,
+        "recommendation_hit": false,
+        "layout_hit": false,
+        "source_anchor_rate": 1.0,
+        "execution_success_rate": 1.0,
+        "total_score": 11.0,
+        "preview": "```json {   \"render_commands\": [     {       \"source_text\": \"Submit company profile\\nCreate account\\nConnect data source\\nRun first sync\",       \"render_type\": \"flowchart\",       \"render_params\": {         \"title\": \"Customer Onboarding Process\",         \"nodes\": [           {\"id\": \"n1\", \"text\": \"Submit company profile\", \"shape\": \"start\"},           {\"id\": \"n2\", \"text\": \"Create account\", \"shape\": \"process\"},           {\"id\": \"n3\", \"text\": \"Risk check\", \"shape\": \"decision\"},           {\"id\": \"n4\", \"text\": \"Connect data source\", \"shape\": \"process\"},           {\"id\": \"n5\", \"text\": \"Run first sync\", \"shape\": \"end\"}         ],         \"edges\": [           {\"from\": \"n1\", \"to\": \"n2\"},           {\"from\": \"n2\", \"to\": \"n3\"},           {\"from\": \"n3\", \"to\": \"n4\"},           {\"from\": \"n4\", \"to\": \"n5\"}  ",
+        "title_after": "Current Process",
+        "item_types_after": [
+          "text",
+          "text",
+          "text",
+          "text",
+          "flowchart"
+        ],
+        "command_brief": [
+          {
+            "slide_index": 1,
+            "slot": "body",
+            "render_type": "flowchart",
+            "title": "Customer Onboarding Process",
+            "source_text": "Submit company profile\nCreate account\nConnect data source\nRun first sync"
+          }
+        ],
+        "error": ""
+      },
+      "hermes": {
+        "mode": "hermes",
+        "latency_sec": 21.29,
+        "raw_length": 972,
+        "render_command_count": 1,
+        "parse_success": true,
+        "current_page_hit_rate": 1.0,
+        "expected_type_hit_rate": 1.0,
+        "title_slot_hit": false,
+        "recommendation_hit": false,
+        "layout_hit": false,
+        "source_anchor_rate": 1.0,
+        "execution_success_rate": 1.0,
+        "total_score": 11.0,
+        "preview": "```json {   \"render_commands\": [     {       \"source_text\": \"Current Process\",       \"render_type\": \"flowchart\",       \"render_params\": {         \"title\": \"Current Process\",         \"flowchart_data\": {           \"nodes\": [             { \"id\": \"1\", \"label\": \"Submit company\\nprofile\", \"shape\": \"rect\" },             { \"id\": \"2\", \"label\": \"Create account\", \"shape\": \"rect\" },             { \"id\": \"3\", \"label\": \"Risk check\", \"shape\": \"diamond\", \"style\": \"fill:#ffeeee;stroke:#cc4444\" },             { \"id\": \"4\", \"label\": \"Connect data\\nsource\", \"shape\": \"rect\" },             { \"id\": \"5\", \"label\": \"Run first sync\", \"shape\": \"rect\" }           ],           \"edges\": [             { \"from\": \"1\", \"to\": \"2\", \"label\": \"\" },             { \"from\": \"2\", \"to\": \"3\", \"label\": \"\" },             { \"from\": \"3\", \"t",
+        "title_after": "Current Process",
+        "item_types_after": [
+          "text",
+          "text",
+          "text",
+          "text",
+          "flowchart"
+        ],
+        "command_brief": [
+          {
+            "slide_index": 1,
+            "slot": "body",
+            "render_type": "flowchart",
+            "title": "Current Process",
+            "source_text": "Current Process"
+          }
+        ],
+        "error": ""
+      }
+    },
+    {
+      "case_id": "layout_image",
+      "label": "Product Hero Image Layout",
+      "summary": "Hermes wins on execution alignment and current-page targeting.",
+      "self_agent": {
+        "mode": "self_agent",
+        "latency_sec": 4.95,
+        "raw_length": 762,
+        "render_command_count": 0,
+        "parse_success": false,
+        "current_page_hit_rate": 0.0,
+        "expected_type_hit_rate": 0.0,
+        "title_slot_hit": false,
+        "recommendation_hit": false,
+        "layout_hit": false,
+        "source_anchor_rate": 0.0,
+        "execution_success_rate": 0.0,
+        "total_score": 2.0,
+        "preview": "```json {   \"action\": \"update\",   \"slide_index\": 1,   \"field\": \"layout\",   \"value\": \"image_right\" } ``` ```json {   \"action\": \"update\",   \"slide_index\": 1,   \"field\": \"title\",   \"value\": \"NovaPad X1: Redefining Portable Power\" } ``` ```json {   \"action\": \"update_item\",   \"slide_index\": 1,   \"item_index\": 0,   \"field\": \"text\",   \"value\": \"The world's thinnest and most powerful productivity tablet, engineered for creators on the move.\" } ``` ```json {   \"action\": \"add_item\",   \"slide_index\": 1,   \"item\": {     \"content_type\": \"image\",     \"image_url\": \"https://example.com/novapad-x1-hero.jpg\",     \"alt_text\": \"NovaPad X1 held in hand, showcasing its ultra-thin profile and vibrant display.\",     \"caption\": \"NovaPad X1: 5.8mm of pure innovation.\"   } } ```",
+        "title_after": "Product Highlights",
+        "item_types_after": [
+          "text",
+          "text",
+          "text"
+        ],
+        "command_brief": [],
+        "error": ""
+      },
+      "hermes": {
+        "mode": "hermes",
+        "latency_sec": 16.66,
+        "raw_length": 1429,
+        "render_command_count": 1,
+        "parse_success": true,
+        "current_page_hit_rate": 1.0,
+        "expected_type_hit_rate": 0.5,
+        "title_slot_hit": false,
+        "recommendation_hit": false,
+        "layout_hit": true,
+        "source_anchor_rate": 1.0,
+        "execution_success_rate": 1.0,
+        "total_score": 10.0,
+        "preview": "```json {   \"render_commands\": [     {       \"source_text\": \"Product Highlights\",       \"render_type\": \"text\",       \"render_params\": {         \"title\": \"NovaPad X1\",         \"layout\": \"image_right\",         \"subtitle\": \"Power meets precision.\",         \"hero_image_placeholder\": {           \"position\": \"right\",           \"caption\": \"NovaPad X1 — crafted from a single block of aerospace-grade aluminum.\"         },         \"items\": [           {             \"level\": 0,             \"text\": \"5.8mm ultra-thin body · Custom M3 chip · 14-hour battery life\"           }         ],         \"style\": \"keynote\",         \"notes\": \"Single positioning line on the left, hero product image on the right with caption below. Clean, high-contrast typography suitable for large-screen projection.\"       },       ",
+        "title_after": "Product Highlights",
+        "item_types_after": [
+          "text",
+          "text",
+          "text",
+          "text"
+        ],
+        "command_brief": [
+          {
+            "slide_index": 1,
+            "slot": "body",
+            "render_type": "text",
+            "title": "NovaPad X1",
+            "source_text": "Product Highlights"
+          }
+        ],
+        "error": ""
+      }
+    },
+    {
+      "case_id": "comparison_table",
+      "label": "Competitor Comparison Table",
+      "summary": "Both models tie on the current heuristics.",
+      "self_agent": {
+        "mode": "self_agent",
+        "latency_sec": 4.38,
+        "raw_length": 838,
+        "render_command_count": 2,
+        "parse_success": true,
+        "current_page_hit_rate": 1.0,
+        "expected_type_hit_rate": 1.0,
+        "title_slot_hit": true,
+        "recommendation_hit": false,
+        "layout_hit": false,
+        "source_anchor_rate": 1.0,
+        "execution_success_rate": 1.0,
+        "total_score": 11.0,
+        "preview": "```json {   \"render_commands\": [     {       \"source_text\": \"Competitive Notes\",       \"render_type\": \"text\",       \"render_params\": {         \"text\": \"竞争格局与战略定位分析\"       },       \"slide_index\": 1,       \"slot\": \"title\"     },     {       \"source_text\": \"DevFlow 2.0: native AI, zero-config\\nGitLab Premium: rich features, high learning cost\\nJenkins X: flexible, but complex to operate\",       \"render_type\": \"table\",       \"render_params\": {         \"title\": \"主要竞品核心能力对比\",         \"headers\": [\"产品\", \"核心优势\", \"主要挑战\", \"战略启示\"],         \"rows\": [           [\"DevFlow 2.0\", \"原生AI集成，零配置开箱即用\", \"功能深度待验证\", \"AI原生与易用性是差异化关键\"],           [\"GitLab Premium\", \"功能全面，生态完整\", \"学习成本高，配置复杂\", \"功能丰富度需与易用性平衡\"],           [\"Jenkins X\", \"高度灵活，可定制性强\", \"运维复杂，上手门槛高\", \"灵活性与运维简易性需协同\"]         ]       },       \"slide_index\": 1",
+        "title_after": "Competitive Notes",
+        "item_types_after": [
+          "text",
+          "text",
+          "text",
+          "table"
+        ],
+        "command_brief": [
+          {
+            "slide_index": 1,
+            "slot": "title",
+            "render_type": "text",
+            "title": "",
+            "source_text": "Competitive Notes"
+          },
+          {
+            "slide_index": 1,
+            "slot": "body",
+            "render_type": "table",
+            "title": "主要竞品核心能力对比",
+            "source_text": "DevFlow 2.0: native AI, zero-config\nGitLab Premium: rich features, high learning cost\nJenkins X: flexible, but complex to operate"
+          }
+        ],
+        "error": ""
+      },
+      "hermes": {
+        "mode": "hermes",
+        "latency_sec": 62.28,
+        "raw_length": 940,
+        "render_command_count": 2,
+        "parse_success": true,
+        "current_page_hit_rate": 1.0,
+        "expected_type_hit_rate": 1.0,
+        "title_slot_hit": true,
+        "recommendation_hit": false,
+        "layout_hit": false,
+        "source_anchor_rate": 1.0,
+        "execution_success_rate": 1.0,
+        "total_score": 11.0,
+        "preview": "```json {   \"render_commands\": [     {       \"source_text\": \"Competitive Notes\",       \"render_type\": \"text\",       \"render_params\": {         \"title\": \"Strategic Competitive Assessment\"       },       \"slide_index\": -1,       \"slot\": \"title\"     },     {       \"source_text\": \"DevFlow 2.0: native AI, zero-config\",       \"render_type\": \"table\",       \"render_params\": {         \"title\": \"\",         \"table_data\": {           \"headers\": [\"Platform\", \"Value Proposition\", \"Operational Reality\", \"Strategic Implication\"],           \"rows\": [             [\"DevFlow 2.0\", \"Native AI, zero-config\", \"Immediate deployment\", \"First-mover advantage\"],             [\"GitLab Premium\", \"Rich feature ecosystem\", \"High learning cost\", \"Talent investment required\"],             [\"Jenkins X\", \"Highly flexible\", \"",
+        "title_after": "Strategic Competitive Assessment",
+        "item_types_after": [
+          "text",
+          "text",
+          "text",
+          "table"
+        ],
+        "command_brief": [
+          {
+            "slide_index": 1,
+            "slot": "title",
+            "render_type": "text",
+            "title": "Strategic Competitive Assessment",
+            "source_text": "Competitive Notes"
+          },
+          {
+            "slide_index": 1,
+            "slot": "body",
+            "render_type": "table",
+            "title": "",
+            "source_text": "DevFlow 2.0: native AI, zero-config"
+          }
+        ],
+        "error": ""
+      }
+    },
+    {
+      "case_id": "kpi_chart",
+      "label": "KPI Trend Chart",
+      "summary": "Self agent wins on expression quality, but target accuracy should be checked.",
+      "self_agent": {
+        "mode": "self_agent",
+        "latency_sec": 6.28,
+        "raw_length": 1392,
+        "render_command_count": 3,
+        "parse_success": true,
+        "current_page_hit_rate": 1.0,
+        "expected_type_hit_rate": 1.0,
+        "title_slot_hit": false,
+        "recommendation_hit": true,
+        "layout_hit": false,
+        "source_anchor_rate": 1.0,
+        "execution_success_rate": 1.0,
+        "total_score": 11.0,
+        "preview": "```json {   \"render_commands\": [     {       \"source_text\": \"Resolution time: Q1 18h, Q2 11h, Q3 7h\",       \"render_type\": \"chart\",       \"render_params\": {         \"title\": \"Resolution Time Trend\",         \"chart_type\": \"line\",         \"chart_data\": {           \"labels\": [\"Q1\", \"Q2\", \"Q3\"],           \"datasets\": [             {               \"label\": \"Resolution Time (hours)\",               \"data\": [18, 11, 7],               \"color\": \"#007bff\"             }           ]         }       },       \"slide_index\": 1,       \"slot\": \"body\"     },     {       \"source_text\": \"CSAT: Q1 82, Q2 88, Q3 91\",       \"render_type\": \"chart\",       \"render_params\": {         \"title\": \"Customer Satisfaction Score Trend\",         \"chart_type\": \"line\",         \"chart_data\": {           \"labels\": [\"Q1\", \"Q2\", \"Q",
+        "title_after": "Quarterly KPI Snapshot",
+        "item_types_after": [
+          "text",
+          "text",
+          "chart",
+          "chart",
+          "text"
+        ],
+        "command_brief": [
+          {
+            "slide_index": 1,
+            "slot": "body",
+            "render_type": "chart",
+            "title": "Resolution Time Trend",
+            "source_text": "Resolution time: Q1 18h, Q2 11h, Q3 7h"
+          },
+          {
+            "slide_index": 1,
+            "slot": "body",
+            "render_type": "chart",
+            "title": "Customer Satisfaction Score Trend",
+            "source_text": "CSAT: Q1 82, Q2 88, Q3 91"
+          },
+          {
+            "slide_index": 1,
+            "slot": "body",
+            "render_type": "text",
+            "title": "Key Takeaway",
+            "source_text": "Resolution time: Q1 18h, Q2 11h, Q3 7h"
+          }
+        ],
+        "error": ""
+      },
+      "hermes": {
+        "mode": "hermes",
+        "latency_sec": 18.48,
+        "raw_length": 1036,
+        "render_command_count": 2,
+        "parse_success": true,
+        "current_page_hit_rate": 0.0,
+        "expected_type_hit_rate": 1.0,
+        "title_slot_hit": false,
+        "recommendation_hit": false,
+        "layout_hit": false,
+        "source_anchor_rate": 1.0,
+        "execution_success_rate": 1.0,
+        "total_score": 9.0,
+        "preview": "```json {   \"render_commands\": [     {       \"source_text\": \"Resolution time: Q1 18h, Q2 11h, Q3 7h\\nCSAT: Q1 82, Q2 88, Q3 91\",       \"render_type\": \"chart\",       \"render_params\": {         \"title\": \"Quarterly KPI Trend\",         \"chart_type\": \"line\",         \"chart_data\": {           \"categories\": [\"Q1\", \"Q2\", \"Q3\"],           \"series\": [             {               \"name\": \"Resolution Time (h)\",               \"values\": [18, 11, 7]             },             {               \"name\": \"CSAT Score\",               \"values\": [82, 88, 91]             }           ]         }       },       \"slide_index\": 2,       \"slot\": \"body\"     },     {       \"source_text\": \"Resolution time: Q1 18h, Q2 11h, Q3 7h\\nCSAT: Q1 82, Q2 88, Q3 91\",       \"render_type\": \"text\",       \"render_params\": {         \"tit",
+        "title_after": "Quarterly KPI Snapshot",
+        "item_types_after": [
+          "text",
+          "text"
+        ],
+        "command_brief": [
+          {
+            "slide_index": 2,
+            "slot": "body",
+            "render_type": "chart",
+            "title": "Quarterly KPI Trend",
+            "source_text": "Resolution time: Q1 18h, Q2 11h, Q3 7h\nCSAT: Q1 82, Q2 88, Q3 91"
+          },
+          {
+            "slide_index": 2,
+            "slot": "footer",
+            "render_type": "text",
+            "title": "",
+            "source_text": "Resolution time: Q1 18h, Q2 11h, Q3 7h\nCSAT: Q1 82, Q2 88, Q3 91"
+          }
+        ],
+        "error": ""
+      }
+    },
+    {
+      "case_id": "action_page",
+      "label": "Action Page With Recommendations",
+      "summary": "Self agent wins on expression quality, but target accuracy should be checked.",
+      "self_agent": {
+        "mode": "self_agent",
+        "latency_sec": 5.94,
+        "raw_length": 1717,
+        "render_command_count": 2,
+        "parse_success": true,
+        "current_page_hit_rate": 1.0,
+        "expected_type_hit_rate": 1.0,
+        "title_slot_hit": true,
+        "recommendation_hit": true,
+        "layout_hit": false,
+        "source_anchor_rate": 1.0,
+        "execution_success_rate": 1.0,
+        "total_score": 11.0,
+        "preview": "```json {   \"render_commands\": [     {       \"source_text\": \"Current Observations\",       \"render_type\": \"text\",       \"render_params\": {         \"title\": \"COO Action Required: Address Critical Growth Blockers\"       },       \"slide_index\": 1,       \"slot\": \"title\"     },     {       \"source_text\": \"Enterprise sales coverage is uneven.\\nMeeting Bot onboarding conversion is weak.\\nCross-sell execution is inconsistent.\",       \"render_type\": \"table\",       \"render_params\": {         \"title\": \"Critical Observations & Prioritized Recommendations\",         \"table_data\": {           \"headers\": [\"Observation\", \"Impact\", \"Priority\", \"Recommended Action\", \"Owner\"],           \"rows\": [             [               \"Enterprise sales coverage is uneven\",               \"High - Limits market penetration ",
+        "title_after": "COO Action Required: Address Critical Growth Blockers",
+        "item_types_after": [
+          "text",
+          "text",
+          "text",
+          "table"
+        ],
+        "command_brief": [
+          {
+            "slide_index": 1,
+            "slot": "title",
+            "render_type": "text",
+            "title": "COO Action Required: Address Critical Growth Blockers",
+            "source_text": "Current Observations"
+          },
+          {
+            "slide_index": 1,
+            "slot": "body",
+            "render_type": "table",
+            "title": "Critical Observations & Prioritized Recommendations",
+            "source_text": "Enterprise sales coverage is uneven.\nMeeting Bot onboarding conversion is weak.\nCross-sell execution is inconsistent."
+          }
+        ],
+        "error": ""
+      },
+      "hermes": {
+        "mode": "hermes",
+        "latency_sec": 14.11,
+        "raw_length": 1260,
+        "render_command_count": 2,
+        "parse_success": true,
+        "current_page_hit_rate": 1.0,
+        "expected_type_hit_rate": 1.0,
+        "title_slot_hit": true,
+        "recommendation_hit": false,
+        "layout_hit": false,
+        "source_anchor_rate": 1.0,
+        "execution_success_rate": 1.0,
+        "total_score": 10.0,
+        "preview": "```json {   \"render_commands\": [     {       \"source_text\": \"Current Observations\",       \"render_type\": \"text\",       \"render_params\": {         \"title\": \"Action Items for the COO — Decision Memo\"       },       \"slide_index\": -1,       \"slot\": \"title\"     },     {       \"source_text\": \"Enterprise sales coverage is uneven.\\nMeeting Bot onboarding conversion is weak.\\nCross-sell execution is inconsistent.\",       \"render_type\": \"text\",       \"render_params\": {         \"body\": \"## Current Observations\\n- Enterprise sales coverage is uneven.\\n- Meeting Bot onboarding conversion is weak.\\n- Cross-sell execution is inconsistent.\\n\\n---\\n\\n## Prioritized Recommendations\\n\\n**1. Owner (VP Sales): Standardize enterprise coverage by Q3** — Redraw territory maps for top 50 accounts, assign named ow",
+        "title_after": "Action Items for the COO — Decision Memo",
+        "item_types_after": [
+          "text",
+          "text",
+          "text",
+          "text"
+        ],
+        "command_brief": [
+          {
+            "slide_index": 1,
+            "slot": "title",
+            "render_type": "text",
+            "title": "Action Items for the COO — Decision Memo",
+            "source_text": "Current Observations"
+          },
+          {
+            "slide_index": 1,
+            "slot": "body",
+            "render_type": "text",
+            "title": "",
+            "source_text": "Enterprise sales coverage is uneven.\nMeeting Bot onboarding conversion is weak.\nCross-sell execution is inconsistent."
+          }
+        ],
+        "error": ""
+      }
+    }
+  ]
+}

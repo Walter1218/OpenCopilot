@@ -70,6 +70,9 @@ class NavigationManager(QObject):
         sc.show()
         sc.raise_()
 
+    def cleanup(self):
+        return None
+
     def hide_smart_copilot(self):
         """隐藏 Smart Copilot"""
         if self._smart_copilot and self._smart_copilot.isVisible():

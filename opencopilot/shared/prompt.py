@@ -102,6 +102,8 @@ CONTEXT_DESCRIPTIONS = {
         "3. 【数据必须结构化】涉及数值、对比、排名的内容，必须使用 table_data（表格）或 chart_data（图表）格式，不得用纯文本。\n"
         "4. 【流程必须可视化】涉及步骤、阶段、审批流的，必须使用 flowchart_data 格式。\n"
         "5. 【排版本质匹配】比较类内容优先用 three_columns，数据图表页优先用 image_right 布局。\n\n"
+        "6. 【默认只改当前页】除非用户明确要求新增页面，否则 slide_index 必须指向当前正在编辑的页，不得漂移到其他页。\n"
+        "7. 【标题必须落标题位】当用户要求修改标题、headline、结论型标题时，必须输出标题位更新；若用渲染指令格式，必须使用 slot=title 和 render_params.title。\n\n"
         "修改模式（按优先级排序）：\n\n"
         "1. **精准局部修改**（推荐用于大多数情况）：\n"
         '   - 修改标题：{"action": "update", "slide_index": 1, "field": "title", "value": "更有冲击力的标题（至少10字）"}\n'

@@ -1671,6 +1671,11 @@ from api.routers.tasks import router as _tsk_r
 from api.routers.evaluation import router as _evl_r
 from api.routers.workspace import router as _ws_r
 from api.routers.studio import router as _stu_r
+from platform_next.api.unified import (
+    apply_router as _vnext_apply_r,
+    context_router as _vnext_context_r,
+    tasks_router as _vnext_tasks_r,
+)
 
 app.include_router(_chat_r)
 app.include_router(_chat_ws)
@@ -1686,3 +1691,6 @@ app.include_router(_tsk_r)
 app.include_router(_evl_r)
 app.include_router(_ws_r)
 app.include_router(_stu_r)
+app.include_router(_vnext_context_r)
+app.include_router(_vnext_tasks_r)
+app.include_router(_vnext_apply_r)

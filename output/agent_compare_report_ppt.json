@@ -1,0 +1,28 @@
+[
+  {
+    "mode": "v5_self_agent",
+    "module": "PPT",
+    "action_type": "ppt",
+    "success": true,
+    "latency_sec": 11.162178039550781,
+    "text_length": 2084,
+    "keyword_hits": 5,
+    "keyword_total": 5,
+    "quality_score": 5.0,
+    "preview": "{\"title\":\"AI 办公助手：赋能企业知识工作者\",\"slides\":[{\"type\":\"title\",\"layout\":\"center\",\"title\":\"AI 办公助手：重新定义知识工作\",\"subtitle\":\"提升效率，释放创造力\"},{\"type\":\"content\",\"layout\":\"text_only\",\"title\":\"产品定位与核心能力\",\"items\":[{\"level\":0,\"text\":\"目标用户：企业知识工作者（如产品经理、工程师、市场人员）",
+    "error": ""
+  },
+  {
+    "mode": "hermes_vnext",
+    "module": "PPT",
+    "action_type": "ppt",
+    "success": true,
+    "latency_sec": 36.58795094490051,
+    "text_length": 1745,
+    "keyword_hits": 5,
+    "keyword_total": 5,
+    "quality_score": 5.0,
+    "preview": "下面是一份 **5 页左右《AI 办公助手产品方案》PPT 大纲**，面向企业知识工作者，重点突出 **ROI、落地路径、实施风险**。  ---  ## 第 1 页：产品定位与目标用户  **标题：AI 办公助手：面向企业知识工作者的效率中枢**  要点：  1. **目标用户**：企业知识工作者，包括管理者、产品、研发、运营、销售、法务、人力等岗位。 2. **核心价值**：减少重复性信息处理工作，提升会议、文档、代码、知识检索与任务协同效率。 3. **产品定位**：不",
+    "error": ""
+  }
+]

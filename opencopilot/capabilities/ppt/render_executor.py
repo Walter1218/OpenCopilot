@@ -200,8 +200,13 @@ class RenderExecutor:
         
         # 根据 slot 更新不同位置
         if command.slot == "title":
-            slide["title"] = command.render_params.get("title", command.source_text)
+            slide["title"] = command.render_params.get(
+                "title",
+                command.render_params.get("text", command.source_text),
+            )
         else:
+            if command.render_type in ("image_right", "image_left", "image_top"):
+                slide["layout"] = command.render_type
             # 默认更新 items
             item_data = self._render_to_item(command)
             slide.setdefault("items", []).append(item_data)

@@ -154,7 +154,7 @@ The v5 redesign is **partially shipped in code, not fully feature-complete**. Cu
 | **Smart Copilot** | 3-Tab shell (`Work / Chat / Studio`), drag & drop sharing, direct Agent calls via `V5AgentWorker` | Further polish on markdown rendering, command palette, richer context chips |
 | **Work / Chat** | Core interaction loop is usable: context fetch, streaming AI output, session handling, cancel | More advanced contextual actions and richer session management |
 | **Studio** | PPT co-creation is fully implemented: 4-Panel workbench, thumbnail strip, diff preview edit, AI chat flow, unified undo stack, export & fullscreen | ✅ Fully Implemented |
-| **Workspace** | Sidebar + 5-panel shell, settings entry, Task/Chat business logic | Files / Memory business logic is still largely placeholder-based |
+| **Workspace** | Sidebar + 5-panel shell, settings entry, Task/Chat/Files/Memory business logic | Files shows recent files list; Memory shows knowledge graph / translation memory / glossary statistics |
 | **Settings** | Unified settings dialog with Engine / Appearance / Shortcuts / Advanced and bridge persistence | More validation, richer summaries, broader config coverage |
 
 ---
@@ -404,7 +404,18 @@ OpenCopilot/
 ├── docs/                         # Documentation
 │   ├── UI_Redesign_Plan_v5.md    # v5.0 UI redesign plan
 │   ├── PPT_CoCreation_Design.md  # PPT co-creation design
-│   └── PPT_CoCreation_Iteration_Plan.md # PPT iteration plan
+│   ├── PPT_CoCreation_Iteration_Plan.md # PPT iteration plan
+│   ├── VNEXT_REBUILD_BLUEPRINT.md # vnext rebuild blueprint
+│   ├── VNEXT_UNIFIED_AGENT_API.md # vnext unified agent API contract
+│   ├── VNEXT_DOC_INDEX.md # vnext document index
+│   ├── VNEXT_MODULE_BOUNDARIES.md # vnext module boundaries and migration rules
+│   ├── VNEXT_DATA_MODEL.md # vnext data model and state machines
+│   ├── VNEXT_PHASE1_IMPLEMENTATION_PLAN.md # vnext phase-1 implementation plan
+│   ├── VNEXT_SMART_COPILOT_UI_SPEC.md # vnext Smart Copilot UI specification
+│   ├── VNEXT_AGENT_GATEWAY_DESIGN.md # vnext Agent Gateway and Provider Adapter design
+│   ├── VNEXT_MIGRATION_PLAYBOOK.md # vnext migration playbook
+│   ├── VNEXT_TEST_AND_ACCEPTANCE.md # vnext test and acceptance plan
+│   └── VNEXT_IMPLEMENTATION_BACKLOG.md # vnext implementation backlog
 ├── personas/                     # AI role files (*.md)
 ├── asu-ide-extension/            # IDE companion extension (VSCode/Trae/Cursor)
 ├── tests/                        # Tests (unit / e2e / ablation)
@@ -425,6 +436,17 @@ OpenCopilot/
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Development guide (module development, testing, adding Persona/Skill) |
 | [docs/STARTUP_GUIDE.md](docs/STARTUP_GUIDE.md) | Startup matrix for Agent / Broker / API Gateway / UI |
 | [docs/UI_Redesign_Plan_v5.md](docs/UI_Redesign_Plan_v5.md) | v5.0 UI redesign plan (3-Tab architecture, Workspace 2.0, unified settings) |
+| [docs/VNEXT_REBUILD_BLUEPRINT.md](docs/VNEXT_REBUILD_BLUEPRINT.md) | vnext rebuild blueprint focused on double-right-click Smart Copilot, API decoupling, and new-directory reconstruction |
+| [docs/VNEXT_UNIFIED_AGENT_API.md](docs/VNEXT_UNIFIED_AGENT_API.md) | vnext unified Agent API contract (Task / Event / Result / Apply / SSE) |
+| [docs/VNEXT_DOC_INDEX.md](docs/VNEXT_DOC_INDEX.md) | vnext document index with reading paths, document map, and review checkpoints |
+| [docs/VNEXT_MODULE_BOUNDARIES.md](docs/VNEXT_MODULE_BOUNDARIES.md) | vnext directory layout, dependency boundaries, and migration rules |
+| [docs/VNEXT_DATA_MODEL.md](docs/VNEXT_DATA_MODEL.md) | vnext data model and state machines for Task / Session / Context / Event / Apply |
+| [docs/VNEXT_PHASE1_IMPLEMENTATION_PLAN.md](docs/VNEXT_PHASE1_IMPLEMENTATION_PLAN.md) | vnext phase-1 implementation plan with sequence, deliverables, risks, and acceptance criteria |
+| [docs/VNEXT_SMART_COPILOT_UI_SPEC.md](docs/VNEXT_SMART_COPILOT_UI_SPEC.md) | vnext Smart Copilot UI specification (floating panel, state machine, component split) |
+| [docs/VNEXT_AGENT_GATEWAY_DESIGN.md](docs/VNEXT_AGENT_GATEWAY_DESIGN.md) | vnext Agent Gateway and Provider Adapter design (gateway roles, adapters, normalization strategies) |
+| [docs/VNEXT_MIGRATION_PLAYBOOK.md](docs/VNEXT_MIGRATION_PLAYBOOK.md) | vnext migration playbook (old-to-new mapping, cutover order, deletion strategy) |
+| [docs/VNEXT_TEST_AND_ACCEPTANCE.md](docs/VNEXT_TEST_AND_ACCEPTANCE.md) | vnext test and acceptance plan (contract tests, golden flows, cutover gates) |
+| [docs/VNEXT_IMPLEMENTATION_BACKLOG.md](docs/VNEXT_IMPLEMENTATION_BACKLOG.md) | vnext implementation backlog (epics, stories, priorities, dependencies) |
 
 ---
 

@@ -1,0 +1,294 @@
+{
+  "case": {
+    "instruction": "Turn the current slide into a leadership-ready page. Use a conclusion-style title that highlights growth, convert the financial data into a bar chart, convert the product line differences into a comparison table, and add two crisp action recommendations.",
+    "current_slide": {
+      "type": "content",
+      "layout": "text_only",
+      "title": "Business Overview",
+      "items": [
+        {
+          "level": 0,
+          "text": "Revenue grew 32 percent year over year and enterprise plans led growth.",
+          "content_type": "text"
+        },
+        {
+          "level": 0,
+          "text": "Q1 revenue was 380M RMB and Q2 revenue was 470M RMB.",
+          "content_type": "text"
+        },
+        {
+          "level": 0,
+          "text": "Copilot Pro, Knowledge Hub, and Meeting Bot showed different retention patterns.",
+          "content_type": "text"
+        },
+        {
+          "level": 0,
+          "text": "We should expand enterprise sales and improve Meeting Bot conversion.",
+          "content_type": "text"
+        }
+      ]
+    },
+    "original_text": "1. Executive summary\nTotal revenue in H1 2026 reached 850M RMB, up 32 percent year over year, with a 56 percent gross margin and subscription revenue accounting for 68 percent.\n\n2. Financial data\nQ1 revenue was 380M RMB and Q2 revenue was 470M RMB. Enterprise ARR reached 260M RMB while SMB ARR reached 140M RMB.\n\n3. Product lines\nCopilot Pro serves engineering teams with a 91 percent renewal rate. Knowledge Hub serves operations teams with an 84 percent renewal rate. Meeting Bot serves sales teams with a 27 percent trial to paid conversion rate.\n\n4. Management actions\nFocus on enterprise expansion, improve Meeting Bot conversion, and strengthen cross product selling.",
+    "user_message_preview": "PPT 总共 3 页，当前正在编辑第 2 页。\n\n前一页（第 1 页）摘要：标题：2026 H1 Business Review，版式：center，要点：无要点\n\n当前幻灯片数据：\n```json\n{\n  \"type\": \"content\",\n  \"layout\": \"text_only\",\n  \"title\": \"Business Overview\",\n  \"items\": [\n    {\n      \"level\": 0,\n      \"text\": \"Revenue grew 32 percent year over year and enterprise plans led growth.\",\n      \"content_type\": \"text\"\n    },\n    {\n      \"level\": 0,\n      \"text\": \"Q1 revenue was 380M RMB and Q2 revenue was 470M RMB.\",\n      \"content_type\": \"text\"\n    },\n    {\n      \"level\": 0,\n      \"text\": \"Copilot Pro, Knowledge Hub, and Meeting Bot showed different retention patterns.\",\n      \"content_type\": \"text\"\n    },\n    {\n      \"level\": 0,\n      \"text\": \"We should expand enterprise sales and improve Meeting Bot conversion.\",\n      \"content_type\": \"text\"\n    }\n  ]\n}\n```\n\n后一页（第 3 页）摘要：标题：Thanks，版式：center，要点：无要点\n\n用户指令：Turn the current slide into a leadership-ready page. Use a conclusion-style title that highlights growth, convert the financial data into a bar chart, convert the product line differences into a comparison table, and add two crisp action recommendations.\n\n用户指令：Turn the current slide into a leadership-ready page. Use a conclusion-style title that highlights growth, convert the financial data into a bar chart, convert the product line differences into a comparison table, and add two crisp action recommendations.\n\n## 输出格式要求\n\n必须返回 JSON 格式的渲染指令：\n\n```json\n{\n  \"render_commands\": [\n    {\n      \"source_text\": \"原文片段（必填，用于定位）\",\n      \"render_type\": \"chart|table|flowchart|text\",\n      \"render_params\": {\n        \"title\": \"标题\",\n        // 根据 render_type 提供相应参数\n      },\n "
+  },
+  "self_agent": {
+    "mode": "self_agent",
+    "raw_len": 1822,
+    "preview": "```json\n{\n  \"render_commands\": [\n    {\n      \"source_text\": \"Business Overview\",\n      \"render_type\": \"text\",\n      \"render_params\": {\n        \"title\": \"2026 H1 业务回顾：营收强劲增长，企业版引领发展\"\n      },\n      \"slide_index\": 2,\n      \"slot\": \"title\"\n    },\n    {\n      \"source_text\": \"Revenue grew 32 percent year over year and enterprise plans led growth.\\nQ1 revenue was 380M RMB and Q2 revenue was 470M RMB.\",\n      \"render_type\": \"chart\",\n      \"render_params\": {\n        \"title\": \"2026年上半年营收表现与增长趋势\",\n        \"chart_type\": \"bar\",\n        \"chart_data\": {\n          \"title\": \"季度营收对比（单位：百万人民币）\",\n          \"labels\": [\"Q1 2026\", \"Q2 2026\", \"同比增长率\"],\n          \"datasets\": [\n            {\n              \"label\": \"营收（百万人民币）\",\n              \"data\": [380, 470, 32],\n              \"color\": \"#007bff\"\n            }\n          ]\n        }\n      },\n      \"slide_index\": 2,\n      \"slot\": \"body\"\n    },\n    {\n      \"source_text\": \"Copilot Pro, Knowledge Hub, and Meeting Bot showed different retention patterns.\",\n      \"render_type\": \"table\",\n      \"render_params\": {\n        \"title\": \"核心产品线留存率表现对比\",\n        \"table_data\": {\n          \"title\": \"产品留存率分析\",\n          \"columns\": [\"产品线\", \"表现概述\", \"关键洞察\"],\n          \"rows\": [\n ",
+    "render_command_count": 4,
+    "render_types": [
+      "text",
+      "chart",
+      "table",
+      "text"
+    ],
+    "rich_type_hits": 2,
+    "execute_success": 4,
+    "execute_total": 4,
+    "title_after": "Business Overview",
+    "item_types_after": [
+      "text",
+      "text",
+      "text",
+      "text"
+    ],
+    "item_texts_after": [
+      "Revenue grew 32 percent year over year and enterprise plans led growth.",
+      "Q1 revenue was 380M RMB and Q2 revenue was 470M RMB.",
+      "Copilot Pro, Knowledge Hub, and Meeting Bot showed different retention patterns.",
+      "We should expand enterprise sales and improve Meeting Bot conversion."
+    ],
+    "old_action_count": 0,
+    "old_actions": [],
+    "instruction_hits": {
+      "has_chart": true,
+      "has_table": true,
+      "has_action_recommendations": false,
+      "title_changed": false
+    },
+    "commands": [
+      {
+        "command_id": "7fa05ac9",
+        "slide_index": 2,
+        "slot": "title",
+        "source_text": "Business Overview",
+        "render_type": "text",
+        "render_params": {
+          "title": "2026 H1 业务回顾：营收强劲增长，企业版引领发展"
+        },
+        "trace_id": "aa9d67db"
+      },
+      {
+        "command_id": "9abcb01f",
+        "slide_index": 2,
+        "slot": "body",
+        "source_text": "Revenue grew 32 percent year over year and enterprise plans led growth.\nQ1 revenue was 380M RMB and Q2 revenue was 470M RMB.",
+        "render_type": "chart",
+        "render_params": {
+          "title": "2026年上半年营收表现与增长趋势",
+          "chart_type": "bar",
+          "chart_data": {
+            "title": "季度营收对比（单位：百万人民币）",
+            "labels": [
+              "Q1 2026",
+              "Q2 2026",
+              "同比增长率"
+            ],
+            "datasets": [
+              {
+                "label": "营收（百万人民币）",
+                "data": [
+                  380,
+                  470,
+                  32
+                ],
+                "color": "#007bff"
+              }
+            ]
+          }
+        },
+        "trace_id": "aa9d67db"
+      },
+      {
+        "command_id": "c92ed202",
+        "slide_index": 2,
+        "slot": "body",
+        "source_text": "Copilot Pro, Knowledge Hub, and Meeting Bot showed different retention patterns.",
+        "render_type": "table",
+        "render_params": {
+          "title": "核心产品线留存率表现对比",
+          "table_data": {
+            "title": "产品留存率分析",
+            "columns": [
+              "产品线",
+              "表现概述",
+              "关键洞察"
+            ],
+            "rows": [
+              [
+                "Copilot Pro",
+                "表现稳定",
+                "作为核心产品，用户粘性高"
+              ],
+              [
+                "Knowledge Hub",
+                "表现良好",
+                "知识管理需求持续增长"
+              ],
+              [
+                "Meeting Bot",
+                "留存率待提升",
+                "转化率有较大优化空间"
+              ]
+            ]
+          }
+        },
+        "trace_id": "aa9d67db"
+      },
+      {
+        "command_id": "851ae0fc",
+        "slide_index": 2,
+        "slot": "body",
+        "source_text": "We should expand enterprise sales and improve Meeting Bot conversion.",
+        "render_type": "text",
+        "render_params": {
+          "title": "下半年核心行动建议",
+          "text": "1. 聚焦企业市场拓展：加大企业版销售投入，深化行业解决方案，目标实现企业客户数增长50%以上。\n2. 优化Meeting Bot产品体验：重新设计用户引导流程，提升首次使用转化率，目标将次月留存率提升至行业平均水平。"
+        },
+        "trace_id": "aa9d67db"
+      }
+    ]
+  },
+  "hermes": {
+    "mode": "hermes",
+    "raw_len": 1900,
+    "preview": "```json\n{\n  \"render_commands\": [\n    {\n      \"source_text\": \"Business Overview\",\n      \"render_type\": \"text\",\n      \"render_params\": {\n        \"text\": \"Revenue Surged 32% YoY, Led by Enterprise Growth\"\n      },\n      \"slide_index\": -1,\n      \"slot\": \"body\"\n    },\n    {\n      \"source_text\": \"Q1 revenue was 380M RMB and Q2 revenue was 470M RMB.\",\n      \"render_type\": \"chart\",\n      \"render_params\": {\n        \"title\": \"Quarterly Revenue\",\n        \"chart_type\": \"bar\",\n        \"chart_data\": {\n          \"categories\": [\"Q1 2026\", \"Q2 2026\"],\n          \"series\": [\n            {\n              \"name\": \"Revenue (M RMB)\",\n              \"data\": [380, 470]\n            }\n          ]\n        }\n      },\n      \"slide_index\": -1,\n      \"slot\": \"body\"\n    },\n    {\n      \"source_text\": \"Copilot Pro, Knowledge Hub, and Meeting Bot showed different retention patterns.\",\n      \"render_type\": \"table\",\n      \"render_params\": {\n        \"title\": \"Product Line Retention Comparison\",\n        \"table_data\": {\n          \"headers\": [\"Product\", \"Retention Pattern\", \"Strategic Priority\"],\n          \"rows\": [\n            [\"Copilot Pro\", \"High stickiness; strong enterprise adoption\", \"Scale across teams\"],\n            ",
+    "render_command_count": 4,
+    "render_types": [
+      "text",
+      "chart",
+      "table",
+      "text"
+    ],
+    "rich_type_hits": 2,
+    "execute_success": 4,
+    "execute_total": 4,
+    "title_after": "Business Overview",
+    "item_types_after": [
+      "text",
+      "text",
+      "text",
+      "text",
+      "text",
+      "chart"
+    ],
+    "item_texts_after": [
+      "Revenue grew 32 percent year over year and enterprise plans led growth.",
+      "Q1 revenue was 380M RMB and Q2 revenue was 470M RMB.",
+      "Copilot Pro, Knowledge Hub, and Meeting Bot showed different retention patterns.",
+      "We should expand enterprise sales and improve Meeting Bot conversion.",
+      "Revenue Surged 32% YoY, Led by Enterprise Growth",
+      "Q1 revenue was 380M RMB and Q2 revenue was 470M RMB."
+    ],
+    "old_action_count": 0,
+    "old_actions": [],
+    "instruction_hits": {
+      "has_chart": true,
+      "has_table": true,
+      "has_action_recommendations": false,
+      "title_changed": false
+    },
+    "commands": [
+      {
+        "command_id": "cc12b8e9",
+        "slide_index": 1,
+        "slot": "body",
+        "source_text": "Business Overview",
+        "render_type": "text",
+        "render_params": {
+          "text": "Revenue Surged 32% YoY, Led by Enterprise Growth"
+        },
+        "trace_id": "5888e428"
+      },
+      {
+        "command_id": "587ea90d",
+        "slide_index": 1,
+        "slot": "body",
+        "source_text": "Q1 revenue was 380M RMB and Q2 revenue was 470M RMB.",
+        "render_type": "chart",
+        "render_params": {
+          "title": "Quarterly Revenue",
+          "chart_type": "bar",
+          "chart_data": {
+            "categories": [
+              "Q1 2026",
+              "Q2 2026"
+            ],
+            "series": [
+              {
+                "name": "Revenue (M RMB)",
+                "data": [
+                  380,
+                  470
+                ]
+              }
+            ]
+          }
+        },
+        "source_range": [
+          196,
+          248
+        ],
+        "trace_id": "5888e428"
+      },
+      {
+        "command_id": "0cc62585",
+        "slide_index": 1,
+        "slot": "body",
+        "source_text": "Copilot Pro, Knowledge Hub, and Meeting Bot showed different retention patterns.",
+        "render_type": "table",
+        "render_params": {
+          "title": "Product Line Retention Comparison",
+          "table_data": {
+            "headers": [
+              "Product",
+              "Retention Pattern",
+              "Strategic Priority"
+            ],
+            "rows": [
+              [
+                "Copilot Pro",
+                "High stickiness; strong enterprise adoption",
+                "Scale across teams"
+              ],
+              [
+                "Knowledge Hub",
+                "Moderate retention; usage tied to content refresh",
+                "Drive daily active use"
+              ],
+              [
+                "Meeting Bot",
+                "Lower conversion; elevated churn risk",
+                "Fix onboarding funnel"
+              ]
+            ]
+          }
+        },
+        "trace_id": "5888e428"
+      },
+      {
+        "command_id": "58c947ad",
+        "slide_index": 1,
+        "slot": "body",
+        "source_text": "We should expand enterprise sales and improve Meeting Bot conversion.",
+        "render_type": "text",
+        "render_params": {
+          "title": "Recommended Actions",
+          "text": "• Accelerate enterprise sales expansion to sustain 32%+ YoY growth\n• Fix Meeting Bot conversion funnel to reduce churn and improve retention"
+        },
+        "trace_id": "5888e428"
+      }
+    ]
+  },
+  "hermes_error": ""
+}

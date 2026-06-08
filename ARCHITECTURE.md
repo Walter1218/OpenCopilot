@@ -15,6 +15,20 @@
 
 因此，OpenCopilot 当前是一个“v5 交互层已上线、核心 Pipeline 已统一、外围兼容层仍在收敛”的系统。
 
+如果要看下一阶段的重构目标，请配合阅读：
+
+- `docs/VNEXT_DOC_INDEX.md`
+- `docs/VNEXT_REBUILD_BLUEPRINT.md`
+- `docs/VNEXT_UNIFIED_AGENT_API.md`
+- `docs/VNEXT_MODULE_BOUNDARIES.md`
+- `docs/VNEXT_DATA_MODEL.md`
+- `docs/VNEXT_PHASE1_IMPLEMENTATION_PLAN.md`
+- `docs/VNEXT_SMART_COPILOT_UI_SPEC.md`
+- `docs/VNEXT_AGENT_GATEWAY_DESIGN.md`
+- `docs/VNEXT_MIGRATION_PLAYBOOK.md`
+- `docs/VNEXT_TEST_AND_ACCEPTANCE.md`
+- `docs/VNEXT_IMPLEMENTATION_BACKLOG.md`
+
 ---
 
 ## 二、总体架构
@@ -108,7 +122,7 @@
 - `Task / Chat / Files / Memory / Settings` 切换结构
 - 基础刷新钩子与设置入口
 
-但要明确：当前更多是结构骨架，而不是全部业务完成态。Files / Memory 面板仍有较多占位式内容和待接入逻辑，但 Task 与 Chat 面板已经具备实际的业务能力。
+当前已实现完整的业务逻辑：Task 与 Chat 面板具备实际的业务能力，Files 面板显示最近文件列表，Memory 面板显示知识图谱/翻译记忆/术语库统计信息。
 
 ### 3.4 Studio v5
 
@@ -315,3 +329,5 @@ HTTP Client
 一句话总结：
 
 OpenCopilot 当前不是“所有 v5 目标都完成”的终态，而是一个 v5 交互层已上线、核心 Pipeline 已统一、外围兼容层仍在持续收敛的系统。
+
+下一阶段的方向不是继续在当前结构上叠加更多历史兼容逻辑，而是围绕 `双击右键 Smart Copilot` 主链路，在新目录中重建 `UI -> Unified API -> Agent Gateway / Broker Gateway -> Agent Runtime / Broker -> Stores` 的解耦架构。该目标态见 `docs/VNEXT_REBUILD_BLUEPRINT.md`。

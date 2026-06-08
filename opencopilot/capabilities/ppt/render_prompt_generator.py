@@ -248,6 +248,8 @@ class RenderPromptGenerator:
 3. chart 类型需要提供 chart_type（bar/line/pie）和 chart_data
 4. table 类型需要提供 table_data（含 headers 和 rows）
 5. flowchart 类型需要提供 flowchart_data（含 nodes 和 edges）
+6. 默认只修改当前正在编辑的页，除非用户明确要求新增页面；此时 slide_index 必须使用当前页索引或 -1
+7. 如果用户要求修改标题、headline 或结论型标题，必须输出 slot=title，并将标题文本放在 render_params.title
 """)
         
         return "\n".join(parts)

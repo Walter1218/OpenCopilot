@@ -12,8 +12,6 @@ from PyQt6.QtGui import *
 from PyQt6.QtWidgets import *
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
 from PyQt6.QtGui import QIcon, QCursor, QAction
-from typing import Dict, Any
-from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QStyle, QMessageBox
 from cursor_effects import CursorOverlay
 from gui.window import AICardWindow
@@ -131,6 +129,7 @@ class CopilotManager:
         self.cleanup()
 
         # 关闭 v5 窗口
+        self.nav.cleanup()
         self.nav.hide_all()
 
         self.ai_card._allow_close = True
@@ -182,7 +181,7 @@ class CopilotManager:
         elif clicks >= 3:
             self._on_triple_right_click(self._pending_click_x, self._pending_click_y)
 
-    def _on_double_right_click(self, x, y):
+    def _on_double_right_click(self, _x, _y):
         pos = QCursor.pos()
         # 呼出卡片前尝试通过 Broker 无感读取高亮文本
         probe = SystemProbeClient()
@@ -192,7 +191,7 @@ class CopilotManager:
         
         self.nav.show_smart_copilot(pos.x(), pos.y(), selected_text=selected)
 
-    def _on_triple_right_click(self, x, y):
+    def _on_triple_right_click(self, _x, _y):
         self.nav.show_workspace()
 
     def _on_global_click(self, x, y):
@@ -251,6 +250,7 @@ class CopilotManager:
 
     def cleanup(self):
         # UI 退出时只终止监听线程与定时器，绝不干涉 Agent 守护进程生命周期。
+        self.nav.cleanup()
         if self._click_resolve_timer:
             self._click_resolve_timer.stop()
 

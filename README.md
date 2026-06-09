@@ -174,6 +174,27 @@ The quality gate now has a documented quantitative baseline:
 
 See `docs/CURRENT_UI_AI_ACCEPTANCE_20260609.md` for the full acceptance matrix and scorecard.
 
+### Current Architecture Highlights
+
+The key story in the current implementation is not just "another agent option was added". The more important change is that **the UI and the agent execution layer are now structurally decoupled**:
+
+- **One fixed `V5 UI`**: `Work / Chat / Workspace Chat / Studio` keep a single user-facing entry instead of splitting into separate UIs for self-hosted vs third-party agents
+- **One runtime entry**: the UI no longer depends on concrete agent implementations directly; task execution is funneled through `V5AgentWorker`
+- **Protocol-first integration**: third-party agents now integrate through `/vnext/context/snapshots`, `/vnext/tasks`, and `/vnext/tasks/{id}/events`, with standardized task / event / result contracts
+- **Gateway / Adapter isolation**: provider-specific differences are handled inside `Agent Gateway` and `Provider Adapter`, instead of leaking third-party protocol details into the UI
+- **Configurable agent switching is already live**: `Settings -> Engine -> Agent Runtime` can now switch between `Self Agent` and `Third-Party Agent`
+- **`Hermes Local` is the current supported third-party path**: `Agent Model` now propagates all the way through `/vnext/tasks` into the Hermes run payload
+
+In practical terms, the current shape is now:
+
+`fixed UI -> unified runtime -> unified API contract -> gateway / adapter absorbs provider differences`
+
+That matters because:
+
+- self-agent evolution no longer requires rewriting the main UI entry
+- future third-party integrations can be added mostly in Runtime / Gateway / Adapter layers
+- UI, protocol, and provider implementations can now evolve independently with much lower coupling
+
 ---
 
 ## Core Capabilities
@@ -384,6 +405,12 @@ The UI is now fixed as one `V5 UI`, and third-party agents are integrated throug
 - use `Fallback Policy` to define automatic recovery when the third-party path fails
 
 The current config-switchable third-party path still supports only `Hermes Local`; the same settings panel can switch between the self agent and the third-party path. Adding a new provider still requires updating the runtime adapter, the UI preset, tests, and documentation together. See `docs/STARTUP_GUIDE.md` and `docs/AGENT_RUNTIME_TARGET_ARCHITECTURE.md`.
+
+Architecturally, the important point is not only that Hermes is supported. It is that:
+
+- the UI talks to a unified task/runtime layer instead of a provider-specific implementation
+- third-party agents are integrated through stable API contracts rather than ad-hoc UI bindings
+- this repo now has a credible foundation for adding more third-party agents without fragmenting the user experience
 
 ---
 

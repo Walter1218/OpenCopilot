@@ -25,13 +25,16 @@ class HermesDtoMapper:
         return "\n".join(sections)
 
     def to_run_request(self, request: UnifiedTaskRequest) -> dict:
+        model = (request.model or "default").strip() or "default"
         return {
             "input": self.build_input_text(request),
+            "model": model,
             "session_id": request.task_id,
             "metadata": {
                 "task_id": request.task_id,
                 "context_snapshot_id": request.context_snapshot_id,
                 "action": request.action,
+                "model": model,
                 "source_app": request.context_payload.get("source_app", ""),
             },
         }

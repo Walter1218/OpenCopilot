@@ -13,6 +13,7 @@ class UnifiedTaskRequest:
     user_input: str
     context_snapshot_id: str
     provider: str = "hermes_local"
+    model: str = "default"
     context_payload: Dict[str, Any] = field(default_factory=dict)
     constraints: Dict[str, Any] = field(default_factory=dict)
 

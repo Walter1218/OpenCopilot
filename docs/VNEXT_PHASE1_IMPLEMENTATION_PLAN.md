@@ -33,6 +33,7 @@
 - Broker 能力只通过 API/ Gateway 参与，不暴露内部协议
 - 新链路的 task/session/event/context 只有一份真源
 - 新目录不依赖旧业务实现
+- 同一套 `V5 UI` 可通过配置切换 `Self Agent` 与第三方智能体，当前第三方先收敛到 `Hermes Local`
 
 ### 2.3 稳定性目标
 
@@ -63,7 +64,7 @@
 ### 3.2 第一阶段明确不做
 
 - 新版 Workspace
-- 多 provider 前台切换
+- 多第三方 provider 前台切换
 - 多 Agent 协作
 - 完整历史 API 兼容
 - 全量动作类型迁移
@@ -197,6 +198,7 @@ HERMES_API_KEY=
 ### 目标
 
 让统一 Gateway 跑通第一个真实 provider，并用它验证新协议与新边界。
+同时证明 UI 已可固定为一套入口，通过配置切换到第三方智能体，而不是让 UI 直接依赖 Hermes 实现。
 
 ### 产出物
 
@@ -207,6 +209,7 @@ HERMES_API_KEY=
 
 - 定义 `AgentProvider` 接口
 - 接入 `Hermes local` provider
+- 打通 `Settings -> Agent Runtime -> V5AgentWorker -> /vnext/tasks -> Hermes` 的配置化透传链路
 - 实现 review / explain / polish 最小能力集
 - 输出统一 `Result DTO`
 
@@ -378,7 +381,8 @@ HERMES_API_KEY=
 - `AICopilotChatWidget` 的共创错误前缀已改为按当前运行时路由自适应，避免走自研路由时仍误提示 `Hermes`
 - 长任务已改为“动态 read timeout + 后台事件消费”模式，降低 `ppt / translate` 被前端提前打断的概率
 - `PPT` 共创 6-case 双智能体基准已完成，第一批稳定性修复已落地
-- 针对 `Settings / Bridge / AgentWorker / PPT 共创 / Studio / Navigation / Workspace / Chat / Work` 的组合业务回归已通过，当前基线为 `319 passed`
+- 针对 `Settings / Bridge / AgentWorker / PPT 共创 / Studio / Navigation / Workspace / Chat / Work` 的组合业务回归已扩大通过，当前基线为 `427 passed`
+- 当前真实生产链路验证已通过，基线为 `27/27 PASS`
 
 ### 6.2 当前 TODO
 
@@ -420,6 +424,7 @@ HERMES_API_KEY=
 - 可执行 apply preview / commit
 - `Studio` 共创内 AI 编辑、重生成、建议分析与外层 `V5` 一样统一走 Hermes
 - `PPT` 共创在标题改写、图文版式、旧动作兼容场景下不再出现明显的当前页漂移
+- 当前主 UI/AI 链路在真实生产代码下通过完整回归与生产验证，详见 `docs/CURRENT_UI_AI_ACCEPTANCE_20260609.md`
 
 ### 7.2 架构验收
 
@@ -441,6 +446,19 @@ HERMES_API_KEY=
 - 双击右键到浮层可见 `< 300ms`
 - 创建任务到首条结果 `< 2.5s`
 - 应用修改关键点击数 `<= 2`
+
+### 7.4 当前量化门槛
+
+- 总分结构：`Reliability 30 + Quality 40 + UX 20 + Safety 10`
+- 硬门槛：
+  - `协议错误率 = 0`
+  - `JSON 解析失败率 = 0`
+  - `think` 泄露率 = `0`
+  - `主链路成功率 = 100%`
+- 建议上线门槛：
+  - 整体平均质量分 `>= 4.3/5.0`
+  - `Explain / Code Review / PPT >= 4.5/5.0`
+  - `Chat / Translate / Polish >= 4.2/5.0`
 
 ---
 

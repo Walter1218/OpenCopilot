@@ -30,6 +30,7 @@ class TaskViewModel:
         user_input: str = "",
         *,
         provider: str = "hermes_local",
+        model: str = "default",
     ) -> dict:
         self.ui_state.status = "running"
         self.ui_state.active_action = action
@@ -48,7 +49,7 @@ class TaskViewModel:
             "action": action,
             "context_snapshot_id": context_snapshot_id,
             "user_input": user_input,
-            "agent_preferences": {"provider": provider},
+            "agent_preferences": {"provider": provider, "model": model},
         }
         response = self.api_client.create_task(payload)
         self.ui_state.latest_task_id = response.get("task_id", "")
@@ -65,6 +66,7 @@ class TaskViewModel:
         context_snapshot_id: str,
         user_input: str = "",
         provider: str = "hermes_local",
+        model: str = "default",
         max_polls: int = 10,
         interval_sec: float = 0.25,
     ) -> Dict[str, Any]:
@@ -73,6 +75,7 @@ class TaskViewModel:
             context_snapshot_id=context_snapshot_id,
             user_input=user_input,
             provider=provider,
+            model=model,
         )
         self.poll_until_terminal(max_polls=max_polls, interval_sec=interval_sec)
         return task

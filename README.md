@@ -152,10 +152,27 @@ The v5 redesign is **partially shipped in code, not fully feature-complete**. Cu
 |------|-----------------------------|-------------------|
 | **Navigation** | `NavigationManager` centralizes Smart Copilot / Workspace / Studio / Settings lifecycle | More legacy windows still coexist in compatibility paths |
 | **Smart Copilot** | 3-Tab shell (`Work / Chat / Studio`), drag & drop sharing, runtime-routed AI calls via `V5AgentWorker` | Further polish on markdown rendering, command palette, richer context chips |
-| **Work / Chat** | Core interaction loop is usable: context fetch, streaming AI output, session handling, cancel | More advanced contextual actions and richer session management |
+| **Work / Chat** | Core interaction loop is usable: context fetch, streaming AI output, session handling, cancel, context chips, send-to-Studio and action telemetry | Richer result rendering, command palette, deeper session references |
 | **Studio** | PPT co-creation is fully implemented: 4-Panel workbench, thumbnail strip, diff preview edit, AI chat flow, unified undo stack, export & fullscreen | ✅ Fully Implemented |
-| **Workspace** | Sidebar + 5-panel shell, settings entry, Task/Chat/Files/Memory business logic | Files shows recent files list; Memory shows knowledge graph / translation memory / glossary statistics |
-| **Settings** | Unified settings dialog with Engine / Appearance / Shortcuts / Advanced and bridge persistence | More validation, richer summaries, broader config coverage |
+| **Workspace** | Sidebar + 5-panel shell, real AI connected in `Workspace Chat`, Task templates/imports, recent file preview/actions, memory summaries, settings summaries and bridge-backed operations | Deeper file management and richer knowledge browser remain future polish |
+| **Settings** | Unified settings dialog with Engine / Appearance / Shortcuts / Advanced, bridge persistence and Workspace summary cards | More validation and broader config coverage |
+
+### Current Acceptance Baseline
+
+The main `V5 UI` AI paths have already passed production-grade functional validation:
+
+- Real AI connected: `Work Tab` primary actions, `Chat Tab` core dialogue, `Workspace Chat`, `Studio Tab`, and in-editor `Studio Window` co-creation
+- Not connected to real AI yet are mostly workflow surfaces or not-yet-shipped design items: `Workspace Files/Memory/Settings/Task`, `Work More`, `Skill Panel`, `Cmd+K`, and context-aware right-click skill menu
+- Full UI/AI regression baseline: `427 passed`
+- Real production validation: `27/27 PASS`
+
+The quality gate now has a documented quantitative baseline:
+
+- Score structure: `Reliability 30 + Quality 40 + UX 20 + Safety 10`
+- Hard gates: `protocol_error_rate = 0`, `json_parse_failure_rate = 0`, `think_leak_rate = 0`
+- Suggested release gate: overall `>= 4.3/5.0`, and `Explain / Code Review / PPT >= 4.5/5.0`
+
+See `docs/CURRENT_UI_AI_ACCEPTANCE_20260609.md` for the full acceptance matrix and scorecard.
 
 ---
 
@@ -362,10 +379,11 @@ The UI is now fixed as one `V5 UI`, and third-party agents are integrated throug
 
 - select `Third-Party Agent` in `Agent Mode`
 - choose the current built-in third-party provider preset in `Agent Provider`
+- configure `Agent Model`, which now propagates through `/vnext/tasks` into the Hermes run payload
 - use `Capability Routes` to decide which capabilities stay on default routing vs. the third-party path
 - use `Fallback Policy` to define automatic recovery when the third-party path fails
 
-The current built-in third-party preset is still centered on `Hermes Local`. Adding a new provider requires updating the runtime adapter, the UI preset, tests, and documentation together. See `docs/STARTUP_GUIDE.md` and `docs/AGENT_RUNTIME_TARGET_ARCHITECTURE.md`.
+The current config-switchable third-party path still supports only `Hermes Local`; the same settings panel can switch between the self agent and the third-party path. Adding a new provider still requires updating the runtime adapter, the UI preset, tests, and documentation together. See `docs/STARTUP_GUIDE.md` and `docs/AGENT_RUNTIME_TARGET_ARCHITECTURE.md`.
 
 ---
 

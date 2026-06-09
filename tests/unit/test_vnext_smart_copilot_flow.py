@@ -96,4 +96,5 @@ def test_floating_panel_runs_vnext_flow(monkeypatch):
         }
     ]
     assert fake_gateway.requests[0].action == "polish"
+    assert fake_gateway.requests[0].model == "default"
     assert fake_gateway.requests[0].context_payload["selection_text"] == "old selection text"

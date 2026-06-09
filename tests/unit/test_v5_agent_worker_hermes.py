@@ -13,9 +13,10 @@ from stores_next.models import EventType
 class FakeGateway:
     def __init__(self) -> None:
         self._has_polled = False
+        self.requests = []
 
     def create_run(self, request):
-        _ = request
+        self.requests.append(request)
         return "run_fake_v5_001"
 
     def poll_events(self, *, provider_id: str, provider_run_id: str):
@@ -50,9 +51,20 @@ def _reset_vnext_state() -> None:
 
 def test_v5_agent_worker_runs_against_vnext(monkeypatch):
     _reset_vnext_state()
-    monkeypatch.setattr(task_routes, "get_agent_gateway", lambda: FakeGateway())
+    fake_gateway = FakeGateway()
+    monkeypatch.setattr(task_routes, "get_agent_gateway", lambda: fake_gateway)
     monkeypatch.setattr(agent_worker_module.SmartCopilotApiRuntime, "ensure_ready", lambda self: "http://testserver")
     monkeypatch.setattr(agent_worker_module.SmartCopilotApiRuntime, "shutdown", lambda self: None)
+    monkeypatch.setattr(
+        agent_worker_module,
+        "resolve_agent_route",
+        lambda _action: agent_worker_module.AgentExecutionRoute(
+            backend="vnext_provider",
+            provider="hermes_local",
+            model="gpt-4o-mini",
+            routing_mode="default",
+        ),
+    )
 
     finished_payloads: list[str] = []
     streamed_payloads: list[str] = []
@@ -80,6 +92,8 @@ def test_v5_agent_worker_runs_against_vnext(monkeypatch):
     assert finished_payloads == ["Hermes result for V5 worker"]
     assert streamed_payloads[-1] == "Hermes result for V5 worker"
     assert client_kwargs["base_url"] == "http://testserver"
+    assert fake_gateway.requests[0].provider == "hermes_local"
+    assert fake_gateway.requests[0].model == "gpt-4o-mini"
     timeout = client_kwargs["timeout"]
     assert isinstance(timeout, agent_worker_module.httpx.Timeout)
     assert timeout.read == worker._build_client_timeout().read

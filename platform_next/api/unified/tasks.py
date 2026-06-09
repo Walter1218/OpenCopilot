@@ -183,6 +183,7 @@ def create_task(request: CreateTaskRequest) -> dict:
         user_input=request.user_input,
         context_snapshot_id=request.context_snapshot_id,
         provider=request.agent_preferences.provider,
+        model=request.agent_preferences.model,
         context_payload={
             "source_app": context.source_app,
             "selection_text": context.selection_text,

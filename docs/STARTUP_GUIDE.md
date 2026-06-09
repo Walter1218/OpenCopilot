@@ -100,7 +100,7 @@ bash scripts/start_ui.sh
 - 当前也可以直接在 `Settings -> Engine` 中配置：
   - `Agent Mode`: `Third-Party Agent` / `Self Agent`
   - `Agent Provider`: `Hermes Local` / `Self Agent`
-  - `Agent Model`: 默认为 `default`
+  - `Agent Model`: 默认为 `default`，当前会真实透传到 `/vnext/tasks` 与 `Hermes` run payload
   - `Capability Routes`: 可对 `chat / explain / coding / ppt / translate` 单独指定 `Default / Self Agent / Hermes Local`
   - `Fallback Policy`: 可开启自动 fallback，并分别配置 `On Timeout` 与 `On Protocol Error`
 
@@ -122,7 +122,8 @@ bash scripts/start_ui.sh
 当前能力边界需要明确：
 
 - UI 侧已经支持“第三方智能体模式”这一抽象入口
-- 当前内置的第三方 provider preset 仍以 `Hermes Local` 为主
+- 当前通过配置切换的第三方智能体仍只支持 `Hermes Local`
+- `Agent Model` 已会随 `V5AgentWorker -> /vnext/tasks -> Hermes` 链路真实生效
 - 如果要接入新的第三方 provider，除了填写连接配置，还需要补对应的 provider adapter 与 UI preset，不能只改文档或只改模型地址
 
 研发侧接入新的第三方 provider，建议按这条最小路径推进：

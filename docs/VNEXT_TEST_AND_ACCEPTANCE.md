@@ -28,6 +28,7 @@
 - 回写可控
 - 与旧系统行为差异可解释
 - 日志与埋点可区分当前 UI 版本和执行后端
+- 固定 UI 下可通过配置切换自研智能体与第三方智能体，而不引入 UI 分叉
 
 ### 2.2 非目标
 
@@ -113,6 +114,8 @@
 必须覆盖：
 
 - `Hermes local` provider 正常返回
+- `Self Agent / Third-Party Agent` 配置切换正确落到统一运行时路由
+- `Agent Model` 能从设置项透传到 `/vnext/tasks` 与第三方 provider payload
 - provider 超时
 - provider 流中断
 - result normalize 成功
@@ -123,6 +126,7 @@
 必须覆盖：
 
 - `SmartCopilotV5` 首次召唤
+- UI 只通过统一 `V5AgentWorker` 发起任务，不直接依赖具体 provider 实现
 - task running
 - result ready
 - preview ready
@@ -258,12 +262,32 @@
 
 ## 7. 指标与门槛
 
+### 7.0 当前基线说明
+
+除了本文件定义的 `vnext` 目标态测试标准，当前仓库已经形成一份面向真实实现的验收基线：
+
+- 当前实现验收真源：`docs/CURRENT_UI_AI_ACCEPTANCE_20260609.md`
+- 主 UI/AI 链路组合回归：`427 passed`
+- 真实生产链路验证：`27/27 PASS`
+
+后续 `vnext` 门槛建议直接继承这份当前基线的功能通过标准与质量量化口径。
+
 ### 7.1 体验指标
 
 - 双击右键到浮层可见 `< 300ms`
 - 上下文摘要显示 `< 800ms`
 - 首条结果 `< 2.5s`
 - 应用修改关键点击数 `<= 2`
+
+当前已接真实 AI 的主能力，建议补充 `P95` 时延上限：
+
+- `Chat <= 12s`
+- `Explain <= 15s`
+- `Fix <= 15s`
+- `Polish <= 8s`
+- `Translate <= 10s`
+- `Code Review <= 30s`
+- `PPT <= 25s`
 
 ### 7.2 稳定性指标
 
@@ -273,6 +297,10 @@
 - apply commit 成功率 `> 95%`
 - `PPT` 共创当前页命中率 `> 95%`
 - `PPT` 共创标题位命中率 `> 95%`
+- 主链路成功率 `= 100%`
+- 协议错误率 `= 0`
+- `JSON` 解析失败率 `= 0`
+- `think` 泄露率 `= 0`
 
 ### 7.3 架构指标
 
@@ -280,7 +308,25 @@
 - 新链路双真源数量 `= 0`
 - provider 差异上浮到 UI 的 case 数 `= 0`
 
-## 7.4 当前测试 TODO
+### 7.4 质量量化口径
+
+建议统一沿用当前已落地的 scorecard 结构：
+
+- `Reliability 30 + Quality 40 + UX 20 + Safety 10`
+- 整体平均质量分 `>= 4.3/5.0`
+- 高价值模块 `Explain / Code Review / PPT >= 4.5/5.0`
+- `Chat / Translate / Polish >= 4.2/5.0`
+
+nightly 建议统一输出：
+
+- 成功率
+- 协议合法率
+- 平均质量分
+- `P50 / P95` 耗时
+- `think` 泄露率
+- 失败 case 列表
+
+## 7.5 当前测试 TODO
 
 - 补 `PPT` 共创“最小完成条件校验 + 轻量 reprompt”回归测试
 - 补图片/版式 patch 标准化后的执行器测试

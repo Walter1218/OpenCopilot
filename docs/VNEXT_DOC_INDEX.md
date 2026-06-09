@@ -50,6 +50,7 @@
 |------|------|
 | `docs/VNEXT_MIGRATION_PLAYBOOK.md` | 从旧架构到新架构的迁移手册、模块映射、切主策略 |
 | `docs/VNEXT_TEST_AND_ACCEPTANCE.md` | 契约测试、黄金链路、回归测试、验收指标 |
+| `docs/CURRENT_UI_AI_ACCEPTANCE_20260609.md` | 当前仓库真实实现的 UI/AI 功能验收与质量验收记录，区分已落地事实与未完成设计项 |
 | `docs/VNEXT_IMPLEMENTATION_BACKLOG.md` | 实施 backlog，按 Epic/Story/任务拆解首轮落地工作 |
 | `docs/VNEXT_AGENT_COMPARISON_BASELINE.md` | 第三方 Hermes 与 v5 自研智能体的接入前基线对比 |
 
@@ -95,9 +96,10 @@
 
 1. `docs/VNEXT_PHASE1_IMPLEMENTATION_PLAN.md`
 2. `docs/VNEXT_TEST_AND_ACCEPTANCE.md`
-3. `docs/VNEXT_DATA_MODEL.md`
-4. `docs/VNEXT_MIGRATION_PLAYBOOK.md`
-5. `docs/VNEXT_AGENT_COMPARISON_BASELINE.md`
+3. `docs/CURRENT_UI_AI_ACCEPTANCE_20260609.md`
+4. `docs/VNEXT_DATA_MODEL.md`
+5. `docs/VNEXT_MIGRATION_PLAYBOOK.md`
+6. `docs/VNEXT_AGENT_COMPARISON_BASELINE.md`
 
 ---
 
@@ -138,6 +140,7 @@ VNEXT_REBUILD_BLUEPRINT
 - `DEVELOPMENT.md`
 - `README.md`
 - `README_CN.md`
+- `docs/CURRENT_UI_AI_ACCEPTANCE_20260609.md`
 
 ### 5.2 哪些文档描述“vnext 目标态”
 
@@ -151,6 +154,7 @@ VNEXT_REBUILD_BLUEPRINT
 - 阶段节奏改动：同步 `VNEXT_PHASE1_IMPLEMENTATION_PLAN` 与 `VNEXT_IMPLEMENTATION_BACKLOG`
 - UI 交互改动：同步 `VNEXT_SMART_COPILOT_UI_SPEC`
 - Gateway/provider 设计改动：同步 `VNEXT_AGENT_GATEWAY_DESIGN`
+- 当前 UI/AI 真实能力边界、第三方智能体接入现状与量化验收口径改动：同步 `CURRENT_UI_AI_ACCEPTANCE_20260609.md`、`README.md`、`README_CN.md`、`STARTUP_GUIDE.md`
 
 ---
 

@@ -235,7 +235,10 @@ class V5AgentWorker(QThread):
                 "action": self.action_type,
                 "user_input": self.prompt,
                 "context_snapshot_id": context_snapshot_id,
-                "agent_preferences": {"provider": self._execution_route.provider},
+                "agent_preferences": {
+                    "provider": self._execution_route.provider,
+                    "model": self._execution_route.model,
+                },
             },
         )
         response.raise_for_status()

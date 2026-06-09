@@ -316,11 +316,11 @@ agent_runtime/protocols/
 1. 打开 `Settings -> Engine -> Agent Runtime`
 2. 将 `Agent Mode` 设为 `Third-Party Agent`
 3. 选择一个已内置的 `Agent Provider` preset
-4. 视情况设置 `Agent Model`
+4. 视情况设置 `Agent Model`，该值当前已会透传到 `/vnext/tasks` 与 `Hermes` run payload
 5. 用 `Capability Routes` 指定哪些能力走第三方
 6. 用 `Fallback Policy` 指定超时或协议异常时的回退策略
 
-当前这条流程已经落地，但内置第三方 preset 仍主要是 `Hermes Local`。
+当前这条流程已经落地，但通过配置可切换的第三方智能体仍主要只有 `Hermes Local`。
 
 ### B. 研发层接入
 

@@ -357,6 +357,7 @@ class StateManager:
     def create_task(
         self,
         session_id: str,
+        task_id: Optional[str] = None,
         task_type: str = "default",
         description: str = "",
         metadata: Optional[Dict[str, Any]] = None
@@ -366,6 +367,7 @@ class StateManager:
         
         Args:
             session_id: 会话ID
+            task_id: 可选任务ID，不传则自动生成
             task_type: 任务类型
             description: 任务描述
             metadata: 额外元数据
@@ -373,7 +375,7 @@ class StateManager:
         Returns:
             创建的任务状态
         """
-        task_id = str(uuid.uuid4())
+        task_id = task_id or str(uuid.uuid4())
         now = time.time()
         
         task = TaskState(

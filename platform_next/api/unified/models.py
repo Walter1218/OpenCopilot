@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class AgentPreferences(BaseModel):
-    provider: str = "hermes_local"
+    provider: str = "auto"
     model: str = "default"
     temperature: float = 0.2
 

@@ -100,30 +100,40 @@ class V5AgentWorker(QThread):
             )
             full_text, chunk_count = self._run_with_optional_fallback(t)
 
-            if self._cancel_event.is_set() or not self._is_running:
-                print(f"[v5] AgentWorker#{self._wid} 被取消 | chunks={chunk_count}")
+            is_cancelled = self._cancel_event.is_set() or not self._is_running
+
+            # 即使被取消，只要已有有效输出就发出 finished_signal
+            # 避免 LLM 完成后因竞态取消导致结果丢失
+            # 注意：vnext_provider 的 task.completed 事件直接赋值 full_text 但不增加 chunk_count
+            # 所以只检查 full_text 是否非空
+            if full_text:
+                self.full_text = full_text
+                t.emit(
+                    "V5_AGENT_DONE",
+                    worker_id=self._wid,
+                    action=self.action_type,
+                    session_id=self.session_id,
+                    chunks=chunk_count,
+                    output_len=len(full_text),
+                    agent_backend=self._execution_route.agent_backend,
+                    provider=self._execution_route.provider,
+                    routing_mode=self._execution_route.routing_mode,
+                    initial_agent_backend=self._initial_route.agent_backend,
+                    initial_provider=self._initial_route.provider,
+                    fallback_used=self._fallback_used,
+                    was_cancelled=is_cancelled,
+                )
+                print(
+                    f"[v5] AgentWorker#{self._wid} {'被取消但有输出' if is_cancelled else '完成'} | "
+                    f"chunks={chunk_count} | output_len={len(full_text)}"
+                )
+                self.finished_signal.emit(full_text)
                 return
 
-            self.full_text = full_text
-            t.emit(
-                "V5_AGENT_DONE",
-                worker_id=self._wid,
-                action=self.action_type,
-                session_id=self.session_id,
-                chunks=chunk_count,
-                output_len=len(full_text),
-                agent_backend=self._execution_route.agent_backend,
-                provider=self._execution_route.provider,
-                routing_mode=self._execution_route.routing_mode,
-                initial_agent_backend=self._initial_route.agent_backend,
-                initial_provider=self._initial_route.provider,
-                fallback_used=self._fallback_used,
-            )
-            print(
-                f"[v5] AgentWorker#{self._wid} 完成 | "
-                f"chunks={chunk_count} | output_len={len(full_text)}"
-            )
-            self.finished_signal.emit(full_text)
+            # 无输出且被取消 → 真正取消
+            if is_cancelled:
+                print(f"[v5] AgentWorker#{self._wid} 被取消 | chunks={chunk_count}")
+                return
 
         except Exception as e:
             t.emit(

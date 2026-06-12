@@ -12,18 +12,28 @@ class NavigationManager(QObject):
     所有 v5.0 窗口之间的跳转、生命周期控制均通过此类，
     避免窗口之间互相 import 形成循环依赖。
 
-    7 条核心链路:
+    10 条核心链路:
         A. Tab 切换 (内部，由 SmartCopilot 自行处理)
-        B. Smart Copilot → Studio 窗口
+        B. Smart Copilot → Studio 窗口 (旧 4-Panel)
+        B+. Smart Copilot → V5Plus CoCreation (3 阶段 E2E)
         C. Smart Copilot → Settings 弹窗
         D. Workspace → Settings 弹窗
         E. System Tray → 各窗口
         F. Work Tab → Chat Tab (上下文跳转)
         G. Studio → Smart Copilot (结果回传)
+        H. CoCreation 内部 Stage 0→1→2 (条件路由)
+        I. CoCreation → Smart Copilot Chat (导出回传)
+
+    全局触发姿态:
+        双击右键 → Smart Copilot (680×520)
+        三击右键 → Agent Workspace (1000×700)
+        System Tray 单击/双击 → Smart Copilot
+        Studio Tab 按钮 → Studio / V5Plus CoCreation
     """
 
     # 信号：供外部监听
     studio_opened = pyqtSignal()
+    cocreation_opened = pyqtSignal()
     settings_opened = pyqtSignal()
     workspace_opened = pyqtSignal()
 
@@ -32,6 +42,7 @@ class NavigationManager(QObject):
         self._smart_copilot = None      # SmartCopilotV5 实例
         self._workspace = None           # WorkspaceV5 实例
         self._studio_window = None       # StudioWindowV5 实例
+        self._cocreation_window = None   # CoCreationWindow (V5Plus) 实例
         self._settings_dialog = None     # SettingsDialogV5 实例
 
     # =========================================================================
@@ -118,6 +129,61 @@ class NavigationManager(QObject):
             QTimer.singleShot(150, lambda: self._studio_window.load_slides(slides))
 
         self.studio_opened.emit()
+
+    # =========================================================================
+    # CoCreation Window (V5Plus)（链路 B+）
+    # =========================================================================
+
+    def open_cocreation(self, text: str = ""):
+        """打开 V5Plus PPT 共创工作台（条件路由：有文本→Stage 1，无文本→Stage 0）"""
+        t = telemetry()
+        t.nav_event("V5_NAV_COCREATION_OPEN", has_text=bool(text and text.strip()),
+                    text_len=len(text) if text else 0)
+
+        # 关闭旧的 Studio 窗口（互斥）
+        if self._studio_window is not None and self._studio_window.isVisible():
+            try:
+                self._studio_window.close()
+                self._studio_window.deleteLater()
+            except Exception:
+                pass
+            self._studio_window = None
+
+        # 已有窗口且可见 → 直接激活并重新路由
+        if (self._cocreation_window is not None
+                and self._cocreation_window.isVisible()):
+            self._cocreation_window.raise_()
+            self._cocreation_window.activateWindow()
+            self._cocreation_window.open_with_text(text)
+            return
+
+        # 清理旧引用
+        if self._cocreation_window is not None:
+            try:
+                self._cocreation_window.close()
+                self._cocreation_window.deleteLater()
+            except Exception:
+                pass
+            self._cocreation_window = None
+
+        from gui.v5plus.cocreation_window import CoCreationWindow
+        self._cocreation_window = CoCreationWindow(self)
+
+        # 居中显示
+        screen = QApplication.screenAt(QCursor.pos()) or QApplication.primaryScreen()
+        sr = screen.geometry()
+        w, h = self._cocreation_window.width(), self._cocreation_window.height()
+        x = sr.x() + (sr.width() - w) // 2
+        y = sr.y() + (sr.height() - h) // 2
+        self._cocreation_window.move(x, y)
+
+        self._cocreation_window.show()
+        QTimer.singleShot(50, lambda: self._cocreation_window.open_with_text(text))
+        self.cocreation_opened.emit()
+
+    def is_cocreation_open(self) -> bool:
+        return (self._cocreation_window is not None
+                and self._cocreation_window.isVisible())
 
     # =========================================================================
     # Settings Dialog（链路 C / D）— 单实例控制

@@ -44,6 +44,14 @@ class RenderPromptGenerator:
         "改写": "text",
         "扩写": "text",
         "总结": "text",
+        # V6 新增：忠实改写关键词
+        "润色": "text",
+        "专业化": "text",
+        "正式": "text",
+        "汇报": "text",
+        # V7 新增：标题改写关键词
+        "标题": "compound",
+        "换标题": "compound",
     }
     
     # 渲染类型 → 示例
@@ -149,6 +157,26 @@ class RenderPromptGenerator:
                     "text": "精简后的文字",
                     "style": "concise"
                 }
+            },
+            # V6 新增：忠实改写正例
+            "faithful_rewrite_good": {
+                "source_text": "2025年营收达到12.8亿元，同比增长21.9%，其中海外市场贡献3.2亿元",
+                "render_type": "text",
+                "render_params": {
+                    "text": "2025年营收达12.8亿元（同比+21.9%），海外市场贡献3.2亿元",
+                    "style": "professional_faithful",
+                    "_note": "正例：保留所有数值、百分比和时间信息"
+                }
+            },
+            # V6 新增：忠实改写反例
+            "faithful_rewrite_bad": {
+                "source_text": "2025年营收达到12.8亿元，同比增长21.9%",
+                "render_type": "text",
+                "render_params": {
+                    "text": "营收实现大幅增长，业绩表现亮眼",
+                    "style": "WRONG_factual_drift",
+                    "_note": "反例：数值被模糊化，事实锚点丢失"
+                }
             }
         }
     }
@@ -212,8 +240,11 @@ class RenderPromptGenerator:
         if selected_text:
             parts.append(f"\n用户选中的原文：\n{selected_text}")
         
+        # V7 新增：复合任务示例（当指令包含标题改写时）
+        if render_type == "compound":
+            parts.append(cls._get_compound_task_example())
         # 针对性示例
-        if render_type:
+        elif render_type:
             example = cls.generate_example_for_type(render_type)
             if example:
                 parts.append(f"\n## 输出示例（{render_type}类型）")
@@ -250,6 +281,11 @@ class RenderPromptGenerator:
 5. flowchart 类型需要提供 flowchart_data（含 nodes 和 edges）
 6. 默认只修改当前正在编辑的页，除非用户明确要求新增页面；此时 slide_index 必须使用当前页索引或 -1
 7. 如果用户要求修改标题、headline 或结论型标题，必须输出 slot=title，并将标题文本放在 render_params.title
+8. 改写/润色时，每条输出必须保留原文中的事实锚点（数字、金额、百分比、时间、专有名词）
+9. 不得将计划/预计/目标等未来态表述改写为已完成/已实现等过去态
+10. 风险、限制、负面信息必须显式保留
+11. 条目数量和顺序保持不变，不合并、不拆分
+12. 区间数据不可被压缩为单一数值
 """)
         
         return "\n".join(parts)
@@ -259,6 +295,55 @@ class RenderPromptGenerator:
         """格式化示例为 JSON 字符串"""
         import json
         return json.dumps(example, ensure_ascii=False, indent=2)
+    
+    @classmethod
+    def _get_compound_task_example(cls) -> str:
+        """V7 新增：复合任务示例（标题改写 + 图表转换 + 文案润色）"""
+        return """
+## 复合任务输出示例
+
+当指令同时包含多种操作时（如改标题+转图表+润色文案），输出多个 render_commands：
+
+```json
+{
+  "render_commands": [
+    {
+      "source_text": "Business Overview",
+      "render_type": "text",
+      "render_params": {
+        "title": "2026 H1 营收增长 32%，突破 850M",
+        "style": "conclusion_headline"
+      },
+      "slide_index": -1,
+      "slot": "title"
+    },
+    {
+      "source_text": "Q1 revenue was 380M RMB and Q2 revenue was 470M RMB",
+      "render_type": "chart",
+      "render_params": {
+        "chart_type": "bar",
+        "title": "季度营收对比",
+        "chart_data": {"labels": ["Q1", "Q2"], "values": [380, 470]}
+      },
+      "slide_index": -1,
+      "slot": "body"
+    },
+    {
+      "source_text": "Revenue grew 32 percent year over year",
+      "render_type": "text",
+      "render_params": {
+        "text": "2026 H1 营收同比增长 32%，企业级订阅驱动主要增长",
+        "style": "professional_faithful"
+      },
+      "slide_index": -1,
+      "slot": "body"
+    }
+  ]
+}
+```
+
+注意：标题改写必须使用 slot=title，并将标题文本放在 render_params.title 中。改写文案时必须保留原文中的事实锚点（数字、百分比、时间）。
+"""
 
 
 # 便捷函数

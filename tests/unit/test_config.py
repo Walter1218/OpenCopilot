@@ -38,8 +38,8 @@ class TestConfigManager:
 
     def test_get_agent_runtime_defaults(self, cfg):
         runtime = cfg.get_agent_runtime()
-        assert runtime["default_backend"] == "vnext_provider"
-        assert runtime["default_provider"] == "hermes_local"
+        assert runtime["default_backend"] == "self_agent"
+        assert runtime["default_provider"] == "self_agent"
         assert runtime["default_model"] == "default"
         assert isinstance(runtime["capability_routes"], dict)
         assert runtime["fallback_policy"]["enabled"] is False

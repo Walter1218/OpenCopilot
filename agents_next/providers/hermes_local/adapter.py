@@ -34,7 +34,10 @@ class HermesLocalAdapter:
         fallback_run_id = f"hermes_run_{uuid4().hex[:12]}"
         ensure_gateway_ready(self._runtime)
         # #region debug-point B:create-run-input
-        import urllib.request; _p='.dbg/v5-hermes-runtime.env'; _u,_s='http://127.0.0.1:7777/event','v5-hermes-runtime'; exec("try:\n with open(_p) as f: c=f.read(); _u=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SERVER_URL=')),_u); _s=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SESSION_ID=')),_s)\nexcept: pass"); urllib.request.urlopen(urllib.request.Request(_u, data=json.dumps({"sessionId":_s,"runId":"pre-fix","hypothesisId":"B","location":"agents_next/providers/hermes_local/adapter.py:create_run","msg":"[DEBUG] Hermes create_run request","data":{"base_url":self._runtime.base_url,"provider_profile":self._runtime.provider_profile,"discovery_source":self._runtime.discovery_source,"payload_input_len":len(str(payload.get('input', ''))),"metadata":payload.get("metadata", {})}}).encode(), headers={"Content-Type":"application/json"})).read()
+        try:
+            import urllib.request; _p='.dbg/v5-hermes-runtime.env'; _u,_s='http://127.0.0.1:7777/event','v5-hermes-runtime'; exec("try:\n with open(_p) as f: c=f.read(); _u=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SERVER_URL=')),_u); _s=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SESSION_ID=')),_s)\nexcept: pass"); urllib.request.urlopen(urllib.request.Request(_u, data=json.dumps({"sessionId":_s,"runId":"pre-fix","hypothesisId":"B","location":"agents_next/providers/hermes_local/adapter.py:create_run","msg":"[DEBUG] Hermes create_run request","data":{"base_url":self._runtime.base_url,"provider_profile":self._runtime.provider_profile,"discovery_source":self._runtime.discovery_source,"payload_input_len":len(str(payload.get('input', ''))),"metadata":payload.get("metadata", {})}}).encode(), headers={"Content-Type":"application/json"})).read()
+        except Exception:
+            pass  # debug 插桩容错：debug server 未运行时静默跳过
         # #endregion
         try:
             response = httpx.post(
@@ -47,13 +50,19 @@ class HermesLocalAdapter:
             data = response.json()
             run_id = data.get("run_id") or fallback_run_id
             # #region debug-point B:create-run-success
-            import urllib.request; _p='.dbg/v5-hermes-runtime.env'; _u,_s='http://127.0.0.1:7777/event','v5-hermes-runtime'; exec("try:\n with open(_p) as f: c=f.read(); _u=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SERVER_URL=')),_u); _s=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SESSION_ID=')),_s)\nexcept: pass"); urllib.request.urlopen(urllib.request.Request(_u, data=json.dumps({"sessionId":_s,"runId":"pre-fix","hypothesisId":"B","location":"agents_next/providers/hermes_local/adapter.py:create_run","msg":"[DEBUG] Hermes create_run success","data":{"run_id":run_id,"status_code":response.status_code}}).encode(), headers={"Content-Type":"application/json"})).read()
+            try:
+                import urllib.request; _p='.dbg/v5-hermes-runtime.env'; _u,_s='http://127.0.0.1:7777/event','v5-hermes-runtime'; exec("try:\n with open(_p) as f: c=f.read(); _u=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SERVER_URL=')),_u); _s=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SESSION_ID=')),_s)\nexcept: pass"); urllib.request.urlopen(urllib.request.Request(_u, data=json.dumps({"sessionId":_s,"runId":"pre-fix","hypothesisId":"B","location":"agents_next/providers/hermes_local/adapter.py:create_run","msg":"[DEBUG] Hermes create_run success","data":{"run_id":run_id,"status_code":response.status_code}}).encode(), headers={"Content-Type":"application/json"})).read()
+            except Exception:
+                pass
             # #endregion
             self._runs[run_id] = {"mode": "remote", "result": None}
             return run_id
         except (httpx.HTTPError, ValueError) as exc:
             # #region debug-point D:create-run-fallback
-            import urllib.request; _p='.dbg/v5-hermes-runtime.env'; _u,_s='http://127.0.0.1:7777/event','v5-hermes-runtime'; exec("try:\n with open(_p) as f: c=f.read(); _u=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SERVER_URL=')),_u); _s=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SESSION_ID=')),_s)\nexcept: pass"); urllib.request.urlopen(urllib.request.Request(_u, data=json.dumps({"sessionId":_s,"runId":"pre-fix","hypothesisId":"D","location":"agents_next/providers/hermes_local/adapter.py:create_run","msg":"[DEBUG] Hermes create_run fallback","data":{"error_type":type(exc).__name__,"error":str(exc),"base_url":self._runtime.base_url,"provider_profile":self._runtime.provider_profile,"discovery_source":self._runtime.discovery_source}}).encode(), headers={"Content-Type":"application/json"})).read()
+            try:
+                import urllib.request; _p='.dbg/v5-hermes-runtime.env'; _u,_s='http://127.0.0.1:7777/event','v5-hermes-runtime'; exec("try:\n with open(_p) as f: c=f.read(); _u=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SERVER_URL=')),_u); _s=next((l.split('=',1)[1] for l in c.split('\\n') if l.startswith('DEBUG_SESSION_ID=')),_s)\nexcept: pass"); urllib.request.urlopen(urllib.request.Request(_u, data=json.dumps({"sessionId":_s,"runId":"pre-fix","hypothesisId":"D","location":"agents_next/providers/hermes_local/adapter.py:create_run","msg":"[DEBUG] Hermes create_run fallback","data":{"error_type":type(exc).__name__,"error":str(exc),"base_url":self._runtime.base_url,"provider_profile":self._runtime.provider_profile,"discovery_source":self._runtime.discovery_source}}).encode(), headers={"Content-Type":"application/json"})).read()
+            except Exception:
+                pass
             # #endregion
             self._runs[fallback_run_id] = {
                 "mode": "stub",

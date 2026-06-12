@@ -10,12 +10,12 @@ from gui.v5.agent_runtime import (
 )
 
 
-def test_resolve_agent_route_uses_default_vnext_provider():
+def test_resolve_agent_route_uses_default_self_agent():
     ConfigManager.reset_instance()
     route = resolve_agent_route("chat")
-    assert route.backend == "vnext_provider"
-    assert route.provider == "hermes_local"
-    assert route.agent_backend == "hermes_local_vnext"
+    assert route.backend == "self_agent"
+    assert route.provider == "self_agent"
+    assert route.agent_backend == "self_agent"
     assert route.routing_mode == "default"
 
 
@@ -55,6 +55,8 @@ def test_resolve_fallback_decision_for_timeout():
     cfg = ConfigManager.get_instance()
     original = cfg.get_raw()
     cfg._config["agent_runtime"] = {
+        "default_backend": "vnext_provider",
+        "default_provider": "hermes_local",
         "fallback_policy": {
             "enabled": True,
             "on_timeout": "self_agent",
@@ -62,6 +64,7 @@ def test_resolve_fallback_decision_for_timeout():
         }
     }
     route = resolve_agent_route("chat")
+    assert route.backend == "vnext_provider"
     decision = resolve_fallback_decision(RuntimeError("request timeout"), route)
     assert decision.enabled is True
     assert decision.target_backend == "self_agent"
@@ -74,6 +77,8 @@ def test_resolve_fallback_decision_for_protocol_error():
     cfg = ConfigManager.get_instance()
     original = cfg.get_raw()
     cfg._config["agent_runtime"] = {
+        "default_backend": "vnext_provider",
+        "default_provider": "hermes_local",
         "fallback_policy": {
             "enabled": True,
             "on_timeout": "",
@@ -81,6 +86,7 @@ def test_resolve_fallback_decision_for_protocol_error():
         }
     }
     route = resolve_agent_route("chat")
+    assert route.backend == "vnext_provider"
     decision = resolve_fallback_decision(ValueError("invalid protocol payload"), route)
     assert decision.enabled is True
     assert decision.target_backend == "self_agent"

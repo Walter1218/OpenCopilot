@@ -149,7 +149,7 @@ def test_ai_worker_surfaces_delegate_errors(monkeypatch, qapp):
     worker.run()
 
     assert len(errors) == 1
-    assert "调用 Hermes 共创链路失败" in errors[0]
+    assert "调用自研智能体共创链路失败" in errors[0]
     assert "delegate boom" in errors[0]
 
 

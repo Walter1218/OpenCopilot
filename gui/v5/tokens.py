@@ -55,6 +55,64 @@ BTN_ACTION_BG = "rgba(50, 50, 65, 200)"
 BTN_ACTION_HOVER = "rgba(70, 70, 90, 240)"
 
 # =============================================================================
+# Primary Action Card 三色 Token（蓝 Explain / 绿 Fix / 黄 Polish）
+# =============================================================================
+
+CARD_EXPLAIN_BG = "rgba(77, 166, 255, 18)"
+CARD_EXPLAIN_BORDER = "rgba(77, 166, 255, 68)"
+CARD_EXPLAIN_ACCENT = "#4da6ff"
+
+CARD_FIX_BG = "rgba(40, 167, 69, 18)"
+CARD_FIX_BORDER = "rgba(40, 167, 69, 68)"
+CARD_FIX_ACCENT = "#28a745"
+
+CARD_POLISH_BG = "rgba(255, 193, 7, 18)"
+CARD_POLISH_BORDER = "rgba(255, 193, 7, 68)"
+CARD_POLISH_ACCENT = "#ffc107"
+
+# =============================================================================
+# Context Header Bar Token
+# =============================================================================
+
+HEADER_BG = "rgba(26, 26, 26, 255)"
+HEADER_BORDER = "rgba(51, 51, 51, 255)"
+
+# =============================================================================
+# Selection Preview Token
+# =============================================================================
+
+PREVIEW_BG = "rgba(37, 37, 38, 255)"
+PREVIEW_BORDER = "rgba(60, 60, 60, 255)"
+PREVIEW_ACCENT = "#4da6ff"
+
+# =============================================================================
+# Confidence Bar Token
+# =============================================================================
+
+CONFIDENCE_BG = "rgba(51, 51, 51, 255)"
+CONFIDENCE_HIGH = "#28a745"     # >= 80%
+CONFIDENCE_MID = "#ffc107"      # >= 50%
+CONFIDENCE_LOW = "#f87171"      # <  50%
+
+# =============================================================================
+# Capsule Strip Token
+# =============================================================================
+
+CAPSULE_RADIUS = 16
+CAPSULE_ACTIVE_BG = "rgba(77, 166, 255, 24)"
+CAPSULE_ACTIVE_BORDER = "rgba(77, 166, 255, 85)"
+CAPSULE_INACTIVE_BG = "rgba(37, 37, 38, 255)"
+CAPSULE_INACTIVE_BORDER = "rgba(60, 60, 60, 255)"
+
+# =============================================================================
+# Apply Button (green) Token
+# =============================================================================
+
+BTN_APPLY_BG = "#28a745"
+BTN_APPLY_HOVER = "#2fba50"
+BTN_APPLY_TEXT = "#ffffff"
+
+# =============================================================================
 # 字体 Token
 # =============================================================================
 
@@ -107,11 +165,12 @@ SHADOW_BLUR = 24             # 阴影模糊半径
 # =============================================================================
 
 CONTEXT_SOURCES = [
-    ("selection", "🎯 Selection", "当前选区"),
-    ("active_doc", "📄 Active Doc", "活动文档"),
-    ("browser", "🌐 Browser", "浏览器"),
-    ("clipboard", "📋 Clipboard", "剪贴板"),
-    ("file", "📁 File", "文件"),
+    # (source_id, label, tip, icon_letter)
+    ("selection", "🎯 Selection", "当前选区", "S"),
+    ("active_doc", "📄 Active Doc", "活动文档", "D"),
+    ("browser", "🌐 Browser", "浏览器", "B"),
+    ("clipboard", "📋 Clipboard", "剪贴板", "C"),
+    ("file", "📁 File", "文件", "F"),
 ]
 
 # =============================================================================
@@ -122,6 +181,31 @@ PRIMARY_ACTIONS = [
     ("explain", "✨ Explain", "解释选中内容"),
     ("fix", "🔧 Fix", "修复问题"),
     ("polish", "✍️ Polish", "润色优化"),
+]
+
+# Primary Action Cards（卡片式，含三色 accent + 描述）
+PRIMARY_ACTION_CARDS = [
+    {
+        "id": "explain", "icon": "📖", "label": "Explain",
+        "desc": "What does this do?",
+        "accent": CARD_EXPLAIN_ACCENT,
+        "bg": CARD_EXPLAIN_BG, "border": CARD_EXPLAIN_BORDER,
+        "shortcut": "Ctrl+Shift+E",
+    },
+    {
+        "id": "fix", "icon": "🔧", "label": "Fix",
+        "desc": "Find & fix issues",
+        "accent": CARD_FIX_ACCENT,
+        "bg": CARD_FIX_BG, "border": CARD_FIX_BORDER,
+        "shortcut": "Ctrl+Shift+F",
+    },
+    {
+        "id": "polish", "icon": "✨", "label": "Polish",
+        "desc": "Improve quality",
+        "accent": CARD_POLISH_ACCENT,
+        "bg": CARD_POLISH_BG, "border": CARD_POLISH_BORDER,
+        "shortcut": "Ctrl+Shift+P",
+    },
 ]
 
 SECONDARY_ACTIONS = [

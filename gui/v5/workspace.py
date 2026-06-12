@@ -6,12 +6,12 @@ from PyQt6.QtGui import QColor, QTextCursor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QFrame, QStackedWidget,
-    QGraphicsDropShadowEffect, QApplication, QTextEdit,
-    QLineEdit, QComboBox,
+    QGraphicsDropShadowEffect, QTextEdit,
+    QLineEdit, QComboBox, QListWidget, QListWidgetItem,
+    QGridLayout,
 )
 
 from gui.v5 import tokens as T
-from gui.shared import make_panel_persistent
 from gui.v5.telemetry import telemetry
 from gui.v5 import bridge
 from gui.v5.agent_worker import V5AgentWorker
@@ -132,6 +132,9 @@ class WorkspaceV5(QWidget):
         self._chunk_count = 0       # 当前对话 chunk 计数器
         # Task 状态
         self._current_task = ""
+        self._files_entries = []
+        self._filtered_files = []
+        self._memory_stats_cache = {}
         self._init_ui()
         telemetry().window_event("V5_WS_CREATE", "workspace")
 
@@ -332,6 +335,36 @@ class WorkspaceV5(QWidget):
         """)
         self._task_input.setMaximumHeight(140)
         layout.addWidget(self._task_input)
+
+        template_row = QHBoxLayout()
+        template_row.setSpacing(8)
+        self._task_template_combo = QComboBox()
+        self._task_template_combo.addItem("选择任务模板", "")
+        self._task_template_combo.addItem("代码审查", "请审查当前代码，重点关注正确性、边界条件、异常处理和测试缺口。")
+        self._task_template_combo.addItem("缺陷修复", "请定位并修复当前问题，先解释根因，再给出可验证的修复方案。")
+        self._task_template_combo.addItem("技术调研", "请围绕当前主题做结构化调研，输出结论、关键证据和建议下一步。")
+        self._task_template_combo.addItem("PPT 生成", "请基于当前资料生成一份结构清晰、适合汇报的 PPT 大纲。")
+        self._task_template_combo.setStyleSheet(self._input_combo_style())
+        template_row.addWidget(self._task_template_combo, stretch=1)
+
+        load_template_btn = QPushButton("载入模板")
+        load_template_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        load_template_btn.setStyleSheet(self._small_outline_btn_style())
+        load_template_btn.clicked.connect(self._on_load_task_template)
+        template_row.addWidget(load_template_btn)
+
+        import_clipboard_btn = QPushButton("剪贴板导入")
+        import_clipboard_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        import_clipboard_btn.setStyleSheet(self._small_outline_btn_style())
+        import_clipboard_btn.clicked.connect(self._on_import_task_from_clipboard)
+        template_row.addWidget(import_clipboard_btn)
+
+        import_file_btn = QPushButton("最近文件导入")
+        import_file_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        import_file_btn.setStyleSheet(self._small_outline_btn_style())
+        import_file_btn.clicked.connect(self._on_import_task_from_recent_file)
+        template_row.addWidget(import_file_btn)
+        layout.addLayout(template_row)
 
         # 操作按钮行
         btn_row = QHBoxLayout()
@@ -536,7 +569,7 @@ class WorkspaceV5(QWidget):
         return panel
 
     def _create_files_panel(self) -> QWidget:
-        """Files 面板 — 展示最近文件列表"""
+        """Files 面板 — 最近文件列表 + 预览 + 快捷操作"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setSpacing(12)
@@ -544,6 +577,40 @@ class WorkspaceV5(QWidget):
         header = QLabel("📁 Files — 最近文件")
         header.setStyleSheet(self._header_style())
         layout.addWidget(header)
+
+        self._files_summary_label = QLabel("最近文件尚未加载")
+        self._files_summary_label.setStyleSheet(self._info_style())
+        self._files_summary_label.setWordWrap(True)
+        layout.addWidget(self._files_summary_label)
+
+        self._files_filter_input = QLineEdit()
+        self._files_filter_input.setPlaceholderText("按文件名、路径或来源筛选最近文件...")
+        self._files_filter_input.setStyleSheet(self._text_input_style())
+        self._files_filter_input.textChanged.connect(self._apply_files_filter)
+        layout.addWidget(self._files_filter_input)
+
+        action_row = QHBoxLayout()
+        for label, handler in [
+            ("刷新", self._refresh_files),
+            ("用于任务", self._on_use_file_for_task),
+            ("发送到 Studio", self._on_open_selected_file_in_studio),
+            ("发送到聊天", self._on_send_file_to_chat),
+            ("复制内容", self._on_copy_selected_file_content),
+            ("复制路径", self._on_copy_selected_file_path),
+        ]:
+            btn = QPushButton(label)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(self._small_outline_btn_style())
+            btn.clicked.connect(handler)
+            action_row.addWidget(btn)
+        action_row.addStretch()
+        layout.addLayout(action_row)
+
+        self._files_list = QListWidget()
+        self._files_list.setStyleSheet(self._list_widget_style())
+        self._files_list.currentRowChanged.connect(self._on_file_selected)
+        self._files_list.setMaximumHeight(180)
+        layout.addWidget(self._files_list)
 
         self._files_content = QTextEdit()
         self._files_content.setReadOnly(True)
@@ -571,6 +638,63 @@ class WorkspaceV5(QWidget):
         header.setStyleSheet(self._header_style())
         layout.addWidget(header)
 
+        self._memory_summary_label = QLabel("记忆概览加载中...")
+        self._memory_summary_label.setStyleSheet(self._info_style())
+        self._memory_summary_label.setWordWrap(True)
+        layout.addWidget(self._memory_summary_label)
+
+        self._memory_cards = {}
+        card_grid = QGridLayout()
+        card_grid.setSpacing(8)
+        for idx, (memory_key, title) in enumerate([
+            ("knowledge_graph", "📊 知识图谱"),
+            ("translation_memory", "🌐 翻译记忆"),
+            ("glossary", "📖 术语库"),
+        ]):
+            card = QFrame()
+            card.setStyleSheet(self._card_style())
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(10, 8, 10, 8)
+            title_label = QLabel(title)
+            title_label.setStyleSheet(self._sub_header_style())
+            value_label = QLabel("加载中...")
+            value_label.setWordWrap(True)
+            value_label.setStyleSheet(self._card_value_style())
+            card_layout.addWidget(title_label)
+            card_layout.addWidget(value_label)
+            self._memory_cards[memory_key] = value_label
+            card_grid.addWidget(card, idx // 3, idx % 3)
+        layout.addLayout(card_grid)
+
+        memory_focus_row = QHBoxLayout()
+        self._memory_focus_combo = QComboBox()
+        self._memory_focus_combo.addItem("知识图谱", "knowledge_graph")
+        self._memory_focus_combo.addItem("翻译记忆", "translation_memory")
+        self._memory_focus_combo.addItem("术语库", "glossary")
+        self._memory_focus_combo.setStyleSheet(self._input_combo_style())
+        self._memory_focus_combo.currentIndexChanged.connect(self._refresh_memory_detail)
+        memory_focus_row.addWidget(self._memory_focus_combo, stretch=1)
+        for label, handler in [
+            ("复制摘要", self._on_copy_memory_summary),
+            ("用于任务", self._on_memory_to_task),
+            ("发送到聊天", self._on_memory_to_chat),
+        ]:
+            btn = QPushButton(label)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(self._small_outline_btn_style())
+            btn.clicked.connect(handler)
+            memory_focus_row.addWidget(btn)
+        layout.addLayout(memory_focus_row)
+
+        memory_btn_row = QHBoxLayout()
+        refresh_btn = QPushButton("刷新概览")
+        refresh_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        refresh_btn.setStyleSheet(self._small_outline_btn_style())
+        refresh_btn.clicked.connect(self._refresh_memory)
+        memory_btn_row.addWidget(refresh_btn)
+        memory_btn_row.addStretch()
+        layout.addLayout(memory_btn_row)
+
         self._memory_content = QTextEdit()
         self._memory_content.setReadOnly(True)
         self._memory_content.setStyleSheet(f"""
@@ -596,9 +720,36 @@ class WorkspaceV5(QWidget):
         header.setStyleSheet(self._header_style())
         layout.addWidget(header)
 
+        top_row = QHBoxLayout()
+        self._settings_overview_label = QLabel("配置概览加载中...")
+        self._settings_overview_label.setStyleSheet(self._info_style())
+        self._settings_overview_label.setWordWrap(True)
+        top_row.addWidget(self._settings_overview_label, stretch=1)
+        refresh_settings_btn = QPushButton("刷新摘要")
+        refresh_settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        refresh_settings_btn.setStyleSheet(self._small_outline_btn_style())
+        refresh_settings_btn.clicked.connect(self._refresh_settings_summary)
+        top_row.addWidget(refresh_settings_btn)
+        layout.addLayout(top_row)
+
+        settings_action_row = QHBoxLayout()
+        for label, handler in [
+            ("导出配置", self._on_export_workspace_settings),
+            ("复制摘要", self._on_copy_settings_summary),
+            ("重置外观", self._on_reset_workspace_appearance),
+        ]:
+            btn = QPushButton(label)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet(self._small_outline_btn_style())
+            btn.clicked.connect(handler)
+            settings_action_row.addWidget(btn)
+        settings_action_row.addStretch()
+        layout.addLayout(settings_action_row)
+
         # 四宫格卡片
-        grid = QHBoxLayout()
+        grid = QGridLayout()
         grid.setSpacing(10)
+        self._settings_summary_labels = {}
         for section_id, label, tip in [
             ("engine", "🔌 Engine", "Cloud/Local LLM"),
             ("appearance", "🎨 Theme", "Dark/Light/System"),
@@ -629,6 +780,15 @@ class WorkspaceV5(QWidget):
                 f"color: {T.TEXT_TERTIARY}; font-size: {T.FONT_CAPTION[0]}px; "
                 "background: transparent; border: none;"
             )
+            card_tip.setWordWrap(True)
+
+            summary = QLabel("加载中...")
+            summary.setWordWrap(True)
+            summary.setStyleSheet(
+                f"color: {T.TEXT_SECONDARY}; font-size: {T.FONT_CAPTION[0]}px; "
+                "background: transparent; border: none; line-height: 1.5;"
+            )
+            self._settings_summary_labels[section_id] = summary
 
             open_btn = QPushButton("配置 →")
             open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -641,10 +801,17 @@ class WorkspaceV5(QWidget):
 
             card_layout.addWidget(card_label)
             card_layout.addWidget(card_tip)
+            card_layout.addWidget(summary)
             card_layout.addWidget(open_btn)
-            grid.addWidget(card)
+            idx = len(self._settings_summary_labels) - 1
+            grid.addWidget(card, idx // 2, idx % 2)
 
         layout.addLayout(grid)
+        self._settings_action_status = QLabel("")
+        self._settings_action_status.setStyleSheet(self._info_style())
+        self._settings_action_status.hide()
+        layout.addWidget(self._settings_action_status)
+        self._refresh_settings_summary()
         layout.addStretch()
         return panel
 
@@ -655,21 +822,33 @@ class WorkspaceV5(QWidget):
     def _refresh_files(self):
         """刷新最近文件列表"""
         files = bridge.get_recent_files(limit=20)
+        telemetry().emit("V5_WS_FILES_REFRESH",
+                         session_id=self._session_id,
+                         file_count=len(files))
+        self._files_entries = files
         if files:
             lines = [f"最近文件 ({len(files)} 个):\n"]
             for f in files:
                 name = f.get("name", "?")
                 size = f.get("size", 0)
                 modified = f.get("modified", "")[:16]
-                size_str = f"{size / 1024:.1f}KB" if size < 1048576 else f"{size / 1048576:.1f}MB"
+                size_str = self._format_file_size(size)
                 lines.append(f"  📄 {name}  ({size_str}, {modified})")
+            self._files_summary_label.setText(
+                f"最近文件已加载 {len(files)} 项，可直接预览、导入任务或发送到 Studio。"
+            )
             self._files_content.setPlainText("\n".join(lines))
+            self._apply_files_filter()
         else:
+            self._filtered_files = []
+            self._files_list.clear()
+            self._files_summary_label.setText("暂无最近文件，可通过拖放文件或 Work/Studio 工作流生成记录。")
             self._files_content.setPlainText("暂无最近文件。\n\n使用 Work Tab 的文件上传功能添加文件。")
 
     def _refresh_memory(self):
         """刷新知识记忆统计"""
         stats = bridge.get_memory_stats()
+        self._memory_stats_cache = stats
         lines = ["知识记忆统计:\n"]
         kg = stats.get("knowledge_graph", {})
         lines.append(f"📊 知识图谱: {kg.get('entities', 0)} 实体 / {kg.get('relations', 0)} 关系 ({kg.get('status', '?')})")
@@ -677,11 +856,32 @@ class WorkspaceV5(QWidget):
         lines.append(f"🌐 翻译记忆: {tm.get('entries', 0)} 条 ({tm.get('status', '?')})")
         gl = stats.get("glossary", {})
         lines.append(f"📖 术语库: {gl.get('terms', 0)} 条 ({gl.get('status', '?')})")
+        self._memory_cards["knowledge_graph"].setText(
+            f"{kg.get('entities', 0)} 实体 / {kg.get('relations', 0)} 关系\n状态: {kg.get('status', '?')}"
+        )
+        self._memory_cards["translation_memory"].setText(
+            f"{tm.get('entries', 0)} 条记录\n状态: {tm.get('status', '?')}"
+        )
+        self._memory_cards["glossary"].setText(
+            f"{gl.get('terms', 0)} 条术语\n状态: {gl.get('status', '?')}"
+        )
+        self._memory_summary_label.setText(
+            f"知识图谱 {kg.get('entities', 0)} / 翻译记忆 {tm.get('entries', 0)} / 术语库 {gl.get('terms', 0)}"
+        )
         self._memory_content.setPlainText("\n".join(lines))
+        self._refresh_memory_detail()
+        telemetry().emit("V5_WS_MEMORY_REFRESH",
+                         session_id=self._session_id,
+                         kg_entities=kg.get('entities', 0),
+                         tm_entries=tm.get('entries', 0),
+                         glossary_terms=gl.get('terms', 0))
 
     def _refresh_task_history(self):
         """刷新任务历史"""
-        tasks = bridge.get_task_history(limit=10)
+        # 优先获取当前 workspace session 的任务，若无则回退到全部
+        tasks = bridge.get_task_history(session_id=self._session_id, limit=10)
+        if not tasks:
+            tasks = bridge.get_task_history(limit=10)
         if tasks:
             lines = [f"最近 {len(tasks)} 个任务:\n"]
             for t in tasks:
@@ -692,6 +892,322 @@ class WorkspaceV5(QWidget):
             self._task_history_list.setText("\n".join(lines))
         else:
             self._task_history_list.setText("暂无任务历史")
+        telemetry().emit("V5_WS_TASK_HISTORY_REFRESH",
+                         session_id=self._session_id,
+                         task_count=len(tasks))
+
+    def _refresh_settings_summary(self):
+        config = bridge.get_config()
+        appearance = bridge.get_appearance()
+        shortcuts = bridge.get_shortcuts().get("shortcuts", {})
+        runtime = bridge.get_agent_runtime_config()
+
+        provider = config.get("provider_type", "cloud")
+        model = config.get(f"{provider}_model", "") or config.get("cloud_model", "")
+        theme = appearance.get("theme", "dark")
+        font_size = appearance.get("font_size", 12)
+        language = appearance.get("language", "zh")
+        runtime_backend = runtime.get("default_backend", "vnext_provider")
+        runtime_provider = runtime.get("default_provider", "hermes_local")
+
+        self._settings_overview_label.setText(
+            f"当前 UI 默认继续走 {runtime_provider}，主题 {theme}，共 {len(shortcuts)} 项快捷键。"
+        )
+        self._settings_summary_labels["engine"].setText(
+            f"Provider: {provider}\nModel: {model or 'default'}\nRuntime: {runtime_backend}/{runtime_provider}"
+        )
+        self._settings_summary_labels["appearance"].setText(
+            f"Theme: {theme}\nFont: {font_size}px\nLanguage: {language}"
+        )
+        self._settings_summary_labels["shortcuts"].setText(
+            f"已配置 {len(shortcuts)} 项快捷键\n示例: {', '.join(list(shortcuts.keys())[:2]) or '暂无'}"
+        )
+        self._settings_summary_labels["advanced"].setText(
+            "支持导出/导入配置、重置默认值，并复用统一设置弹窗。"
+        )
+        telemetry().emit("V5_WS_SETTINGS_REFRESH",
+                         session_id=self._session_id,
+                         provider=provider,
+                         shortcut_count=len(shortcuts),
+                         theme=theme)
+
+    def _apply_files_filter(self):
+        keyword = self._files_filter_input.text().strip().lower()
+        if not keyword:
+            self._filtered_files = list(self._files_entries)
+        else:
+            self._filtered_files = [
+                item for item in self._files_entries
+                if keyword in item.get("name", "").lower()
+                or keyword in item.get("path", "").lower()
+                or keyword in item.get("source", "").lower()
+            ]
+
+        self._files_list.clear()
+        for item in self._filtered_files:
+            size_str = self._format_file_size(item.get("size", 0))
+            source = item.get("source", "local")
+            self._files_list.addItem(QListWidgetItem(
+                f"📄 {item.get('name', '?')}  ·  {size_str}  ·  {source}"
+            ))
+
+        if self._filtered_files:
+            self._files_summary_label.setText(
+                f"最近文件共 {len(self._files_entries)} 项，当前筛选结果 {len(self._filtered_files)} 项。"
+            )
+            self._files_list.setCurrentRow(0)
+        else:
+            self._files_summary_label.setText(
+                f"最近文件共 {len(self._files_entries)} 项，当前筛选没有匹配结果。"
+            )
+            self._files_content.setPlainText("当前筛选条件下没有匹配的最近文件。")
+        telemetry().emit("V5_WS_FILES_FILTER",
+                         session_id=self._session_id,
+                         keyword=keyword,
+                         match_count=len(self._filtered_files))
+
+    def _get_selected_file_entry(self):
+        row = self._files_list.currentRow()
+        if row < 0:
+            return None
+        if row >= len(getattr(self, "_filtered_files", [])):
+            return None
+        return self._filtered_files[row]
+
+    def _on_file_selected(self, row: int):
+        if row < 0:
+            return
+        entry = self._get_selected_file_entry()
+        if not entry:
+            return
+        path = entry.get("path", "")
+        result = bridge.get_file_content(path) if path else {"text": "", "status": "no_path"}
+        preview = self._summarize_text(result.get("text", ""), 800)
+        self._files_content.setPlainText(
+            f"文件: {entry.get('name', '?')}\n"
+            f"路径: {path}\n"
+            f"状态: {result.get('status', '?')}\n"
+            f"大小: {self._format_file_size(entry.get('size', 0))}\n\n"
+            f"{preview or '该文件暂无可预览文本内容。'}"
+        )
+        telemetry().emit("V5_WS_FILE_SELECT",
+                         session_id=self._session_id,
+                         file_name=entry.get("name", ""),
+                         text_len=len(result.get("text", "")),
+                         status=result.get("status", ""))
+
+    def _on_use_file_for_task(self):
+        entry = self._get_selected_file_entry()
+        if not entry:
+            self._task_status_label.setText("⚠️ 请先在 Files 面板选择一个文件")
+            self._task_status_label.show()
+            return
+        result = bridge.get_file_content(entry.get("path", ""))
+        text = result.get("text", "")
+        if not text:
+            self._task_status_label.setText("⚠️ 当前文件暂无可导入内容")
+            self._task_status_label.show()
+            return
+        self._task_input.setPlainText(self._summarize_text(text, 2000))
+        self._stack.setCurrentIndex(0)
+        self._task_status_label.setText(f"✅ 已从文件导入任务草稿: {entry.get('name', '')}")
+        self._task_status_label.show()
+        telemetry().emit("V5_WS_TASK_IMPORT_FILE",
+                         session_id=self._session_id,
+                         file_name=entry.get("name", ""),
+                         text_len=len(text))
+
+    def _on_open_selected_file_in_studio(self):
+        entry = self._get_selected_file_entry()
+        if not entry:
+            self._files_content.setPlainText("⚠️ 请先选择一个文件，再发送到 Studio。")
+            return
+        result = bridge.get_file_content(entry.get("path", ""))
+        text = result.get("text", "")
+        if not text.strip():
+            self._files_content.setPlainText("⚠️ 当前文件没有可发送到 Studio 的正文内容。")
+            return
+        if hasattr(self.nav, "open_studio"):
+            self.nav.open_studio(text=text)
+            self._files_content.setPlainText(
+                f"已将 `{entry.get('name', '')}` 的内容发送到 Studio。\n\n"
+                "你现在可以在 Studio 中继续生成大纲、编辑和导出 PPT。"
+            )
+            telemetry().emit("V5_WS_FILE_OPEN_STUDIO",
+                             session_id=self._session_id,
+                             file_name=entry.get("name", ""),
+                             text_len=len(text))
+
+    def _on_copy_selected_file_path(self):
+        entry = self._get_selected_file_entry()
+        if not entry:
+            self._files_content.setPlainText("⚠️ 请先选择一个文件，再复制路径。")
+            return
+        path = entry.get("path", "")
+        ok = bridge.do_copy_to_clipboard(path)
+        self._files_content.setPlainText(
+            f"✅ 已复制文件路径:\n{path}" if ok else "❌ 复制文件路径失败"
+        )
+        telemetry().emit("V5_WS_FILE_COPY_PATH",
+                         session_id=self._session_id,
+                         file_name=entry.get("name", ""),
+                         success=ok)
+
+    def _on_send_file_to_chat(self):
+        entry = self._get_selected_file_entry()
+        if not entry:
+            self._files_content.setPlainText("⚠️ 请先选择一个文件，再发送到聊天。")
+            return
+        result = bridge.get_file_content(entry.get("path", ""))
+        text = result.get("text", "")
+        if not text.strip():
+            self._files_content.setPlainText("⚠️ 当前文件没有可发送到聊天的文本内容。")
+            return
+        self._stack.setCurrentIndex(1)
+        self._append_chat_message(
+            "系统",
+            f"已从 Files 注入 `{entry.get('name', '')}` 内容（{len(text)} 字符），可继续提问。"
+        )
+        preview = self._summarize_text(text, 1200)
+        self._append_chat_message("系统", preview)
+        self._chat_input.setFocus()
+        telemetry().emit("V5_WS_FILE_SEND_CHAT",
+                         session_id=self._session_id,
+                         file_name=entry.get("name", ""),
+                         text_len=len(text))
+
+    def _on_copy_selected_file_content(self):
+        entry = self._get_selected_file_entry()
+        if not entry:
+            self._files_content.setPlainText("⚠️ 请先选择一个文件，再复制内容。")
+            return
+        result = bridge.get_file_content(entry.get("path", ""))
+        text = result.get("text", "")
+        ok = bool(text) and bridge.do_copy_to_clipboard(text)
+        self._files_content.setPlainText(
+            f"✅ 已复制 `{entry.get('name', '')}` 的内容到剪贴板。"
+            if ok else "❌ 当前文件没有可复制的文本内容"
+        )
+        telemetry().emit("V5_WS_FILE_COPY_CONTENT",
+                         session_id=self._session_id,
+                         file_name=entry.get("name", ""),
+                         success=ok,
+                         text_len=len(text))
+
+    def _refresh_memory_detail(self):
+        focus = self._memory_focus_combo.currentData()
+        detail = self._build_memory_detail_text(focus)
+        self._memory_content.setPlainText(detail)
+        telemetry().emit("V5_WS_MEMORY_SELECT",
+                         session_id=self._session_id,
+                         focus=focus)
+
+    def _build_memory_detail_text(self, focus: str) -> str:
+        stats = self._memory_stats_cache or {}
+        if focus == "knowledge_graph":
+            kg = stats.get("knowledge_graph", {})
+            return (
+                "知识图谱详情:\n\n"
+                f"- 实体数: {kg.get('entities', 0)}\n"
+                f"- 关系数: {kg.get('relations', 0)}\n"
+                f"- 状态: {kg.get('status', '?')}\n\n"
+                "适合在调研、总结和多轮任务中作为稳定知识背景。"
+            )
+        if focus == "translation_memory":
+            tm = stats.get("translation_memory", {})
+            return (
+                "翻译记忆详情:\n\n"
+                f"- 记忆条数: {tm.get('entries', 0)}\n"
+                f"- 状态: {tm.get('status', '?')}\n\n"
+                "适合在连续翻译和术语一致性要求高的任务中复用。"
+            )
+        gl = stats.get("glossary", {})
+        return (
+            "术语库详情:\n\n"
+            f"- 术语条数: {gl.get('terms', 0)}\n"
+            f"- 状态: {gl.get('status', '?')}\n\n"
+            "适合在品牌、产品名、行业概念等固定表达场景中复用。"
+        )
+
+    def _on_copy_memory_summary(self):
+        text = self._build_memory_detail_text(self._memory_focus_combo.currentData())
+        ok = bridge.do_copy_to_clipboard(text)
+        self._memory_summary_label.setText(
+            "已复制当前记忆摘要到剪贴板。" if ok else "复制记忆摘要失败。"
+        )
+        telemetry().emit("V5_WS_MEMORY_COPY",
+                         session_id=self._session_id,
+                         focus=self._memory_focus_combo.currentData(),
+                         success=ok)
+
+    def _on_memory_to_task(self):
+        text = self._build_memory_detail_text(self._memory_focus_combo.currentData())
+        self._task_input.setPlainText(text)
+        self._stack.setCurrentIndex(0)
+        self._task_status_label.setText("✅ 已将记忆摘要注入到 Task 草稿")
+        self._task_status_label.show()
+        telemetry().emit("V5_WS_MEMORY_USE_TASK",
+                         session_id=self._session_id,
+                         focus=self._memory_focus_combo.currentData())
+
+    def _on_memory_to_chat(self):
+        text = self._build_memory_detail_text(self._memory_focus_combo.currentData())
+        self._stack.setCurrentIndex(1)
+        self._append_chat_message("系统", text)
+        self._chat_input.setFocus()
+        telemetry().emit("V5_WS_MEMORY_SEND_CHAT",
+                         session_id=self._session_id,
+                         focus=self._memory_focus_combo.currentData())
+
+    def _on_export_workspace_settings(self):
+        result = bridge.do_export_config()
+        if result.get("success"):
+            self._settings_action_status.setText(
+                f"✅ 已导出配置到 {result.get('filename', '')}"
+            )
+        else:
+            self._settings_action_status.setText(
+                f"❌ 导出失败: {result.get('message', '')}"
+            )
+        self._settings_action_status.show()
+        telemetry().emit("V5_WS_SETTINGS_EXPORT",
+                         session_id=self._session_id,
+                         success=result.get("success", False),
+                         filename=result.get("filename", ""))
+
+    def _on_copy_settings_summary(self):
+        summary = "\n\n".join(
+            [
+                self._settings_overview_label.text(),
+                self._settings_summary_labels["engine"].text(),
+                self._settings_summary_labels["appearance"].text(),
+                self._settings_summary_labels["shortcuts"].text(),
+                self._settings_summary_labels["advanced"].text(),
+            ]
+        )
+        ok = bridge.do_copy_to_clipboard(summary)
+        self._settings_action_status.setText(
+            "✅ 已复制当前设置摘要。" if ok else "❌ 复制设置摘要失败。"
+        )
+        self._settings_action_status.show()
+        telemetry().emit("V5_WS_SETTINGS_COPY",
+                         session_id=self._session_id,
+                         success=ok)
+
+    def _on_reset_workspace_appearance(self):
+        result = bridge.do_reset_config("appearance")
+        if result.get("success"):
+            self._refresh_settings_summary()
+            self._settings_action_status.setText("✅ 已重置外观配置为默认值。")
+        else:
+            self._settings_action_status.setText(
+                f"❌ 重置失败: {result.get('message', '')}"
+            )
+        self._settings_action_status.show()
+        telemetry().emit("V5_WS_SETTINGS_RESET",
+                         session_id=self._session_id,
+                         section="appearance",
+                         success=result.get("success", False))
 
     # =========================================================================
     # Chat — AI 对话能力接入
@@ -1014,6 +1530,67 @@ class WorkspaceV5(QWidget):
                          context_source="workspace_task")
         print(f"[v5] Workspace Task: 任务已清除 | prev_len={prev_len}")
 
+    def _on_load_task_template(self):
+        template = self._task_template_combo.currentData()
+        if not template:
+            self._task_status_label.setText("⚠️ 请先选择一个任务模板")
+            self._task_status_label.show()
+            return
+        self._task_input.setPlainText(template)
+        self._task_status_label.setText("✅ 已载入任务模板，可继续补充细节后保存")
+        self._task_status_label.show()
+        telemetry().emit("V5_WS_TASK_TEMPLATE_LOAD",
+                         session_id=self._session_id,
+                         template_name=self._task_template_combo.currentText())
+
+    def _on_import_task_from_clipboard(self):
+        clip = bridge.get_clipboard_text()
+        text = clip.get("text", "").strip()
+        if not text:
+            self._task_status_label.setText("⚠️ 剪贴板当前没有可导入内容")
+            self._task_status_label.show()
+            return
+        self._task_input.setPlainText(self._summarize_text(text, 2000))
+        self._task_status_label.setText(f"✅ 已从剪贴板导入任务草稿 ({len(text)} 字符)")
+        self._task_status_label.show()
+        telemetry().emit("V5_WS_TASK_IMPORT_CLIPBOARD",
+                         session_id=self._session_id,
+                         text_len=len(text))
+
+    def _on_import_task_from_recent_file(self):
+        files = bridge.get_recent_files(limit=1)
+        if not files:
+            self._task_status_label.setText("⚠️ 当前没有最近文件可导入")
+            self._task_status_label.show()
+            return
+        result = bridge.get_file_content(files[0].get("path", ""))
+        text = result.get("text", "")
+        if not text:
+            self._task_status_label.setText("⚠️ 最近文件没有可导入的文本内容")
+            self._task_status_label.show()
+            return
+        self._task_input.setPlainText(self._summarize_text(text, 2000))
+        self._task_status_label.setText(f"✅ 已从最近文件导入: {files[0].get('name', '')}")
+        self._task_status_label.show()
+        telemetry().emit("V5_WS_TASK_IMPORT_RECENT",
+                         session_id=self._session_id,
+                         file_name=files[0].get("name", ""),
+                         text_len=len(text))
+
+    @staticmethod
+    def _summarize_text(text: str, limit: int = 240) -> str:
+        if len(text) <= limit:
+            return text
+        return text[:limit] + "…"
+
+    @staticmethod
+    def _format_file_size(size: int) -> str:
+        if size < 1024:
+            return f"{size}B"
+        if size < 1048576:
+            return f"{size / 1024:.1f}KB"
+        return f"{size / 1048576:.1f}MB"
+
     # =========================================================================
     # 样式
     # =========================================================================
@@ -1038,4 +1615,69 @@ class WorkspaceV5(QWidget):
         return (
             f"color: {T.TEXT_PRIMARY}; font-weight: bold; "
             f"font-size: 16px; background: transparent; border: none;"
+        )
+
+    @staticmethod
+    def _info_style():
+        return (
+            f"color: {T.TEXT_SECONDARY}; font-size: {T.FONT_CAPTION[0]}px; "
+            f"background: {T.BG_ELEVATED}; border-radius: 6px; padding: 8px 10px;"
+        )
+
+    @staticmethod
+    def _small_outline_btn_style():
+        return (
+            f"QPushButton {{ background-color: {T.BG_ELEVATED}; color: {T.TEXT_SECONDARY}; "
+            f"border: 1px solid {T.STROKE_BORDER}; border-radius: 6px; "
+            f"padding: 4px 10px; font-size: {T.FONT_CAPTION[0]}px; }}"
+            f"QPushButton:hover {{ background-color: {T.BG_HOVER}; color: {T.TEXT_PRIMARY}; }}"
+        )
+
+    @staticmethod
+    def _text_input_style():
+        return (
+            f"QLineEdit {{ background-color: {T.BG_INPUT}; color: {T.TEXT_PRIMARY}; "
+            f"border: 1px solid {T.STROKE_BORDER}; border-radius: 6px; "
+            f"padding: 6px 10px; font-size: {T.FONT_BODY[0]}px; }}"
+            f"QLineEdit:focus {{ border: 1px solid {T.STROKE_FOCUS}; }}"
+        )
+
+    @staticmethod
+    def _input_combo_style():
+        return (
+            f"QComboBox {{ background-color: {T.BG_INPUT}; color: {T.TEXT_PRIMARY}; "
+            f"border: 1px solid {T.STROKE_BORDER}; border-radius: 6px; "
+            f"padding: 6px 10px; font-size: {T.FONT_BODY[0]}px; }}"
+            f"QComboBox QAbstractItemView {{ background-color: {T.BG_ELEVATED}; "
+            f"color: {T.TEXT_PRIMARY}; selection-background-color: {T.BG_SELECTED}; }}"
+        )
+
+    @staticmethod
+    def _card_style():
+        return (
+            f"QFrame {{ background-color: {T.BG_ELEVATED}; border-radius: 8px; "
+            f"border: 1px solid {T.STROKE_SUBTLE}; }}"
+        )
+
+    @staticmethod
+    def _sub_header_style():
+        return (
+            f"color: {T.TEXT_PRIMARY}; font-weight: bold; "
+            f"font-size: {T.FONT_CAPTION[0]}px; background: transparent; border: none;"
+        )
+
+    @staticmethod
+    def _card_value_style():
+        return (
+            f"color: {T.TEXT_SECONDARY}; font-size: {T.FONT_CAPTION[0]}px; "
+            "background: transparent; border: none; line-height: 1.5;"
+        )
+
+    @staticmethod
+    def _list_widget_style():
+        return (
+            f"QListWidget {{ background-color: {T.BG_ELEVATED}; color: {T.TEXT_PRIMARY}; "
+            f"border: 1px solid {T.STROKE_SUBTLE}; border-radius: 8px; padding: 4px; }}"
+            f"QListWidget::item {{ padding: 6px 8px; border-radius: 4px; }}"
+            f"QListWidget::item:selected {{ background: {T.BG_SELECTED}; color: {T.TEXT_PRIMARY}; }}"
         )

@@ -9,6 +9,7 @@ from gui.v5 import tokens as T
 from gui.v5.telemetry import telemetry
 from gui.v5 import bridge
 from gui.v5.agent_worker import V5AgentWorker
+from gui.v5.ppt_prompt import build_ppt_generation_prompt, parse_slides_from_text
 
 
 class StudioTabV5(QWidget):
@@ -19,6 +20,7 @@ class StudioTabV5(QWidget):
         self.nav = nav
         self._session_id = telemetry().new_session_id()
         self._agent_worker = None  # 当前运行的 Agent Worker
+        self._llm_ctx = None  # LLM trace context
         self._original_text = ""  # 保存用户原始输入，用于传入 Studio 的 Source Panel
         self._init_ui()
 
@@ -27,69 +29,56 @@ class StudioTabV5(QWidget):
         layout.setContentsMargins(0, 10, 0, 0)
         layout.setSpacing(10)
 
-        # ── Launcher 卡片 ──
-        card = QFrame()
-        card.setStyleSheet(f"""
-            QFrame {{
-                background-color: {T.BG_ELEVATED};
-                border-radius: 10px;
-                border: 1px solid {T.STROKE_SUBTLE};
-            }}
-        """)
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(16, 16, 16, 16)
-        card_layout.setSpacing(8)
+        # ── 居中容器 ──
+        center = QWidget()
+        center_layout = QVBoxLayout(center)
+        center_layout.setContentsMargins(24, 30, 24, 20)
+        center_layout.setSpacing(12)
+        center_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # 图标 + 标题
-        title_row = QHBoxLayout()
-        icon_label = QLabel("🎨")
-        icon_label.setStyleSheet(
-            f"font-size: 24px; background: transparent; border: none;"
-        )
-        title_label = QLabel("Studio")
-        title_label.setStyleSheet(
+        # 标题
+        title = QLabel("PPT Co-Creation")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet(
             f"color: {T.TEXT_PRIMARY}; font-weight: bold; "
             f"font-size: 16px; background: transparent; border: none;"
         )
-        title_row.addWidget(icon_label)
-        title_row.addWidget(title_label)
-        title_row.addStretch()
-        card_layout.addLayout(title_row)
+        center_layout.addWidget(title)
 
         # 描述
-        desc = QLabel("AI 驱动的 PPT 共创工作台")
+        desc = QLabel("Create professional presentations from your documents")
+        desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
         desc.setStyleSheet(
             f"color: {T.TEXT_SECONDARY}; font-size: {T.FONT_BODY[0]}px; "
             "background: transparent; border: none;"
         )
-        desc.setWordWrap(True)
-        card_layout.addWidget(desc)
+        center_layout.addWidget(desc)
 
-        # 功能点列表
-        features = QLabel(
-            "• 智能大纲生成  • 4-Panel 编辑器  • 缩略图导航\n"
-            "• Click-to-Edit  • AI 差异预览  • 一键导出 PPT"
-        )
-        features.setStyleSheet(
-            f"color: {T.TEXT_TERTIARY}; font-size: {T.FONT_CAPTION[0]}px; "
-            "background: transparent; border: none; line-height: 1.6;"
-        )
-        features.setWordWrap(True)
-        card_layout.addWidget(features)
+        # 按钮行
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(10)
+        btn_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # 打开按钮
-        self._open_btn = QPushButton("打开 Studio ▶")
+        self._open_btn = QPushButton("Open Studio")
         self._open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._open_btn.setStyleSheet(self._cta_btn_style())
-        self._open_btn.setMinimumHeight(T.BTN_LARGE_HEIGHT)
+        self._open_btn.setFixedHeight(T.BTN_LARGE_HEIGHT)
+        self._open_btn.setStyleSheet(self._neutral_btn_style())
         self._open_btn.clicked.connect(self._on_open_studio)
-        card_layout.addWidget(self._open_btn)
+        btn_row.addWidget(self._open_btn)
 
-        layout.addWidget(card)
+        self._v5plus_btn = QPushButton("V5Plus CoCreation")
+        self._v5plus_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._v5plus_btn.setFixedHeight(T.BTN_LARGE_HEIGHT)
+        self._v5plus_btn.setStyleSheet(self._v5plus_btn_style())
+        self._v5plus_btn.setToolTip("3 阶段 E2E 共创流程：输入 → 策略发现 → 编辑打磨")
+        self._v5plus_btn.clicked.connect(self._on_open_v5plus)
+        btn_row.addWidget(self._v5plus_btn)
 
-        # ── 快速输入区（使用 QTextEdit 支持长文本，避免 QLineEdit 截断）──
+        center_layout.addLayout(btn_row)
+
+        # 快速输入区
         self._quick_input = QTextEdit()
-        self._quick_input.setPlaceholderText("粘贴文本、输入主题，或拖入文档...")
+        self._quick_input.setPlaceholderText("Quick paste text here to start...")
         self._quick_input.setStyleSheet(f"""
             QTextEdit {{
                 background-color: {T.BG_INPUT};
@@ -103,27 +92,15 @@ class StudioTabV5(QWidget):
         """)
         self._quick_input.setMaximumHeight(80)
         self._quick_input.setAcceptRichText(False)
-        layout.addWidget(self._quick_input)
+        center_layout.addWidget(self._quick_input)
 
-        quick_btn = QPushButton("快速创建")
-        quick_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        quick_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {T.ACCENT_CONTROL};
-                color: #000; border-radius: 6px;
-                padding: 6px 14px; font-weight: bold;
-                font-size: {T.FONT_BODY[0]}px;
-            }}
-            QPushButton:hover {{ background-color: {T.ACCENT_HOVER}; }}
-        """)
-        quick_btn.clicked.connect(self._on_quick_open)
-        layout.addWidget(quick_btn, alignment=Qt.AlignmentFlag.AlignRight)
+        layout.addWidget(center)
 
         # ── 状态文案 ──
         self._status_label = QLabel("")
         self._status_label.setStyleSheet(
             f"color: {T.TEXT_TERTIARY}; font-size: {T.FONT_CAPTION[0]}px; "
-            f"padding: 4px 0;"
+            f"padding: 4px 16px;"
         )
         self._status_label.setWordWrap(True)
         layout.addWidget(self._status_label)
@@ -184,6 +161,13 @@ class StudioTabV5(QWidget):
         telemetry().emit("V5_STAB_OPEN_STUDIO", session_id=self._session_id)
         self.nav.open_studio()
 
+    def _on_open_v5plus(self):
+        """打开 V5Plus 共创工作台（3 阶段 E2E 流程）"""
+        text = self._quick_input.toPlainText().strip()
+        telemetry().emit("V5_STAB_OPEN_V5PLUS", session_id=self._session_id,
+                         text_len=len(text), has_text=bool(text))
+        self.nav.open_cocreation(text)
+
     def _on_quick_open(self):
         """快速创建：通过 Agent Worker 生成 PPT 内容并打开 Studio"""
         text = self._quick_input.toPlainText().strip()
@@ -217,54 +201,23 @@ class StudioTabV5(QWidget):
         telemetry().emit("V5_STAB_QUICK_OPEN", text_len=len(text),
                          session_id=self._session_id)
         self._original_text = text  # 保存原始文本，用于传入 Studio 的 Source Panel
+
+        # LLM 链路追踪 start
+        self._llm_ctx = telemetry().llm_start(
+            source_tab="STUDIO",
+            action_type="ppt",
+            session_id=self._session_id,
+            text_len=len(text),
+        )
+
         self._status_label.setText("🔄 AI 生成 PPT 内容中...")
         self._status_label.setStyleSheet(
             f"color: {T.TEXT_ACCENT}; font-size: {T.FONT_CAPTION[0]}px; padding: 4px 0;"
         )
 
-        # 长文档智能截断提示：超过 8000 字符时告知 LLM 进行提炼
+        # 通过共享 prompt 构建器生成 PPT prompt（与 V5Plus 完全一致）
         text_len = len(text)
-        length_hint = ""
-        if text_len > 8000:
-            length_hint = (
-                f"\n\n注意：原始内容较长（{text_len} 字符），请重点提炼核心信息，"
-                f"不要试图覆盖所有细节。优先保证结构清晰和要点精炼。"
-            )
-
-        # 通过 V5AgentWorker 生成 PPT 内容
-        # 提示：persona 文件 (personas/ppt.md) 已包含详细的 JSON 输出格式要求，
-        # prompt 只需传达主题和基本要求
-        prompt = (
-            f"请根据以下内容生成 PPT 大纲。\n\n"
-            f"要求：\n"
-            f"1. 严格输出纯 JSON 格式，不要输出任何其他文字、代码块标记或解释\n"
-            f"2. 输出格式为 {{\"title\": \"演示文稿标题\", \"slides\": [...]}}\n"
-            f"3. 每个 slide 包含 type, layout, title, items, source_excerpt 等字段\n"
-            f"4. layout 可选值:\n"
-            f"   - center: 居中标题页（封面/结尾）\n"
-            f"   - text_only: 纯文字列表（默认）\n"
-            f"   - image_right / image_left: 图文混排（案例说明/场景描述）\n"
-            f"   - three_columns: 三栏并排（多维度对比）\n"
-            f"   - table: 表格（结构化数据/参数对比/统计数据）\n"
-            f"   - chart: 图表（数值趋势/占比/对比，支持 bar/line/pie）\n"
-            f"   - flowchart: 流程图（步骤流程/决策树/工作流）\n"
-            f"5. 智能选型规则：\n"
-            f"   - 含数值数据、统计、趋势 → 用 chart\n"
-            f"   - 含结构化对比、参数表、分类数据 → 用 table\n"
-            f"   - 含步骤、流程、阶段、顺序 → 用 flowchart\n"
-            f"   - 含案例、场景描述 → 用 image_right\n"
-            f"   - 其他普通内容 → 用 text_only\n"
-            f"6. 每页 3-5 个要点，每个要点一句话\n"
-            f"7. 特殊布局的 items 数据结构：\n"
-            f"   table 类型: items[0] 需含 content_type=\"table\" 和 table_data={{\"columns\":[\"列1\",\"列2\"],\"rows\":[[\"值1\",\"值2\"],...]}}\n"
-            f"   chart 类型: items[0] 需含 content_type=\"chart\", chart_type=\"bar|line|pie\" 和 chart_data={{\"title\":\"图表标题\",\"labels\":[\"标签1\",\"标签2\"],\"datasets\":[{{\"label\":\"系列名\",\"data\":[10,20]}}]}}\n"
-            f"   flowchart 类型: items[0] 需含 content_type=\"flowchart\" 和 flowchart_data={{\"title\":\"流程标题\",\"steps\":[\"步骤1\",\"步骤2\",\"步骤3\"],\"layout\":\"horizontal\"}}\n"
-            f"8. source_excerpt 字段：每页 slide 必须包含，值为该页内容对应的原文片段（20-80字），从原始内容中直接摘录，用于原文高亮联动\n"
-            f"9. 必须包含结尾页：type=ending, layout=center, title='谢谢', subtitle='Q & A'\n"
-            f"10. 覆盖原文所有一级章节，不要遗漏任何主题\n"
-            f"{length_hint}\n"
-            f"原始内容：\n{text}"
-        )
+        prompt = build_ppt_generation_prompt(text=text)
         
         # 结构化日志：记录 PPT 生成请求详情
         from opencopilot.agent.observability import PipelineObservability
@@ -275,7 +228,7 @@ class StudioTabV5(QWidget):
             extra_data={
                 "text_len": text_len,
                 "prompt_len": len(prompt),
-                "has_length_hint": bool(length_hint),
+                "has_length_hint": text_len > 8000,
             },
         )
         
@@ -296,7 +249,13 @@ class StudioTabV5(QWidget):
         """PPT 内容生成完成回调"""
         # 安全清理：等待线程结束后再置空引用，避免 QThread 被销毁时仍在运行
         self._safely_reset_worker()
-        
+
+        # LLM 链路追踪 done
+        t = telemetry()
+        if self._llm_ctx:
+            t.llm_done(self._llm_ctx, source_tab="STUDIO",
+                       output_len=len(full_text))
+
         # 埋点：记录原始文本和 AI 输出的长度
         from opencopilot.agent.observability import PipelineObservability
         obs = PipelineObservability.get_instance()
@@ -304,7 +263,7 @@ class StudioTabV5(QWidget):
                     session_id=self._session_id, event="PPT_GENERATED")
         
         # 尝试从 AI 输出中提取 JSON slides
-        slides = self._parse_slides_from_text(full_text)
+        slides = parse_slides_from_text(full_text)
         if slides:
             # 传入用户原始文本（而非 AI 输出）到 Source Panel
             self.nav.open_studio(text=self._original_text, slides=slides)
@@ -346,6 +305,12 @@ class StudioTabV5(QWidget):
     def _on_ppt_error(self, error_msg: str):
         """PPT 生成错误回调"""
         self._safely_reset_worker()
+
+        # LLM 链路追踪 error
+        t = telemetry()
+        if self._llm_ctx:
+            t.llm_error(self._llm_ctx, source_tab="STUDIO",
+                        error_msg=error_msg)
         
         # 针对常见错误类型给出更具体的提示
         if "规则检查发现违规" in error_msg:
@@ -391,76 +356,8 @@ class StudioTabV5(QWidget):
 
     @staticmethod
     def _parse_slides_from_text(text: str) -> list:
-        """从 AI 输出文本中解析 JSON slides 数组
-
-        优先使用 ppt_generator.extract_json_from_text（更健壮，含 Markdown 降级），
-        若不可用则回退到本地解析逻辑。
-        """
-        # 优先使用 ppt_generator 的健壮解析（含 Markdown 降级）
-        try:
-            from ppt_generator import extract_json_from_text
-            result = extract_json_from_text(text)
-            if result:
-                # extract_json_from_text 可能返回 dict（含 slides key）或 list
-                if isinstance(result, dict) and "slides" in result:
-                    slides = result["slides"]
-                    if isinstance(slides, list) and len(slides) > 0:
-                        return slides
-                elif isinstance(result, list) and len(result) > 0:
-                    return result
-        except ImportError:
-            pass
-        except Exception as e:
-            print(f"[v5] StudioTab: ppt_generator 解析异常: {e}")
-
-        # 回退：本地 JSON 解析
-        import json
-        import re
-
-        # 尝试提取 ```json ... ``` 代码块
-        json_match = re.search(r"```json\s*(.*?)\s*```", text, re.DOTALL)
-        if json_match:
-            try:
-                data = json.loads(json_match.group(1))
-                if isinstance(data, dict) and "slides" in data and isinstance(data["slides"], list):
-                    return data["slides"]
-                elif isinstance(data, list) and len(data) > 0:
-                    return data
-            except (json.JSONDecodeError, ValueError):
-                pass
-
-        # 尝试提取花括号包裹的 JSON 对象
-        obj_match = re.search(r"\{.*\}", text, re.DOTALL)
-        if obj_match:
-            try:
-                data = json.loads(obj_match.group(0))
-                if isinstance(data, dict) and "slides" in data and isinstance(data["slides"], list):
-                    return data["slides"]
-            except (json.JSONDecodeError, ValueError):
-                pass
-
-        # 尝试直接解析整个文本为 JSON
-        try:
-            data = json.loads(text.strip())
-            if isinstance(data, dict) and "slides" in data and isinstance(data["slides"], list):
-                return data["slides"]
-            elif isinstance(data, list) and len(data) > 0:
-                return data
-        except (json.JSONDecodeError, ValueError):
-            pass
-
-        # 尝试提取方括号包裹的数组
-        array_match = re.search(r"\[\s*\{.*?\}\s*\]", text, re.DOTALL)
-        if array_match:
-            try:
-                slides = json.loads(array_match.group(0))
-                if isinstance(slides, list) and len(slides) > 0:
-                    return slides
-            except (json.JSONDecodeError, ValueError):
-                pass
-
-        print(f"[v5] StudioTab: 所有解析方式均失败，文本前 300 字符: {text[:300]}")
-        return []
+        """从 AI 输出文本中解析 JSON slides 数组（代理到共享模块）"""
+        return parse_slides_from_text(text)
 
     # =========================================================================
     # 样式
@@ -478,4 +375,33 @@ class StudioTabV5(QWidget):
             }}
             QPushButton:hover {{ background-color: {T.BTN_PRIMARY_HOVER}; }}
             QPushButton:pressed {{ background-color: {T.ACCENT_PRESSED}; }}
+        """
+
+    @staticmethod
+    def _neutral_btn_style():
+        return f"""
+            QPushButton {{
+                background-color: rgba(255, 255, 255, 0.08);
+                color: {T.TEXT_PRIMARY};
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 8px;
+                padding: {T.BTN_LARGE_PADDING};
+                font-size: 14px; font-weight: bold;
+            }}
+            QPushButton:hover {{ background-color: rgba(255, 255, 255, 0.16); }}
+            QPushButton:pressed {{ background-color: rgba(255, 255, 255, 0.24); }}
+        """
+
+    @staticmethod
+    def _v5plus_btn_style():
+        return f"""
+            QPushButton {{
+                background-color: rgba(167, 139, 250, 180);
+                color: #fff;
+                border: none; border-radius: 8px;
+                padding: {T.BTN_LARGE_PADDING};
+                font-size: 14px; font-weight: bold;
+            }}
+            QPushButton:hover {{ background-color: rgba(167, 139, 250, 230); }}
+            QPushButton:pressed {{ background-color: rgba(139, 92, 246, 230); }}
         """

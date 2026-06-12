@@ -1,6 +1,6 @@
 # OpenCopilot vNext Agent Gateway 与 Provider Adapter 设计
 
-> 版本 vNext Draft 0.1 | 2026-06-08 | 面向统一任务协议、Hermes 过渡接入、自研 coding agent 与第三方智能体接入
+> 版本 vNext Draft 0.2 | 2026-06-11 | 面向统一任务协议、self_hosted 编排执行、自研 agent 与第三方 agent 共存
 
 ---
 
@@ -25,6 +25,22 @@
 4. Broker 能力容易被不同智能体各自绕着调用
 
 因此需要一层 `Gateway + Adapter`。
+
+## 2.1 当前落地状态
+
+截至 `2026-06-11`，vnext runtime 已落地下列能力：
+
+- `auto -> provider selector`
+  - 文本类任务默认走 `self_hosted`
+  - `ppt` 仍默认走 `hermes_local`
+- `self_hosted adapter`
+  - 通过统一 `Task/Event/Result` 协议桥接本地自研 agent runtime
+  - 对 UI 暴露标准 `task.stage_changed / task.delta / task.completed`
+- `runtime ablation hooks`
+  - 通过 `context_snapshot.metadata.runtime_flags` 控制 planner/context/tool prompt 等能力开关
+  - 支持同输入消融评测与增益分析
+
+这意味着 `Agent Gateway` 已不再只是 Hermes 透传层，而是开始承担真正的 runtime orchestration 职责。
 
 ---
 
@@ -91,25 +107,29 @@ Agent Gateway 不负责：
 
 ### 5.1 Provider 分类
 
-第一阶段 provider 规划如下：
+当前 provider 规划如下：
 
-- `hermes_local` 作为过渡主 provider
-- `self_hosted` 作为第二阶段目标 provider
-- `third_party` 作为扩展类别保留
+- `self_hosted`
+  - 当前文本类任务默认 provider
+  - 负责桥接本地自研 orchestrated runtime
+- `hermes_local`
+  - 当前 `ppt`/结构化产物任务默认 provider
+  - 保留为第三方强能力 provider
+- `third_party`
+  - 扩展类别保留
 
 ### 5.2 推荐 provider 目录
 
 ```text
 agents_next/providers/
+  self_hosted/
+    adapter.py
   hermes_local/
     adapter.py
     dto_mapper.py
     stream_adapter.py
     error_mapper.py
     healthcheck.py
-  self_hosted/
-    adapter.py
-    runtime_bridge.py
   openai_compatible/
     adapter.py
     streaming.py
@@ -122,7 +142,7 @@ agents_next/providers/
 
 ### 5.2.1 Hermes local 配置约定
 
-`hermes_local` 第一阶段按“用户填写配置 + 首选 profile + 自动发现可用端口”执行。
+`hermes_local` 当前按“用户填写配置 + 首选 profile + 自动发现可用端口”执行。
 
 推荐环境变量：
 
@@ -141,6 +161,23 @@ HERMES_API_KEY=
 4. 自动扫描 `~/.hermes/profiles/*/.env`，对可推导端口做 `/health` 验证后选择健康实例
 
 这样做的目的不是耦合 Hermes 目录，而是在调试阶段先稳定接通首选 profile；如果当前机器上的 Hermes 端口或 profile 不一致，OpenCopilot 会在运行时动态选择健康实例，同时保留未来切换到其他 profile 或 provider 的能力。
+
+### 5.2.2 Self-hosted 配置约定
+
+`self_hosted` 当前不依赖独立 HTTP provider 进程，而是直接桥接仓库内自研 runtime：
+
+- 入口：`opencopilot.agent.caller.call_agent_pipeline_sync`
+- 编排层：`platform_next/gateway/agent_gateway/coordinator.py`
+- 运行时 flags：`context_snapshot.metadata.runtime_flags`
+
+当前已支持的实验 flags：
+
+- `disable_planner`
+- `disable_context_prefix`
+- `disable_tools_prompt`
+- `disable_persona_prompt`
+- `disable_history`
+- `disable_session_memory`
 
 ### 5.3 Provider 能力差异
 

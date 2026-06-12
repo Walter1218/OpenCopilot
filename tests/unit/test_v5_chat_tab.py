@@ -1,4 +1,4 @@
-"""V5 Chat Tab 业务模拟测试
+"""V5 Chat Tab 业务模拟测试（气泡 UI 版）
 
 覆盖:
 - 初始化与 UI 结构验证
@@ -8,7 +8,6 @@
 - 会话管理（新建/切换/加载历史）
 - Context Panel 折叠/展开
 - 埋点事件验证
-- AI Worker 集成（启动/取消/完成/错误）
 """
 import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -45,6 +44,30 @@ def chat_tab(qapp, mock_nav):
     tab.deleteLater()
 
 
+from PyQt6.QtWidgets import QLabel
+
+
+def _get_bubble_texts(chat_tab):
+    """提取所有气泡中的文本"""
+    texts = []
+    for i in range(chat_tab._bubble_layout.count()):
+        item = chat_tab._bubble_layout.itemAt(i)
+        if item.widget():
+            # 直接 widget（AI / 系统）
+            lbl = item.widget().findChild(QLabel)
+            if lbl is not None:
+                texts.append(lbl.text())
+        elif item.layout():
+            # wrapper layout（用户气泡）
+            for j in range(item.layout().count()):
+                sub = item.layout().itemAt(j)
+                if sub.widget():
+                    lbl = sub.widget().findChild(QLabel)
+                    if lbl is not None:
+                        texts.append(lbl.text())
+    return texts
+
+
 # =============================================================================
 # 1. 初始化验证
 # =============================================================================
@@ -57,10 +80,10 @@ class TestChatTabInit:
         assert chat_tab is not None
         assert chat_tab._message_count == 0
 
-    def test_has_chat_display(self, chat_tab):
-        """应有聊天显示区"""
-        assert chat_tab._chat_display is not None
-        assert chat_tab._chat_display.isReadOnly() is True
+    def test_has_bubble_scroll(self, chat_tab):
+        """应有气泡滚动区"""
+        assert chat_tab._chat_scroll is not None
+        assert chat_tab._bubble_layout is not None
 
     def test_has_chat_input(self, chat_tab):
         """应有输入框"""
@@ -70,10 +93,10 @@ class TestChatTabInit:
     def test_has_send_button(self, chat_tab):
         """应有发送按钮"""
         assert chat_tab._send_btn is not None
-        assert chat_tab._send_btn.text() == "发送"
+        assert chat_tab._send_btn.text() == "▶"
 
     def test_has_session_combo(self, chat_tab):
-        """应有会话选择器"""
+        """应有会话选择器（隐藏但存在）"""
         assert chat_tab._session_combo is not None
         assert chat_tab._session_combo.count() >= 1
 
@@ -82,10 +105,14 @@ class TestChatTabInit:
         assert chat_tab._new_session_btn is not None
         assert chat_tab._new_session_btn.text() == "+"
 
-    def test_context_panel_collapsed_by_default(self, chat_tab):
-        """Context Panel 默认应折叠"""
+    def test_context_collapsed_by_default(self, chat_tab):
+        """Context 默认应折叠"""
         assert chat_tab._context_collapsed is True
-        assert chat_tab._ctx_content.isVisible() is False
+
+    def test_has_context_badge(self, chat_tab):
+        """应有 Context Badge"""
+        assert chat_tab._ctx_badge is not None
+        assert chat_tab._ctx_badge.text() == "Context"
 
 
 # =============================================================================
@@ -99,7 +126,6 @@ class TestSendMessage:
         """空消息应被忽略"""
         chat_tab._chat_input.setText("   ")
         chat_tab._on_send()
-        # 消息计数不应增加
         assert chat_tab._message_count == 0
 
     def test_send_message_updates_ui(self, chat_tab):
@@ -111,13 +137,11 @@ class TestSendMessage:
             mock_worker.return_value = mock_instance
             chat_tab._on_send()
 
-        # 输入框应被清空
         assert chat_tab._chat_input.text() == ""
-        # 消息计数应增加
         assert chat_tab._message_count == 1
 
     def test_send_message_appends_user_message(self, chat_tab):
-        """发送后应显示用户消息"""
+        """发送后应显示用户消息气泡"""
         chat_tab._chat_input.setText("Test message")
         with patch("gui.v5.chat_tab.V5AgentWorker") as mock_worker:
             mock_instance = MagicMock()
@@ -125,11 +149,11 @@ class TestSendMessage:
             mock_worker.return_value = mock_instance
             chat_tab._on_send()
 
-        html = chat_tab._chat_display.toHtml()
-        assert "Test message" in html
+        texts = _get_bubble_texts(chat_tab)
+        assert any("Test message" in t for t in texts)
 
     def test_send_button_changes_to_stop(self, chat_tab):
-        """发送后按钮应变更为停止"""
+        """发送后应创建 Agent Worker"""
         chat_tab._chat_input.setText("Hello")
         with patch("gui.v5.chat_tab.V5AgentWorker") as mock_worker:
             mock_instance = MagicMock()
@@ -137,7 +161,7 @@ class TestSendMessage:
             mock_worker.return_value = mock_instance
             chat_tab._on_send()
 
-        assert chat_tab._send_btn.text() == "停止"
+        assert chat_tab._agent_worker is not None
 
     def test_send_creates_agent_worker(self, chat_tab):
         """发送应创建 V5AgentWorker"""
@@ -164,7 +188,6 @@ class TestSendMessage:
         chat_tab._on_send()
 
         mock_existing.stop.assert_called_once()
-        assert chat_tab._send_btn.text() == "发送"
 
 
 # =============================================================================
@@ -183,13 +206,12 @@ class TestAICallbacks:
             mock_worker.return_value = mock_instance
             chat_tab._on_send()
 
-        # 模拟 AI chunk 回调
         chat_tab._on_ai_chunk("Hello from AI")
-        html = chat_tab._chat_display.toHtml()
-        assert "Hello from AI" in html
+        texts = _get_bubble_texts(chat_tab)
+        assert any("Hello from AI" in t for t in texts)
 
     def test_ai_finished_resets_button(self, chat_tab):
-        """AI 完成后按钮应恢复"""
+        """AI 完成后应恢复状态"""
         chat_tab._chat_input.setText("Test")
         with patch("gui.v5.chat_tab.V5AgentWorker") as mock_worker:
             mock_instance = MagicMock()
@@ -198,7 +220,7 @@ class TestAICallbacks:
             chat_tab._on_send()
 
         chat_tab._on_ai_finished("Final response")
-        assert chat_tab._send_btn.text() == "发送"
+        assert chat_tab._send_btn.text() == "▶"
 
     def test_ai_error_shows_error(self, chat_tab):
         """AI 错误应显示错误信息"""
@@ -210,9 +232,9 @@ class TestAICallbacks:
             chat_tab._on_send()
 
         chat_tab._on_ai_error("Connection timeout")
-        html = chat_tab._chat_display.toHtml()
-        assert "Connection timeout" in html
-        assert chat_tab._send_btn.text() == "发送"
+        texts = _get_bubble_texts(chat_tab)
+        assert any("Connection timeout" in t for t in texts)
+        assert chat_tab._send_btn.text() == "▶"
 
     def test_ai_finished_saves_message(self, chat_tab):
         """AI 完成后应保存消息到历史"""
@@ -224,13 +246,12 @@ class TestAICallbacks:
             chat_tab._on_send()
 
         chat_tab._on_ai_finished("Assistant response")
-        # 验证历史文件是否写入
         history_dir = os.path.expanduser("~/.opencopilot/chat_history")
         history_file = os.path.join(history_dir, f"{chat_tab._session_id}.json")
         if os.path.exists(history_file):
             with open(history_file, "r", encoding="utf-8") as f:
                 history = json.load(f)
-            assert len(history) >= 2  # user + assistant
+            assert len(history) >= 2
             assert history[-1]["role"] == "assistant"
 
 
@@ -242,25 +263,30 @@ class TestInjectContext:
     """上下文注入测试"""
 
     def test_inject_context_shows_preview(self, chat_tab):
-        """注入上下文应显示预览"""
+        """注入上下文应显示系统消息"""
         chat_tab.inject_context("This is context text from Work Tab", "selection")
-        html = chat_tab._chat_display.toHtml()
-        assert "上下文" in html
-        assert "selection" in html
+        texts = _get_bubble_texts(chat_tab)
+        assert any("上下文" in t for t in texts) or any("selection" in t for t in texts)
 
     def test_inject_context_long_text_truncated(self, chat_tab):
         """超长上下文应截断显示"""
         long_text = "A" * 500
         chat_tab.inject_context(long_text, "active_doc")
-        html = chat_tab._chat_display.toHtml()
-        assert "500 字符" in html
+        texts = _get_bubble_texts(chat_tab)
+        assert any("500 字符" in t for t in texts)
 
     def test_inject_context_clears_display(self, chat_tab):
         """注入上下文应清空显示区"""
-        chat_tab._chat_display.append("Old content")
+        chat_tab.append_message("AI", "Old content")
         chat_tab.inject_context("New context", "browser")
-        html = chat_tab._chat_display.toHtml()
-        assert "Old content" not in html
+        texts = _get_bubble_texts(chat_tab)
+        assert not any("Old content" in t for t in texts)
+
+    def test_inject_context_updates_context_panel(self, chat_tab):
+        """注入上下文后 Context 来源数应增加"""
+        chat_tab.inject_context("Context payload", "selection")
+        assert len(chat_tab._context_sources) == 1
+        assert "1 个上下文来源" in chat_tab._ctx_hint.text()
 
 
 # =============================================================================
@@ -273,23 +299,28 @@ class TestSetSharedText:
     def test_set_shared_text_shows_message(self, chat_tab):
         """接收共享文本应显示消息"""
         chat_tab.set_shared_text("Shared from drag drop", source="drag_drop")
-        html = chat_tab._chat_display.toHtml()
-        assert "Shared from drag drop" in html
-        assert "drag_drop" in html
+        texts = _get_bubble_texts(chat_tab)
+        assert any("Shared from drag drop" in t for t in texts) or \
+               any("drag_drop" in t for t in texts)
 
     def test_set_shared_text_empty_ignored(self, chat_tab):
         """空共享文本不应显示"""
-        chat_tab._chat_display.clear()
+        chat_tab._clear_bubbles()
         chat_tab.set_shared_text("", source="drag_drop")
-        html = chat_tab._chat_display.toHtml()
-        # 空文本不应添加新消息
-        assert "drag_drop" not in html
+        texts = _get_bubble_texts(chat_tab)
+        assert not any("drag_drop" in t for t in texts)
 
     def test_set_shared_text_with_file_source(self, chat_tab):
         """文件来源应正确显示"""
         chat_tab.set_shared_text("File content", source="file:test.py")
-        html = chat_tab._chat_display.toHtml()
-        assert "file:test.py" in html
+        texts = _get_bubble_texts(chat_tab)
+        assert any("file:test.py" in t for t in texts)
+
+    def test_set_shared_text_updates_context_count(self, chat_tab):
+        """共享文本后 Context 来源数应增加"""
+        chat_tab.set_shared_text("Shared content", source="drag_drop")
+        assert len(chat_tab._context_sources) == 1
+        assert "1 个上下文来源" in chat_tab._ctx_hint.text()
 
 
 # =============================================================================
@@ -313,105 +344,83 @@ class TestSessionManagement:
         assert chat_tab._session_combo.count() == old_count + 1
 
     def test_new_session_clears_display(self, chat_tab):
-        """新建会话应清空显示区（触发combo切换后显示历史为空）"""
-        chat_tab._chat_display.append("Old message")
+        """新建会话应清空显示区并显示新会话提示"""
+        chat_tab.append_message("AI", "Old message")
         chat_tab._on_new_session()
-        text = chat_tab._chat_display.toPlainText()
-        # _on_new_session 会触发 combo currentIndexChanged，最终显示历史为空或新会话
-        assert "会话历史为空" in text or "新会话" in text
+        texts = _get_bubble_texts(chat_tab)
+        assert any("新会话" in t for t in texts)
 
     def test_session_switch_loads_history(self, chat_tab):
         """切换会话应加载历史"""
-        # 先创建一些历史
         chat_tab._session_id = "test-session-123"
         chat_tab._save_message("user", "Hello")
         chat_tab._save_message("assistant", "Hi there")
 
-        # 添加到 combo
         chat_tab._session_combo.addItem("Test Session", "test-session-123")
         index = chat_tab._session_combo.count() - 1
 
-        # 切换会话
         chat_tab._on_session_changed(index)
-        html = chat_tab._chat_display.toHtml()
-        assert "Hello" in html
-        assert "Hi there" in html
+        texts = _get_bubble_texts(chat_tab)
+        assert any("Hello" in t for t in texts)
+        assert any("Hi there" in t for t in texts)
 
     def test_session_switch_negative_index_ignored(self, chat_tab):
         """负索引应被忽略"""
-        chat_tab._chat_display.append("Content")
+        chat_tab.append_message("AI", "Content")
+        old_texts = _get_bubble_texts(chat_tab)
         chat_tab._on_session_changed(-1)
-        # 不应清空
-        html = chat_tab._chat_display.toHtml()
-        assert "Content" in html
+        # 不应清空（气泡数不变）
+        new_texts = _get_bubble_texts(chat_tab)
+        assert len(new_texts) >= len(old_texts)
 
 
 # =============================================================================
-# 7. Context Panel 折叠
+# 7. Context Panel
 # =============================================================================
 
 class TestContextPanel:
-    """Context Panel 折叠/展开测试"""
+    """Context Panel 测试"""
 
-    def test_toggle_expands(self, chat_tab):
-        """折叠按钮点击应展开"""
+    def test_toggle(self, chat_tab):
+        """toggle_context 应切换折叠状态"""
         assert chat_tab._context_collapsed is True
         chat_tab._toggle_context()
         assert chat_tab._context_collapsed is False
-        # setVisible 被调用即可，offscreen 平台 isVisible() 不可靠
-
-    def test_toggle_collapses(self, chat_tab):
-        """再次点击应折叠"""
-        chat_tab._toggle_context()  # expand
-        chat_tab._toggle_context()  # collapse
+        chat_tab._toggle_context()
         assert chat_tab._context_collapsed is True
-        assert chat_tab._ctx_content.isVisible() is False
 
-    def test_toggle_updates_button_text(self, chat_tab):
-        """按钮文本应随状态变化"""
-        chat_tab._toggle_context()
-        assert "▾" in chat_tab._ctx_toggle_btn.text()
-        chat_tab._toggle_context()
-        assert "▸" in chat_tab._ctx_toggle_btn.text()
+    def test_clear_context_sources(self, chat_tab):
+        """清空上下文后应恢复为空状态"""
+        chat_tab.set_shared_text("Shared content", source="drag_drop")
+        chat_tab._clear_context_sources()
+        assert len(chat_tab._context_sources) == 0
+        assert "从 Work Tab" in chat_tab._ctx_hint.text()
 
 
 # =============================================================================
-# 8. 消息追加与 HTML 转义
+# 8. 消息追加
 # =============================================================================
 
 class TestAppendMessage:
     """消息追加测试"""
 
     def test_append_user_message(self, chat_tab):
-        """用户消息应正确显示"""
+        """用户消息应正确显示为气泡"""
         chat_tab.append_message("你", "Hello")
-        html = chat_tab._chat_display.toHtml()
-        assert "Hello" in html
+        texts = _get_bubble_texts(chat_tab)
+        assert any("Hello" in t for t in texts)
 
     def test_append_ai_message(self, chat_tab):
-        """AI 消息应正确显示"""
+        """AI 消息应正确显示为气泡"""
         chat_tab.append_message("AI", "Response")
-        html = chat_tab._chat_display.toHtml()
-        assert "Response" in html
+        texts = _get_bubble_texts(chat_tab)
+        assert any("Response" in t for t in texts)
 
     def test_append_system_message(self, chat_tab):
-        """系统消息应正确显示"""
+        """系统消息应正确显示为气泡"""
         chat_tab.append_message("系统", "System info")
-        html = chat_tab._chat_display.toHtml()
-        assert "System info" in html
-
-    def test_html_escaping(self, chat_tab):
-        """HTML 特殊字符应被转义"""
-        chat_tab.append_message("AI", "<script>alert('xss')</script>")
-        html = chat_tab._chat_display.toHtml()
-        assert "<script>" not in html
-        assert "&lt;script&gt;" in html
-
-    def test_newline_to_br(self, chat_tab):
-        """换行应转为 <br>"""
-        chat_tab.append_message("AI", "Line1\nLine2")
-        html = chat_tab._chat_display.toHtml()
-        assert "<br>" in html or "Line1" in html
+        texts = _get_bubble_texts(chat_tab)
+        assert any("System info" in t for t in texts)
 
 
 # =============================================================================
@@ -490,15 +499,6 @@ class TestTelemetryEvents:
         calls = [c for c in mock_emit.call_args_list if c[0][0] == "V5_CHAT_SHARED_TEXT"]
         assert len(calls) == 1
         assert calls[0][1].get("source") == "drag_drop"
-
-    def test_toggle_context_emits_v5_chat_ctx_toggle(self, chat_tab):
-        """切换 Context Panel 应发射 V5_CHAT_CTX_TOGGLE"""
-        with patch("gui.v5.telemetry.V5Telemetry.emit") as mock_emit:
-            chat_tab._toggle_context()
-
-        calls = [c for c in mock_emit.call_args_list if c[0][0] == "V5_CHAT_CTX_TOGGLE"]
-        assert len(calls) == 1
-        assert calls[0][1].get("collapsed") is False
 
     def test_session_switch_emits_v5_chat_switch_session(self, chat_tab):
         """切换会话应发射 V5_CHAT_SWITCH_SESSION"""

@@ -1,0 +1,58 @@
+{
+  "phase": "modification_ab",
+  "timestamp": "2026-06-12 02:02:07",
+  "doc": "ai_agent_whitepaper.md",
+  "target_slide_index": 0,
+  "cases": [
+    {
+      "instruction_label": "layout_change",
+      "instruction": "将此页改为流程图布局",
+      "slides_count_a": 5,
+      "slides_count_b": 12,
+      "text_similarity": 0.9998,
+      "structure_diff": {
+        "slide_count_diff": 7,
+        "layout_diffs": {
+          "text_only": 3,
+          "chart": 2,
+          "center": 2
+        },
+        "avg_title_similarity": 1.0,
+        "total_items_diff": 9
+      },
+      "latency_a": 14.43,
+      "latency_b": 13.51
+    },
+    {
+      "instruction_label": "content_slim",
+      "instruction": "精简要点，每项不超过10个字",
+      "slides_count_a": 12,
+      "slides_count_b": 12,
+      "text_similarity": 0.9701,
+      "structure_diff": {
+        "slide_count_diff": 0,
+        "layout_diffs": {},
+        "avg_title_similarity": 1.0,
+        "total_items_diff": 0
+      },
+      "latency_a": 13.75,
+      "latency_b": 14.07
+    },
+    {
+      "instruction_label": "title_refine",
+      "instruction": "将标题改为更简洁的表达",
+      "slides_count_a": 12,
+      "slides_count_b": 12,
+      "text_similarity": 0.6427,
+      "structure_diff": {
+        "slide_count_diff": 0,
+        "layout_diffs": {},
+        "avg_title_similarity": 0.9802,
+        "total_items_diff": 0
+      },
+      "latency_a": 20.35,
+      "latency_b": 15.46
+    }
+  ],
+  "avg_similarity": 0.8709
+}

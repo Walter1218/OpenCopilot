@@ -55,11 +55,15 @@ def _finalize_task_result(task: TaskRecord) -> None:
     )
     context = get_context_store().get(task.context_snapshot_id)
     summary = result_payload.get("summary", "")
+    warnings = list(result_payload.get("warnings", []))
+    provider_warning = f"provider={task.provider}"
+    if provider_warning not in warnings:
+        warnings.append(provider_warning)
     result = TaskResult(
         summary=summary,
         artifacts=result_payload.get("artifacts", []),
         evidence=result_payload.get("evidence", []),
-        warnings=[f"provider={task.provider}"],
+        warnings=warnings,
         next_actions=result_payload.get("next_actions", []),
         apply_operations=_build_apply_operations(
             context.selection_text if context is not None else "",
@@ -161,24 +165,10 @@ def create_task(request: CreateTaskRequest) -> dict:
     if context is None:
         raise HTTPException(status_code=404, detail="context snapshot not found")
 
-    task = TaskRecord(
-        task_id=f"task_{uuid4().hex[:12]}",
-        action=request.action,
-        context_snapshot_id=request.context_snapshot_id,
-        provider=request.agent_preferences.provider,
-    )
-    get_task_store().create(task)
-    event = TaskEvent(
-        event_id=f"evt_{uuid4().hex[:12]}",
-        task_id=task.task_id,
-        type=EventType.TASK_CREATED,
-        sequence=get_event_store().next_sequence(task.task_id),
-        payload={"action": task.action},
-    )
-    get_event_store().append(event)
-
+    gateway = get_agent_gateway()
+    task_id = f"task_{uuid4().hex[:12]}"
     unified_request = UnifiedTaskRequest(
-        task_id=task.task_id,
+        task_id=task_id,
         action=request.action,
         user_input=request.user_input,
         context_snapshot_id=request.context_snapshot_id,
@@ -192,7 +182,27 @@ def create_task(request: CreateTaskRequest) -> dict:
         },
         constraints=request.constraints.model_dump(),
     )
-    provider_run_id = get_agent_gateway().create_run(unified_request)
+    resolved_provider = request.agent_preferences.provider
+    if hasattr(gateway, "resolve_provider"):
+        resolved_provider = gateway.resolve_provider(unified_request)
+
+    task = TaskRecord(
+        task_id=task_id,
+        action=request.action,
+        context_snapshot_id=request.context_snapshot_id,
+        provider=resolved_provider,
+    )
+    get_task_store().create(task)
+    event = TaskEvent(
+        event_id=f"evt_{uuid4().hex[:12]}",
+        task_id=task.task_id,
+        type=EventType.TASK_CREATED,
+        sequence=get_event_store().next_sequence(task.task_id),
+        payload={"action": task.action},
+    )
+    get_event_store().append(event)
+
+    provider_run_id = gateway.create_run(unified_request)
     get_task_store().set_provider_run_id(task.task_id, provider_run_id)
     get_task_store().update_status(
         task.task_id,

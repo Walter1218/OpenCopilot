@@ -61,8 +61,8 @@ DEFAULT_WEB_SEARCH_CONFIG = {
 }
 
 DEFAULT_AGENT_RUNTIME_CONFIG = {
-    "default_backend": "vnext_provider",
-    "default_provider": "hermes_local",
+    "default_backend": "self_agent",
+    "default_provider": "self_agent",
     "default_model": "default",
     "capability_routes": {},
     "fallback_policy": {

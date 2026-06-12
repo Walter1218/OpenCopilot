@@ -1,6 +1,8 @@
 import json
 import time
 import asyncio
+import inspect
+import os
 import traceback
 from typing import Dict, Any, Optional, Callable, AsyncGenerator
 
@@ -19,6 +21,15 @@ def _get_config_manager():
 # ============================================================
 
 class SessionSetupMiddleware(BaseMiddleware):
+    _ppt_editor_direct_edit_prompt = (
+        "You are handling a PPT co-creation edit request.\n"
+        "The prompt already includes the current slide data and enough context to edit directly.\n"
+        "Do not ask to read the slide again.\n"
+        "Do not output placeholder tool calls such as read_slide.\n"
+        "Return the final editable result directly, preferably as render_commands JSON.\n"
+        "Unless the user explicitly asks to add or modify other pages, default to the current slide only."
+    )
+
 
     def __init__(
         self,
@@ -46,6 +57,7 @@ class SessionSetupMiddleware(BaseMiddleware):
             text = ctx.text
             session_id = ctx.session_id
             is_new_task = ctx.is_new_task
+            runtime_flags = self._extract_runtime_flags(req)
 
             # ── 诊断埋点: 入口参数 ──
             PipelineObservability.get_instance().log(
@@ -126,16 +138,27 @@ class SessionSetupMiddleware(BaseMiddleware):
 
             _t4 = time.time()
             source = envelope.get("source", "drag")
-            context_prefix = self._build_context_prefix(source, envelope.get("meta", {}))
+            context_prefix = ""
+            if not runtime_flags.get("disable_context_prefix", False):
+                context_prefix = self._build_context_prefix(source, envelope.get("meta", {}))
             persona_prompt = self._sanitize_persona_for_context(persona_prompt, source)
+            if runtime_flags.get("disable_persona_prompt", False):
+                persona_prompt = ""
 
             if context_prefix:
                 ctx.enriched_system = f"{context_prefix}\n\n{persona_prompt}"
             else:
                 ctx.enriched_system = persona_prompt
 
+            if self._is_ppt_editor_request(ctx):
+                ctx.enable_web_search = False
+                ctx.metadata["answer_first"] = True
+                ctx.enriched_system = f"{ctx.enriched_system}\n\n{self._ppt_editor_direct_edit_prompt}".strip()
+
             # 注入 SKILL.md 工具描述到 system prompt（延迟加载，缓存复用）
-            tools_prompt = self._get_tools_prompt()
+            tools_prompt = ""
+            if not runtime_flags.get("disable_tools_prompt", False) and not self._is_ppt_editor_request(ctx):
+                tools_prompt = self._get_tools_prompt()
             if tools_prompt:
                 ctx.enriched_system = f"{ctx.enriched_system}\n\n{tools_prompt}"
                 PipelineObservability.get_instance().log(
@@ -147,10 +170,13 @@ class SessionSetupMiddleware(BaseMiddleware):
             _t_prefix = time.time() - _t4
 
             _t5 = time.time()
+            history_messages = chat_ctx["messages"]
+            if runtime_flags.get("disable_history", False):
+                history_messages = []
             ctx.messages = self._window_manager.build_messages(
                 system_prompt=ctx.enriched_system,
                 envelope=envelope,
-                history_messages=chat_ctx["messages"],
+                history_messages=history_messages,
             )
             _t_build = time.time() - _t5
 
@@ -200,7 +226,8 @@ class SessionSetupMiddleware(BaseMiddleware):
                 else user_message_content[0]["text"]
             )
 
-            self._memory.add_message(session_id, "user", ctx.user_message_content)
+            if not runtime_flags.get("disable_session_memory", False):
+                self._memory.add_message(session_id, "user", ctx.user_message_content)
 
             PipelineObservability.get_instance().timer(f"[Timer] SessionSetup: total={time.time()-_t0:.3f}s | norm={_t_norm:.3f} mem={_t_mem:.3f} persona={_t_persona:.3f} prefix={_t_prefix:.3f} build={_t_build:.3f}",
                                                         action_type=ctx.action_type)
@@ -209,6 +236,14 @@ class SessionSetupMiddleware(BaseMiddleware):
             traceback.print_exc()
 
         await next_fn()
+
+    @staticmethod
+    def _extract_runtime_flags(req: Dict[str, Any]) -> Dict[str, Any]:
+        context_meta = req.get("context_meta", {})
+        if not isinstance(context_meta, dict):
+            return {}
+        runtime_flags = context_meta.get("runtime_flags", {})
+        return runtime_flags if isinstance(runtime_flags, dict) else {}
 
     @staticmethod
     def _inject_translation_direction(persona_prompt: str, context_meta: dict) -> str:
@@ -256,6 +291,17 @@ class SessionSetupMiddleware(BaseMiddleware):
             print(f"[Pipeline] SkillLoader failed: {e}", flush=True)
             self._tools_prompt_cache = ""
         return self._tools_prompt_cache
+
+    @staticmethod
+    def _is_ppt_editor_request(ctx: PipelineContext) -> bool:
+        if os.getenv("OPEN_COPILOT_DISABLE_PPT_DIRECT_EDIT_GUARD", "0").strip().lower() in {"1", "true", "on"}:
+            return False
+        context_source = str(ctx.request.get("context_source", "")).lower()
+        text = ctx.text or ""
+        return (
+            context_source == "ppt_editor"
+            or ("PPT 总共" in text and "当前幻灯片数据" in text)
+        )
 
 
 class SecurityGuardMiddleware(BaseMiddleware):
@@ -418,9 +464,11 @@ class PlannerMiddleware(BaseMiddleware):
 
     # 这些 action_type 明确不需要 Planner（避免 PPT prompt 中"步骤""设计"等词触发误判）
     _skip_planner_types = {"ppt", "translate", "polish", "fix", "evaluation", "revision", "custom"}
+    _answer_first_types = {"chat", "code_review", "explain", "planning"}
 
     async def process(self, ctx: PipelineContext, next_fn: Callable[[], object]) -> None:
         _t0 = time.time()
+        runtime_flags = self._extract_runtime_flags(ctx)
 
         # 按 action_type 快速跳过不需要 Planner 的请求
         if ctx.action_type in self._skip_planner_types:
@@ -431,8 +479,17 @@ class PlannerMiddleware(BaseMiddleware):
             await next_fn()
             return
 
+        if runtime_flags.get("disable_planner", False):
+            PipelineObservability.get_instance().timer(
+                f"[Timer] Planner: total={time.time()-_t0:.3f}s (skipped, runtime_flag=disable_planner)",
+                action_type=ctx.action_type,
+            )
+            await next_fn()
+            return
+
         try:
-            if self._is_complex_task(ctx.text):
+            if self._is_complex_task(ctx.text) or self._is_ppt_editor_request(ctx):
+                answer_first = self._should_answer_first(ctx)
                 _t1 = time.time()
                 plan = await self._planner.create_plan(
                     task=ctx.text,
@@ -448,8 +505,14 @@ class PlannerMiddleware(BaseMiddleware):
                             for s in plan.steps
                         ],
                     }
-                    plan_text = self._format_plan_for_system(ctx.metadata["plan"])
-                    ctx.enriched_system = ctx.enriched_system + plan_text
+                    if answer_first:
+                        ctx.metadata["answer_first"] = True
+                        ctx.enable_web_search = False
+                        plan_text = self._format_answer_first_plan(ctx.metadata["plan"])
+                        self._inject_system_message(ctx, plan_text)
+                    else:
+                        plan_text = self._format_plan_for_system(ctx.metadata["plan"])
+                        ctx.enriched_system = ctx.enriched_system + plan_text
                 PipelineObservability.get_instance().timer(f"[Timer] Planner: total={time.time()-_t0:.3f}s | create_plan={_t_plan:.3f}s (complex)",
                                                             action_type=ctx.action_type)
             else:
@@ -462,6 +525,14 @@ class PlannerMiddleware(BaseMiddleware):
 
         await next_fn()
 
+    @staticmethod
+    def _extract_runtime_flags(ctx: PipelineContext) -> Dict[str, Any]:
+        context_meta = ctx.request.get("context_meta", {})
+        if not isinstance(context_meta, dict):
+            return {}
+        runtime_flags = context_meta.get("runtime_flags", {})
+        return runtime_flags if isinstance(runtime_flags, dict) else {}
+
     def _is_complex_task(self, text: str) -> bool:
         complexity_indicators = [
             "步骤", "流程", "方案", "规划",
@@ -473,6 +544,38 @@ class PlannerMiddleware(BaseMiddleware):
         score = sum(1 for kw in complexity_indicators if kw in text_lower)
         return score >= 2
 
+    def _should_answer_first(self, ctx: PipelineContext) -> bool:
+        if self._is_ppt_editor_request(ctx):
+            return True
+
+        if ctx.action_type not in self._answer_first_types:
+            return False
+
+        text_lower = ctx.text.lower()
+        search_intents = [
+            "搜索", "检索", "联网", "调研", "research", "最新", "查一下", "查找", "搜集资料",
+            "web search", "google", "搜索相关", "先搜索",
+        ]
+        if any(keyword in text_lower for keyword in search_intents):
+            return False
+
+        deliverable_intents = [
+            "给出", "输出", "方案", "执行摘要", "行动清单", "风险清单", "待确认",
+            "审查", "改进建议", "示例代码", "重构", "总结", "分析",
+        ]
+        return any(keyword in text_lower for keyword in deliverable_intents)
+
+    @staticmethod
+    def _is_ppt_editor_request(ctx: PipelineContext) -> bool:
+        if os.getenv("OPEN_COPILOT_DISABLE_PPT_DIRECT_EDIT_GUARD", "0").strip().lower() in {"1", "true", "on"}:
+            return False
+        context_source = str(ctx.request.get("context_source", "")).lower()
+        text = ctx.text or ""
+        return (
+            context_source == "ppt_editor"
+            or ("PPT 总共" in text and "当前幻灯片数据" in text)
+        )
+
     def _format_plan_for_system(self, plan: dict) -> str:
         lines = ["\n\n[Task Plan - Auto-generated]"]
         lines.append(f"Task: {plan['task']}")
@@ -480,6 +583,50 @@ class PlannerMiddleware(BaseMiddleware):
         for i, s in enumerate(plan["steps"], 1):
             lines.append(f"  {i}. [{s['type']}] {s['description']}")
         return "\n".join(lines)
+
+    def _format_answer_first_plan(self, plan: dict) -> str:
+        lines = [
+            "[Internal Response Strategy]",
+            "You must provide the final answer directly in this turn.",
+            "Do not expose tool calls, search plans, or intermediate reasoning.",
+            "Do not output JSON tool requests unless the user explicitly asks for them.",
+            "Assume the prompt and provided context already contain the required information.",
+            "Do not claim that you need to inspect files, query knowledge_search, or browse the web unless the user explicitly asks for external lookup.",
+            "Use the internal plan only to organize the final answer structure.",
+            f"Task: {plan['task']}",
+            "Suggested answer structure:",
+        ]
+        for idx, step in enumerate(plan["steps"], 1):
+            desc = self._sanitize_answer_first_step(step["description"])
+            lines.append(f"{idx}. {desc}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _sanitize_answer_first_step(description: str) -> str:
+        replacements = {
+            "搜索相关知识": "梳理与任务相关的关键信息",
+            "收集完成任务所需的信息": "提炼完成任务所需的必要信息",
+            "收集信息": "提炼必要信息",
+            "调用工具": "组织必要素材",
+            "检索": "梳理",
+            "搜索": "梳理",
+            "工具": "信息",
+        }
+        sanitized = description
+        for source, target in replacements.items():
+            sanitized = sanitized.replace(source, target)
+        return sanitized
+
+    @staticmethod
+    def _inject_system_message(ctx: PipelineContext, content: str) -> None:
+        system_message = {"role": "system", "content": content}
+        if not ctx.messages:
+            ctx.messages.append(system_message)
+            return
+        if ctx.messages[-1].get("role") == "user":
+            ctx.messages.insert(len(ctx.messages) - 1, system_message)
+        else:
+            ctx.messages.append(system_message)
 
 
 class StateTrackingMiddleware(BaseMiddleware):
@@ -492,12 +639,15 @@ class StateTrackingMiddleware(BaseMiddleware):
         try:
             # 用户消息已在 SessionSetupMiddleware 中添加，此处不再重复添加
             if ctx.metadata.get("plan"):
-                await self._state.create_task(
+                task_result = self._state.create_task(
                     session_id=ctx.session_id,
                     task_id=ctx.metadata["plan"]["plan_id"],
                     task_type="agent_request",
                     description=ctx.metadata["plan"]["task"],
+                    metadata={"plan": ctx.metadata["plan"]},
                 )
+                if inspect.isawaitable(task_result):
+                    await task_result
         except Exception as e:
             print(f"[Pipeline] State tracking error: {e}", flush=True)
 

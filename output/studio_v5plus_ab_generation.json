@@ -1,0 +1,290 @@
+{
+  "phase": "generation_ab",
+  "timestamp": "2026-06-12 02:00:01",
+  "summary": {
+    "total_docs": 13,
+    "avg_text_similarity": 0.4725,
+    "avg_slide_count_diff": 1.15,
+    "avg_layout_match_rate": 0.4844,
+    "consistent_count": 8,
+    "consistency_rate": 0.6154,
+    "threshold": 0.4
+  },
+  "cases": [
+    {
+      "doc": "project_plan.md",
+      "doc_chars": 800,
+      "raw_output_len_a": 3051,
+      "raw_output_len_b": 2963,
+      "slides_count_a": 9,
+      "slides_count_b": 10,
+      "text_similarity": 0.716,
+      "structure_diff": {
+        "slide_count_diff": 1,
+        "layout_diffs": {
+          "text_only": 3,
+          "chart": -1,
+          "image_right": -1
+        },
+        "avg_title_similarity": 0.5261,
+        "total_items_diff": 8
+      },
+      "layout_match_rate": 0.4444,
+      "latency_a": 13.28,
+      "latency_b": 12.57
+    },
+    {
+      "doc": "ai_agent_whitepaper.md",
+      "doc_chars": 1981,
+      "raw_output_len_a": 5849,
+      "raw_output_len_b": 3743,
+      "slides_count_a": 11,
+      "slides_count_b": 11,
+      "text_similarity": 0.4256,
+      "structure_diff": {
+        "slide_count_diff": 0,
+        "layout_diffs": {
+          "text_only": 1,
+          "chart": -1
+        },
+        "avg_title_similarity": 0.6332,
+        "total_items_diff": 1
+      },
+      "layout_match_rate": 0.8182,
+      "latency_a": 17.83,
+      "latency_b": 13.6
+    },
+    {
+      "doc": "TEST_REPORT.md",
+      "doc_chars": 10788,
+      "raw_output_len_a": 5077,
+      "raw_output_len_b": 3475,
+      "slides_count_a": 13,
+      "slides_count_b": 10,
+      "text_similarity": 0.3531,
+      "structure_diff": {
+        "slide_count_diff": 3,
+        "layout_diffs": {
+          "flowchart": 1,
+          "three_columns": -2,
+          "center": -1,
+          "chart": -1
+        },
+        "avg_title_similarity": 0.1902,
+        "total_items_diff": 33
+      },
+      "layout_match_rate": 0.2,
+      "latency_a": 21.34,
+      "latency_b": 15.68
+    },
+    {
+      "doc": "budget_report.md",
+      "doc_chars": 897,
+      "raw_output_len_a": 1662,
+      "raw_output_len_b": 2273,
+      "slides_count_a": 7,
+      "slides_count_b": 6,
+      "text_similarity": 0.5967,
+      "structure_diff": {
+        "slide_count_diff": 1,
+        "layout_diffs": {
+          "flowchart": 1,
+          "three_columns": 1,
+          "text_only": -3
+        },
+        "avg_title_similarity": 0.3954,
+        "total_items_diff": 15
+      },
+      "layout_match_rate": 0.3333,
+      "latency_a": 7.19,
+      "latency_b": 10.78
+    },
+    {
+      "doc": "api_spec.md",
+      "doc_chars": 951,
+      "raw_output_len_a": 2600,
+      "raw_output_len_b": 2417,
+      "slides_count_a": 8,
+      "slides_count_b": 7,
+      "text_similarity": 0.3285,
+      "structure_diff": {
+        "slide_count_diff": 1,
+        "layout_diffs": {
+          "text_only": -1
+        },
+        "avg_title_similarity": 0.2483,
+        "total_items_diff": 6
+      },
+      "layout_match_rate": 0.2857,
+      "latency_a": 10.45,
+      "latency_b": 12.51
+    },
+    {
+      "doc": "mixed_release_note.md",
+      "doc_chars": 1481,
+      "raw_output_len_a": 2633,
+      "raw_output_len_b": 3081,
+      "slides_count_a": 5,
+      "slides_count_b": 5,
+      "text_similarity": 0.2125,
+      "structure_diff": {
+        "slide_count_diff": 0,
+        "layout_diffs": {
+          "unknown": 1,
+          "flowchart": 1,
+          "table": -1,
+          "three_columns": -1
+        },
+        "avg_title_similarity": 0.2148,
+        "total_items_diff": 2
+      },
+      "layout_match_rate": 0.2,
+      "latency_a": 11.21,
+      "latency_b": 11.08
+    },
+    {
+      "doc": "tech_spec.md",
+      "doc_chars": 1251,
+      "raw_output_len_a": 2526,
+      "raw_output_len_b": 2966,
+      "slides_count_a": 7,
+      "slides_count_b": 7,
+      "text_similarity": 0.5076,
+      "structure_diff": {
+        "slide_count_diff": 0,
+        "layout_diffs": {},
+        "avg_title_similarity": 0.7478,
+        "total_items_diff": 10
+      },
+      "layout_match_rate": 1.0,
+      "latency_a": 9.74,
+      "latency_b": 11.88
+    },
+    {
+      "doc": "combined_long_doc.md",
+      "doc_chars": 5030,
+      "raw_output_len_a": 5951,
+      "raw_output_len_b": 5798,
+      "slides_count_a": 17,
+      "slides_count_b": 17,
+      "text_similarity": 0.5362,
+      "structure_diff": {
+        "slide_count_diff": 0,
+        "layout_diffs": {
+          "three_columns": 1,
+          "text_only": -2,
+          "chart": 1
+        },
+        "avg_title_similarity": 0.5061,
+        "total_items_diff": 12
+      },
+      "layout_match_rate": 0.5294,
+      "latency_a": 25.88,
+      "latency_b": 27.16
+    },
+    {
+      "doc": "tiny_doc.md",
+      "doc_chars": 57,
+      "raw_output_len_a": 751,
+      "raw_output_len_b": 564,
+      "slides_count_a": 4,
+      "slides_count_b": 4,
+      "text_similarity": 0.689,
+      "structure_diff": {
+        "slide_count_diff": 0,
+        "layout_diffs": {},
+        "avg_title_similarity": 0.65,
+        "total_items_diff": 1
+      },
+      "layout_match_rate": 1.0,
+      "latency_a": 5.19,
+      "latency_b": 3.09
+    },
+    {
+      "doc": "product_spec.md",
+      "doc_chars": 741,
+      "raw_output_len_a": 2217,
+      "raw_output_len_b": 2245,
+      "slides_count_a": 7,
+      "slides_count_b": 7,
+      "text_similarity": 0.3492,
+      "structure_diff": {
+        "slide_count_diff": 0,
+        "layout_diffs": {
+          "flowchart": 1,
+          "three_columns": -1,
+          "text_only": -1,
+          "center": 1
+        },
+        "avg_title_similarity": 0.7815,
+        "total_items_diff": 5
+      },
+      "layout_match_rate": 0.4286,
+      "latency_a": 10.71,
+      "latency_b": 12.97
+    },
+    {
+      "doc": "annual_strategy_report.md",
+      "doc_chars": 3059,
+      "raw_output_len_a": 6088,
+      "raw_output_len_b": 4138,
+      "slides_count_a": 19,
+      "slides_count_b": 13,
+      "text_similarity": 0.4653,
+      "structure_diff": {
+        "slide_count_diff": 6,
+        "layout_diffs": {
+          "table": -1,
+          "text_only": 1,
+          "center": -6
+        },
+        "avg_title_similarity": 0.4193,
+        "total_items_diff": 23
+      },
+      "layout_match_rate": 0.3077,
+      "latency_a": 25.92,
+      "latency_b": 17.05
+    },
+    {
+      "doc": "marketing_plan.md",
+      "doc_chars": 1297,
+      "raw_output_len_a": 3190,
+      "raw_output_len_b": 2947,
+      "slides_count_a": 8,
+      "slides_count_b": 9,
+      "text_similarity": 0.5879,
+      "structure_diff": {
+        "slide_count_diff": 1,
+        "layout_diffs": {
+          "chart": 1
+        },
+        "avg_title_similarity": 0.4846,
+        "total_items_diff": 2
+      },
+      "layout_match_rate": 0.375,
+      "latency_a": 15.36,
+      "latency_b": 15.21
+    },
+    {
+      "doc": "meeting_notes.md",
+      "doc_chars": 934,
+      "raw_output_len_a": 3843,
+      "raw_output_len_b": 2711,
+      "slides_count_a": 10,
+      "slides_count_b": 8,
+      "text_similarity": 0.3747,
+      "structure_diff": {
+        "slide_count_diff": 2,
+        "layout_diffs": {
+          "table": -1,
+          "chart": -1
+        },
+        "avg_title_similarity": 0.4061,
+        "total_items_diff": 14
+      },
+      "layout_match_rate": 0.375,
+      "latency_a": 18.56,
+      "latency_b": 12.4
+    }
+  ]
+}

@@ -598,6 +598,22 @@ def extract_json_from_text(text):
     except Exception as e:
         logger.error(f"[extract_json] JSON解析异常: {type(e).__name__}: {e}")
     
+    # 2.0.5 json_repair 专业库兜底（在截断修复前尝试，处理复杂组合错误）
+    try:
+        import json_repair
+        repaired_obj = json_repair.repair_json(json_str, return_objects=True)
+        if isinstance(repaired_obj, dict) and "slides" in repaired_obj:
+            logger.info(f"[extract_json] json_repair 修复成功，slides数量: {len(repaired_obj.get('slides', []))}")
+            print(f"[extract_json] ✅ json_repair 自动修复 JSON，解析出 {len(repaired_obj.get('slides', []))} 个 slides")
+            return repaired_obj
+        elif isinstance(repaired_obj, list) and len(repaired_obj) > 0:
+            logger.info(f"[extract_json] json_repair 修复成功，数组长度: {len(repaired_obj)}")
+            return repaired_obj
+    except ImportError:
+        pass
+    except Exception as jr_e:
+        logger.warning(f"[extract_json] json_repair 修复失败: {jr_e}")
+
     # 2.1 尝试修复被截断的 JSON
     try:
         # 检查是否是被截断的 JSON（包含 slides 但不完整）
@@ -845,6 +861,210 @@ def format_chart_slide(slide, slide_data, prs):
             series.format.fill.fore_color.rgb = colors[i]
 
 
+def format_flowchart_slide(slide, slide_data, prs):
+    """格式化流程图页 - 使用形状和连接线绘制流程图"""
+    from pptx.enum.shapes import MSO_CONNECTOR_TYPE
+    
+    title_text = slide_data.get("title", "流程图")
+    flowchart_data = slide_data.get("flowchart_data", {})
+    
+    # 设置标题
+    title_shape = slide.shapes.title
+    title_shape.text = clean_markdown(title_text)
+    title_shape.width = Inches(11.333)
+    title_shape.left = Inches(1)
+    title_shape.top = Inches(0.5)
+    title_shape.height = Inches(1.2)
+    
+    for p in title_shape.text_frame.paragraphs:
+        p.font.bold = True
+        p.font.size = Pt(36)
+        p.font.color.rgb = RGBColor(0, 82, 204)
+        p.alignment = PP_ALIGN.LEFT
+    
+    nodes = flowchart_data.get("nodes", [])
+    edges = flowchart_data.get("edges", [])
+    
+    if not nodes:
+        # 如果没有节点数据，显示占位符
+        body_shape = slide.placeholders[1]
+        body_shape.text = "流程图数据加载中..."
+        return
+    
+    # 计算布局参数
+    num_nodes = len(nodes)
+    start_left = Inches(1.5)
+    start_top = Inches(2.5)
+    node_width = Inches(1.8)
+    node_height = Inches(0.8)
+    h_spacing = Inches(0.5)  # 水平间距
+    v_spacing = Inches(0.3)  # 垂直间距
+    
+    # 根据节点数量决定布局方向
+    if num_nodes <= 4:
+        # 水平布局
+        total_width = num_nodes * node_width + (num_nodes - 1) * h_spacing
+        start_left = (Inches(13.333) - total_width) / 2
+        
+        node_positions = {}
+        for i, node in enumerate(nodes):
+            left = start_left + i * (node_width + h_spacing)
+            top = start_top
+            
+            # 根据形状类型选择形状
+            shape_type = node.get("shape", "process")
+            if shape_type == "start" or shape_type == "end":
+                shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, left, top, node_width, node_height)
+                shape.fill.solid()
+                # 使用更柔和的颜色
+                shape.fill.fore_color.rgb = RGBColor(46, 139, 87) if shape_type == "start" else RGBColor(178, 34, 34)
+                shape.line.color.rgb = RGBColor(34, 100, 60) if shape_type == "start" else RGBColor(130, 25, 25)
+            else:
+                shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, left, top, node_width, node_height)
+                shape.fill.solid()
+                # 使用渐变蓝色系
+                shape.fill.fore_color.rgb = RGBColor(65, 105, 225)
+                shape.line.color.rgb = RGBColor(50, 80, 180)
+            
+            shape.line.width = Pt(1.5)
+            
+            # 设置文本
+            tf = shape.text_frame
+            tf.word_wrap = True
+            tf.margin_left = Pt(8)
+            tf.margin_right = Pt(8)
+            p = tf.paragraphs[0]
+            p.text = node.get("text", "")
+            p.font.size = Pt(12)
+            p.font.bold = True
+            p.font.color.rgb = RGBColor(255, 255, 255)
+            p.alignment = PP_ALIGN.CENTER
+            
+            node_positions[node["id"]] = {
+                "left": left,
+                "top": top,
+                "right": left + node_width,
+                "bottom": top + node_height,
+                "center_x": left + node_width / 2,
+                "center_y": top + node_height / 2
+            }
+    else:
+        # 垂直布局（节点较多时）
+        cols = min(3, (num_nodes + 1) // 2)
+        rows = (num_nodes + cols - 1) // cols
+        
+        total_width = cols * node_width + (cols - 1) * h_spacing
+        start_left = (Inches(13.333) - total_width) / 2
+        
+        node_positions = {}
+        for i, node in enumerate(nodes):
+            col = i % cols
+            row = i // cols
+            left = start_left + col * (node_width + h_spacing)
+            top = start_top + row * (node_height + v_spacing)
+            
+            # 根据形状类型选择形状
+            shape_type = node.get("shape", "process")
+            if shape_type == "start" or shape_type == "end":
+                shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, left, top, node_width, node_height)
+                shape.fill.solid()
+                shape.fill.fore_color.rgb = RGBColor(46, 139, 87) if shape_type == "start" else RGBColor(178, 34, 34)
+                shape.line.color.rgb = RGBColor(34, 100, 60) if shape_type == "start" else RGBColor(130, 25, 25)
+            else:
+                shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, left, top, node_width, node_height)
+                shape.fill.solid()
+                shape.fill.fore_color.rgb = RGBColor(65, 105, 225)
+                shape.line.color.rgb = RGBColor(50, 80, 180)
+            
+            shape.line.width = Pt(1.5)
+            
+            # 设置文本
+            tf = shape.text_frame
+            tf.word_wrap = True
+            tf.margin_left = Pt(8)
+            tf.margin_right = Pt(8)
+            p = tf.paragraphs[0]
+            p.text = node.get("text", "")
+            p.font.size = Pt(12)
+            p.font.bold = True
+            p.font.color.rgb = RGBColor(255, 255, 255)
+            p.alignment = PP_ALIGN.CENTER
+            
+            node_positions[node["id"]] = {
+                "left": left,
+                "top": top,
+                "right": left + node_width,
+                "bottom": top + node_height,
+                "center_x": left + node_width / 2,
+                "center_y": top + node_height / 2
+            }
+    
+    # 绘制连接线
+    from pptx.enum.shapes import MSO_CONNECTOR_TYPE
+    from pptx.oxml.ns import qn
+    
+    for edge in edges:
+        from_id = edge.get("from")
+        to_id = edge.get("to")
+        
+        if from_id in node_positions and to_id in node_positions:
+            from_pos = node_positions[from_id]
+            to_pos = node_positions[to_id]
+            
+            # 计算连接线起点和终点
+            # 水平布局：从右侧中点连接到左侧中点
+            # 垂直布局：从底部中点连接到顶部中点
+            if num_nodes <= 4:
+                # 水平布局
+                start_x = from_pos["right"]
+                start_y = from_pos["center_y"]
+                end_x = to_pos["left"]
+                end_y = to_pos["center_y"]
+                
+                # 使用肘形连接线（带角度），上下偏移避免重叠
+                offset_y = Inches(0.3) if from_pos["center_y"] < Inches(4) else Inches(-0.3)
+                
+                # 添加肘形连接线
+                connector = slide.shapes.add_connector(
+                    MSO_CONNECTOR_TYPE.ELBOW,
+                    start_x, start_y,
+                    end_x, end_y
+                )
+                connector.line.color.rgb = RGBColor(70, 130, 180)  # 钢蓝色
+                connector.line.width = Pt(2)
+                
+                # 通过 XML 调整连接线路径，添加中间转折点
+                # 创建自定义路径使连接线带角度
+                sp_elem = connector._element
+                cxnSp = sp_elem
+                
+                # 添加中间点使连接线呈现 Z 字形
+                # python-pptx 的 connector 会自动根据起点终点计算肘形路径
+            else:
+                # 垂直布局
+                start_x = from_pos["center_x"]
+                start_y = from_pos["bottom"]
+                end_x = to_pos["center_x"]
+                end_y = to_pos["top"]
+                
+                # 使用肘形连接线
+                connector = slide.shapes.add_connector(
+                    MSO_CONNECTOR_TYPE.ELBOW,
+                    start_x, start_y,
+                    end_x, end_y
+                )
+                connector.line.color.rgb = RGBColor(70, 130, 180)  # 钢蓝色
+                connector.line.width = Pt(2)
+            
+            # 设置末端箭头样式
+            line_elem = connector.line._ln
+            tailEnd = line_elem.makeelement(qn('a:tailEnd'), {})
+            tailEnd.set('type', 'triangle')
+            tailEnd.set('w', 'med')
+            tailEnd.set('len', 'med')
+            line_elem.append(tailEnd)
+
+
 def generate_ppt_from_json(json_data, output_path="output.pptx"):
     prs = Presentation()
     prs.slide_width = Inches(13.333)
@@ -871,6 +1091,22 @@ def generate_ppt_from_json(json_data, output_path="output.pptx"):
                 slide = prs.slides.add_slide(prs.slide_layouts[1])
                 apply_corporate_theme(slide, prs, is_title_slide=False)
                 format_chart_slide(slide, slide_data, prs)
+            # 检查是否是流程图类型
+            elif content_type == "flowchart" and "flowchart_data" in slide_data:
+                slide = prs.slides.add_slide(prs.slide_layouts[1])
+                apply_corporate_theme(slide, prs, is_title_slide=False)
+                format_flowchart_slide(slide, slide_data, prs)
+            # 检查 items 中是否包含流程图数据
+            elif any(item.get("content_type") == "flowchart" for item in slide_data.get("items", [])):
+                slide = prs.slides.add_slide(prs.slide_layouts[1])
+                apply_corporate_theme(slide, prs, is_title_slide=False)
+                # 提取第一个流程图 item
+                flowchart_item = next(item for item in slide_data.get("items", []) if item.get("content_type") == "flowchart")
+                flowchart_slide_data = {
+                    "title": slide_data.get("title", "流程图"),
+                    "flowchart_data": flowchart_item.get("flowchart_data", {})
+                }
+                format_flowchart_slide(slide, flowchart_slide_data, prs)
             else:
                 slide = prs.slides.add_slide(prs.slide_layouts[1])
                 apply_corporate_theme(slide, prs, is_title_slide=False)

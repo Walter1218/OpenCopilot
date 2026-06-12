@@ -190,6 +190,41 @@ class TestLoadText:
 
 
 # =============================================================================
+# 5.1 load_slides 鲁棒性
+# =============================================================================
+
+class TestLoadSlidesRobustness:
+    """load_slides 对异常 slide/item 形态的兜底"""
+
+    def test_load_slides_coerces_string_slide(self, studio_window):
+        slides = studio_window._normalize_slides_payload([
+            {"type": "content", "layout": "text_only", "title": "第一页", "items": []},
+            "直接落入的字符串页",
+        ])
+
+        assert len(slides) == 2
+        assert isinstance(slides[1], dict)
+        assert slides[1]["items"][0]["text"] == "直接落入的字符串页"
+        assert slides[1]["layout"] == "text_only"
+
+    def test_load_slides_coerces_string_items(self, studio_window):
+        slides = studio_window._normalize_slides_payload([
+            {
+                "type": "content",
+                "layout": "text_only",
+                "title": "第一页",
+                "items": ["字符串要点", {"text": "正常要点", "level": 1}],
+            }
+        ])
+
+        items = slides[0]["items"]
+        assert len(items) == 2
+        assert all(isinstance(item, dict) for item in items)
+        assert items[0]["text"] == "字符串要点"
+        assert items[0]["content_type"] == "text"
+
+
+# =============================================================================
 # 6. 底部按钮结构验证
 # =============================================================================
 

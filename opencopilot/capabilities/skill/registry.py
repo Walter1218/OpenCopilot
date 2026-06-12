@@ -48,6 +48,10 @@ class SkillRegistry:
             from .persona_skill import PersonaSkill
             builtin_skills.append(PersonaSkill())
         except Exception: pass
+        try:
+            from .content_convert_skill import ContentConvertSkill
+            builtin_skills.append(ContentConvertSkill())
+        except Exception: pass
         
         for skill in builtin_skills:
             self.register(skill)

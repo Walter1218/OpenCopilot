@@ -2,13 +2,21 @@
 
 > 基于当前代码实现（`opencopilot/capabilities/ppt/`）的深度审查，结合项目设计文档和产品目标，输出下一代交互设计方向。
 >
-> 交互稿 (Canvas Wireframe): `.qoder/.../canvases/ppt-cocreation-wireframe.canvas.tsx`
+> 交互稿 (Canvas Wireframe): `canvases/ppt-cocreation-e2e-flow.canvas.tsx`（3 阶段端到端版）
+>
+> 端到端设计文档: [`PPT_CoCreation_E2E_Design.md`](./PPT_CoCreation_E2E_Design.md)
 
 ---
 
 ## 一、现状评估
 
 ### 1.1 当前架构总览
+
+> **注意**：交互架构已重新设计为 3 阶段 E2E 流程（输入→策略→编辑打磨），
+> Stage 3 采用 IDE 式双面板布局（60/40），旧的 4 面板架构保留为历史参考。
+> 详见 [`PPT_CoCreation_E2E_Design.md`](./PPT_CoCreation_E2E_Design.md)。
+
+**旧版架构（4 面板，历史参考）：**
 
 PPT 共创工作台是一个 PyQt6 桌面三面板编辑器：
 
@@ -23,7 +31,7 @@ PPT 共创工作台是一个 PyQt6 桌面三面板编辑器：
 
 ### 1.2 已实现的核心能力
 
-- ✅ 三阶段交互流程：Drafting → Interactive Editing → Export
+- ✅ 三阶段交互流程：Drafting → Interactive Editing → Export（新设计已升级为：输入→策略发现→编辑打磨）
 - ✅ 对话驱动状态更新（JSON patch 局部修改模式）
 - ✅ 双向联动：原文 ↔ 大纲 ↔ 预览
 - ✅ Undo/Redo 操作栈（50 级历史，AI 对话驱动 + 撤销/重做按钮 + Ctrl+Z/Y 快捷键）
@@ -44,12 +52,12 @@ PPT 共创工作台是一个 PyQt6 桌面三面板编辑器：
 | U2 | 预览面板的 `SlideRenderer` 有 hit-test 和拖放信号，但未连接到编辑流程 | 用户必须切到大纲面板表单才能改内容，交互路径长 | `preview_panel.py` |
 | U3 | 大纲面板用纯文字 `QListWidget` 做幻灯片导航，20+ 页时难以快速定位 | 大规模 PPT 可用性差 | `outline_panel.py` |
 | U4 | 5 个快捷指令硬编码，不随幻灯片内容类型变化 | 表格/图表页面缺少对应操作入口 | `ai_chat_widget.py:_build_shortcut_command` |
-| U5 | AI 对话框固定在底部 250px，不可分离或移动 | 挤占预览和编辑空间 | `cocreation_dialog.py:_init_ui` |
+| U5 | AI 对话框固定在底部 250px，不可分离或移动 | 挤占预览和编辑空间 | `cocreation_dialog.py:_init_ui` | ✅ **新设计已解决**：AI 输入移至右侧面板底部 |
 | U6 | ~~AI 修改直接应用，无 before/after 对比~~ | ✅ 已解决：`_format_diff_message` 显示 `~~旧值~~ → **新值**` | `ai_chat_widget.py:_on_ai_response` |
 | U7 | 主题切换通过 Ctrl+T 循环 + QMessageBox 弹窗 | 无法预览、无法直接选择、操作打断 | `cocreation_dialog.py:_on_toggle_theme` |
 | U8 | 撤销/重做快捷键在 AI 对话层已接通，dialog 层待统一 | AI 对话层 Ctrl+Z/Y 可用，手动编辑层待统一 | `ai_chat_widget.py:keyPressEvent` |
 | U9 | AI chat 的 undo stack 已实现，与手动编辑的变更待统一 | AI 编辑可撤销，手动编辑待接入统一栈 | `ai_chat_widget.py` vs `cocreation_dialog.py` |
-| U10 | 原文面板在生成后沦为只读展示，价值快速衰减 | 30% 的屏幕空间利用率低 | `source_panel.py` |
+| U10 | 原文面板在生成后沦为只读展示，价值快速衰减 | 30% 的屏幕空间利用率低 | `source_panel.py` | ✅ **新设计已解决**：原文面板升级为映射可视化+重新提炼 |
 
 ---
 
@@ -286,7 +294,7 @@ PPT 共创工作台是一个 PyQt6 桌面三面板编辑器：
 
 ### 4.1 中央化状态管理
 
-**现状**：`json_data` 在 `CoCreationDialog` 中作为 list 被各面板直接 mutate。
+**现状**：`slides_data` / `json_data` 仍会在 `StudioWindowV5` 相关面板中被直接 mutate，状态收口还可以继续加强。
 
 **改进**：
 ```
@@ -322,13 +330,83 @@ class EventBus(QObject):
 
 ### 4.4 废弃遗留入口
 
-`gui/dialogs/ppt_preview.py` (PPTPreviewDialog) 是旧版双面板编辑器，与 `CoCreationDialog` 功能重叠。应统一为 `CoCreationDialog` 唯一入口，并移除 `PPTPreviewDialog` 引用。
+当前主入口已经统一为 `StudioWindowV5`。`gui/dialogs/ppt_preview.py` (PPTPreviewDialog) 与旧 `CoCreationDialog` 口径都应视为历史遗留，不再作为现行方案描述。
 
-**涉及文件**：`gui/dialogs/ppt_preview.py`, `gui/window.py`, `smart_copilot.py`, `smart_copilot_api.py`
+**涉及文件**：`gui/dialogs/ppt_preview.py`, `gui/v5/studio_tab.py`, `gui/v5/studio_window.py`, `smart_copilot.py`
+
+### 4.5 运行时护栏与专项评测（已落地）
+
+以下能力已经不再是“规划项”，而是当前代码中已落地的现状：
+
+#### A. `ppt_editor` 直编护栏
+
+当前 runtime 中间件会对 `ppt_editor` 请求施加额外约束：
+
+- 关闭 web search
+- 跳过通用 tools prompt
+- 强制 `answer-first`
+- 禁止再次请求 `read_slide`
+- 默认只修改当前页
+- 鼓励直接输出 `render_commands`
+
+这使得当前 PPT 共创链路的真实执行方式，已经从“普通聊天”升级为“受控编辑任务”。
+
+#### B. `F_polish` 忠实改写专项提示
+
+当前 benchmark 构造层已为 `F_polish` 额外注入润色约束，要求：
+
+- 逐条改写
+- 保留数字、时间、金额、专有名词
+- 保留因果、对比、转折关系
+- 保持条目顺序与粒度
+- 优先输出可定位的 `render_commands`
+
+#### C. 忠实改写专项 benchmark
+
+围绕“专业化且保事实”，当前已形成固定回归入口：
+
+- 数据集：`tests/test_data/ppt_faithful_rewrite_cases.json`
+- 模式：`OPEN_COPILOT_PPT_TASK_MODE=faithful_rewrite`
+- 评测入口：`tests/e2e/test_ppt_cocreation_quality_benchmark.py`
+- 单测：`tests/unit/test_ppt_faithful_rewrite_benchmark.py`
+
+当前这套专项基准的意义是：
+
+- 不再只靠单条 case 调 prompt
+- 不再只看主观“文风更高级”
+- 而是固定样本、固定准入门槛、固定版本对比
+
+#### D. Prompt 已进入版本化管理
+
+当前 `ppt_editor` prompt 的代码真源在：
+
+- `opencopilot/shared/prompt.py`
+
+并且已通过：
+
+- `PPT_EDITOR_PROMPT_VERSION`
+- `prompts/ppt_editor/`
+
+进行版本快照管理。当前最新快照已推进到：
+
+- `v7_compound_task`
 
 ---
 
 ## 五、实施优先级路线图
+
+> **注意**：以下 Sprint 计划基于旧版 4 面板架构制定。新的 3 阶段 E2E 设计已重新组织任务，
+> 具体实施顺序参见 [`PPT_CoCreation_E2E_Design.md`](./PPT_CoCreation_E2E_Design.md) §六架构映射表。
+
+### Sprint 0 — E2E 架构重构（新增）
+
+| 任务 | 工作量 | 影响 | 状态 |
+|------|--------|------|------|
+| Stage 1 空状态页（QLineEdit → TextArea + 入口路由） | Medium | 统一入口体验 | ⏳ 待实现 |
+| Stage 2 修辞分析 + 策略面板 | High | 新增策略发现能力 | ⏳ 待实现 |
+| Stage 3 IDE 式双面板布局（60/40） | High | 核心交互升级 | ⏳ 待实现 |
+| 原文映射标签 + 双向联动 + 重新提炼 | High | 原文面板价值重塑 | ⏳ 待实现 |
+| AI Diff Overlay（浮层式确认） | Medium | AI 修改可控性 | ⏳ 待实现 |
 
 ### Sprint 1 — Quick Wins（1-2 周）
 
@@ -337,7 +415,7 @@ class EventBus(QObject):
 | 接通 Undo/Redo/Zoom 空实现 | Low | 修复快捷键失效问题 | ✅ AI 对话层已接通 Ctrl+Z/Y + 按钮 |
 | 流式 AI 反馈（打字指示器 + 进度条 + Cancel） | Medium | 核心体验提升 | ⏳ 待实现 |
 | 统一 Undo Stack（合并手动+AI 编辑） | Medium | 撤销行为一致性 | 🔄 AI 对话层已完成，dialog 层待统一 |
-| 废弃 PPTPreviewDialog | Low | 减少维护成本 | ⏳ 待实现 |
+| 清理遗留 PPTPreviewDialog / CoCreationDialog 口径 | Low | 减少维护成本 | 🔄 文档口径已统一到 `StudioWindowV5`，代码清理可继续推进 |
 
 ### Sprint 2 — Core Interaction（2-3 周）
 
@@ -393,6 +471,10 @@ class EventBus(QObject):
 ---
 
 > **相关文档**：
-> - 基础设计：`docs/PPT_CoCreation_Design.md`
-> - 交互稿：Canvas Wireframe (3 tabs: Main Layout / AI Detail / Features)
+> - 端到端设计：[`PPT_CoCreation_E2E_Design.md`](./PPT_CoCreation_E2E_Design.md)（3 阶段交互流程 + IDE 式布局）
+> - 基础设计：[`PPT_CoCreation_Design.md`](./PPT_CoCreation_Design.md)（架构、JSON Schema、路线图）
+> - Prompt 演进：[`PPT_COCREATION_PROMPT_EVOLUTION_20260610.md`](./PPT_COCREATION_PROMPT_EVOLUTION_20260610.md)
+> - 忠实改写规范：[`PPT_FAITHFUL_REWRITE_BENCHMARK_SPEC.md`](./PPT_FAITHFUL_REWRITE_BENCHMARK_SPEC.md)
+> - Prompt 迭代手册：[`PPT_FAITHFUL_REWRITE_PROMPT_ITERATION_PLAYBOOK.md`](./PPT_FAITHFUL_REWRITE_PROMPT_ITERATION_PLAYBOOK.md)
+> - 交互稿：`canvases/ppt-cocreation-e2e-flow.canvas.tsx`（3 阶段端到端版）
 > - 核心代码：`opencopilot/capabilities/ppt/`

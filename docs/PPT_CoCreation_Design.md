@@ -1,10 +1,17 @@
 # OpenCopilot 伴生智能体：PPT 人机共创引擎设计方案
 
+> 本文已按当前 `Studio V5` 实现更新，旧的 `PPTPreviewDialog / asu_custom_agent` 口径已废弃。
+
 ## 一、 核心定位与设计理念
 将现有的“单向格式转换工具”升级为“**伴生式 AI 策划师与排版助理**”。
 核心理念：**对话驱动状态更新 (Conversation-driven State Update)**。用户只需用自然语言发号施令，AI 在后台实时更新结构化数据，并在前端实时渲染大纲预览。只有在自然语言遇到瓶颈时，才提供轻量级的手动干预作为兜底。
 
 ## 二、 交互心流 (User Workflow)
+
+> **最新设计**：交互流程已精简为 3 阶段端到端设计，详见
+> **→ [`PPT_CoCreation_E2E_Design.md`](./PPT_CoCreation_E2E_Design.md)**
+>
+> 以下保留为历史参考。
 
 整个交互过程分为三个递进阶段：
 
@@ -14,7 +21,7 @@
 3. **入口弹出**：当 AI 完成输出后，系统利用底层的正则与解析引擎 (`extract_json_from_text`) 自动扫描内容。一旦识别出合法的 JSON 结构或标准的 Markdown 大纲，界面右下角会自动弹出 **[💾 导出为 PPT]** 按钮，提供人机共创交互的入口。
 
 ### 阶段 2：可视化人机共创排版 (Interactive Editing)
-这是人机共创的核心。用户点击导出按钮后，不会直接生成死板的 PPT，而是进入一个独立的 **PPT 人机共创编辑器 (`PPTPreviewDialog`)**。
+这是人机共创的核心。用户点击入口后，不会直接生成死板的 PPT，而是进入独立的 **PPT 人机共创工作台 (`StudioWindowV5`)**。
 1. **左侧大纲导航**：直观展示总页数和各页主标题，用户可以快速点击切换幻灯片。
 2. **右侧表单编辑**：用户可以对当前选中的幻灯片进行细粒度修改：
    - 修改标题、副标题。
@@ -36,7 +43,7 @@
 
 ### 2. AI 策划引擎 (Prompt & LLM Logic)
 - **职责**：将模糊的自然语言转化为确定的 JSON 状态修改。
-- **机制**：在 `asu_custom_agent.py` 中预置 `ppt_planner` 角色。要求其输出必须严格遵循内部 JSON 协议。例如：
+- **机制**：当前统一通过 `V5AgentWorker + agent_runtime` 执行，默认走 `vnext/Hermes`，也可按配置切到 `self_agent`。PPT 场景的提示词和上下文约束由 `ppt_editor` 上下文描述、渲染指令生成器与运行时路由共同控制。输出仍要求遵循内部 JSON / render command 协议。例如：
   ```json
   [
     {"type": "title", "layout": "center", "title": "...", "subtitle": "..."},
@@ -47,6 +54,85 @@
 ### 3. 物理渲染引擎 (PPT Generator)
 - **职责**：将确定的 JSON 状态转化为高质量的视觉文件。
 - **机制**：即重构后的 `ppt_generator.py`。内置“极简商务”、“科技蓝”等多套母版引擎。通过解析 JSON 中的 `layout` 字段，动态计算文本框坐标，分配图文混排（Image Right）、三栏对比（Three Columns）或数据表格等物理图层。
+
+## 三点五、最新运行时补充（2026-06-11）
+
+这部分描述当前代码里已经落地、且会直接影响 PPT 共创行为的真实机制。
+
+### 1. `ppt_editor` 已接入运行时护栏
+
+当前 `ppt_editor` 不再只是“普通 chat + prompt”的松耦合模式，而是由 runtime 中间件追加了额外行为约束：
+
+- `SessionSetupMiddleware` 会识别 `context_source="ppt_editor"`
+- 命中后默认关闭 web search
+- 默认跳过通用 tools prompt 注入
+- 默认进入 `answer-first` 直答模式
+- 额外注入“不要再次 read_slide、直接返回 render_commands JSON、默认只改当前页”的系统约束
+
+这意味着当前真实行为更接近：
+
+- `PPT 场景专属受控编辑链路`
+
+而不是：
+
+- `普通多轮聊天场景里的一个提示词分支`
+
+### 2. 当前 prompt 版本已进入快照化管理
+
+`ppt_editor` 当前 system prompt 已在代码中显式版本化：
+
+- 代码真源：`opencopilot/shared/prompt.py`
+- 当前版本：`PPT_EDITOR_PROMPT_VERSION = "v7_compound_task"`
+- 快照目录：`prompts/ppt_editor/`
+
+当前可追溯的几个关键快照包括：
+
+- `v4_baseline`
+- `v5_fact_anchor`
+- `v6_structure`
+- `v7_compound_task`
+
+这意味着后续 prompt 调整不应该只在聊天里口头讨论，而应基于：
+
+- 版本快照
+- 固定 benchmark
+- before/after 报告
+
+来做可回滚、可比较的迭代。
+
+### 3. 动态示例层已补到“正反例 + 复合任务”
+
+`render_prompt_generator.py` 当前不再只是最早期的图表/表格/流程图示例。
+
+最新实现中已经补入：
+
+- 忠实改写正例：`faithful_rewrite_good`
+- 忠实改写反例：`faithful_rewrite_bad`
+- 标题类与复合任务关键词识别增强
+
+因此当前更准确的描述是：
+
+- 仍然是轻量动态 few-shot 体系
+- 但已经不再是“只有单个通用示例”的早期形态
+
+### 4. 忠实改写已从“润色子问题”升级为专项评测能力
+
+围绕“专业化且保事实”，当前已新增专项 benchmark 基础设施：
+
+- 固定数据集：`tests/test_data/ppt_faithful_rewrite_cases.json`
+- 评测模式：`OPEN_COPILOT_PPT_TASK_MODE=faithful_rewrite`
+- 主入口：`tests/e2e/test_ppt_cocreation_quality_benchmark.py`
+- 规范文档：`docs/PPT_FAITHFUL_REWRITE_BENCHMARK_SPEC.md`
+- 迭代手册：`docs/PPT_FAITHFUL_REWRITE_PROMPT_ITERATION_PLAYBOOK.md`
+
+这代表 PPT 共创当前已经进入：
+
+- `有固定 case`
+- `有固定评价口径`
+- `有版本化 prompt`
+- `有准入门槛`
+
+的迭代阶段。
 
 ## 四、 核心数据结构协议 (JSON Schema)
 
@@ -103,8 +189,20 @@
 
 ## 六、交互迭代方案
 
-> 详细的下一代交互迭代方案（10 项交互改进 + 6 项功能迭代 + 架构改进 + Sprint 路线图）已独立成文：
+> 端到端交互设计（3 阶段流程 + IDE 式布局 + 条件入口路由）：
+>
+> **→ [`PPT_CoCreation_E2E_Design.md`](./PPT_CoCreation_E2E_Design.md)**
+>
+> 详细的交互迭代方案（10 项交互改进 + 6 项功能迭代 + 架构改进 + Sprint 路线图）：
 >
 > **→ [`PPT_CoCreation_Iteration_Plan.md`](./PPT_CoCreation_Iteration_Plan.md)**
 >
-> 交互稿 (Canvas Wireframe) 也已配套输出，包含 Main Layout / AI Detail / Features 三个视图。
+> 忠实改写专项评测规范：
+>
+> **→ [`PPT_FAITHFUL_REWRITE_BENCHMARK_SPEC.md`](./PPT_FAITHFUL_REWRITE_BENCHMARK_SPEC.md)**
+>
+> Prompt 迭代执行手册：
+>
+> **→ [`PPT_FAITHFUL_REWRITE_PROMPT_ITERATION_PLAYBOOK.md`](./PPT_FAITHFUL_REWRITE_PROMPT_ITERATION_PLAYBOOK.md)**
+>
+> 交互稿：`canvases/ppt-cocreation-e2e-flow.canvas.tsx`（3 阶段端到端版）

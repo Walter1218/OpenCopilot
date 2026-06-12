@@ -112,10 +112,14 @@ class TestPanelNavigation:
         assert workspace._stack.currentIndex() == 3
 
     def test_switch_to_task_triggers_refresh(self, workspace):
-        """切换到 Task 面板应触发任务历史刷新"""
+        """切换到 Task 面板应触发任务历史刷新（优先按 session 过滤，回退全部）"""
         with patch("gui.v5.bridge.get_task_history", return_value=[]) as mock_get:
             workspace._on_nav_clicked(0)
-        mock_get.assert_called_once()
+        # 第一次带 session_id，第二次回退不带
+        assert mock_get.call_count == 2
+        # 验证第一次调用包含 session_id 参数
+        first_call_kwargs = mock_get.call_args_list[0].kwargs
+        assert "session_id" in first_call_kwargs
 
     def test_switch_to_settings(self, workspace):
         """切换到 Settings 面板 (index 4)"""
@@ -155,15 +159,16 @@ class TestFilesPanel:
     def test_refresh_with_files(self, workspace):
         """有最近文件时应显示文件列表"""
         files = [
-            {"name": "main.py", "size": 2048, "modified": "2026-06-01T10:00:00"},
-            {"name": "test.py", "size": 512, "modified": "2026-05-30T08:00:00"},
+            {"name": "main.py", "path": "/tmp/main.py", "size": 2048, "modified": "2026-06-01T10:00:00"},
+            {"name": "test.py", "path": "/tmp/test.py", "size": 512, "modified": "2026-05-30T08:00:00"},
         ]
-        with patch("gui.v5.bridge.get_recent_files", return_value=files):
+        with patch("gui.v5.bridge.get_recent_files", return_value=files), \
+             patch("gui.v5.bridge.get_file_content", return_value={"text": "print('hello')", "status": "ok"}):
             workspace._refresh_files()
+        assert "2 项" in workspace._files_summary_label.text()
         text = workspace._files_content.toPlainText()
-        assert "2 个" in text
         assert "main.py" in text
-        assert "test.py" in text
+        assert "/tmp/main.py" in text
 
     def test_refresh_empty(self, workspace):
         """无最近文件时应显示提示"""
@@ -174,19 +179,60 @@ class TestFilesPanel:
 
     def test_refresh_shows_file_size_kb(self, workspace):
         """文件大小 < 1MB 应显示 KB"""
-        files = [{"name": "small.py", "size": 1024, "modified": "2026-06-01T10:00:00"}]
-        with patch("gui.v5.bridge.get_recent_files", return_value=files):
+        files = [{"name": "small.py", "path": "/tmp/small.py", "size": 1024, "modified": "2026-06-01T10:00:00"}]
+        with patch("gui.v5.bridge.get_recent_files", return_value=files), \
+             patch("gui.v5.bridge.get_file_content", return_value={"text": "small", "status": "ok"}):
             workspace._refresh_files()
         text = workspace._files_content.toPlainText()
         assert "KB" in text
 
     def test_refresh_shows_file_size_mb(self, workspace):
         """文件大小 > 1MB 应显示 MB"""
-        files = [{"name": "big.pptx", "size": 2 * 1024 * 1024, "modified": "2026-06-01T10:00:00"}]
-        with patch("gui.v5.bridge.get_recent_files", return_value=files):
+        files = [{"name": "big.pptx", "path": "/tmp/big.pptx", "size": 2 * 1024 * 1024, "modified": "2026-06-01T10:00:00"}]
+        with patch("gui.v5.bridge.get_recent_files", return_value=files), \
+             patch("gui.v5.bridge.get_file_content", return_value={"text": "slides", "status": "ok"}):
             workspace._refresh_files()
         text = workspace._files_content.toPlainText()
         assert "MB" in text
+
+    def test_use_file_for_task_imports_preview(self, workspace):
+        """选中文件后应可导入到 Task 草稿"""
+        workspace._files_entries = [{"name": "notes.md", "path": "/tmp/notes.md", "size": 12}]
+        workspace._filtered_files = list(workspace._files_entries)
+        workspace._files_list.addItem("notes.md")
+        workspace._files_list.setCurrentRow(0)
+        with patch("gui.v5.bridge.get_file_content", return_value={"text": "task context", "status": "ok"}):
+            workspace._on_use_file_for_task()
+        assert "task context" in workspace._task_input.toPlainText()
+
+    def test_filter_files_updates_match_count(self, workspace):
+        workspace._files_entries = [
+            {"name": "notes.md", "path": "/tmp/notes.md", "size": 12, "source": "local"},
+            {"name": "slides.pptx", "path": "/tmp/slides.pptx", "size": 120, "source": "drag_drop"},
+        ]
+        workspace._files_filter_input.setText("slides")
+        assert len(workspace._filtered_files) == 1
+        assert "1 项" in workspace._files_summary_label.text()
+
+    def test_send_file_to_chat_appends_system_message(self, workspace):
+        workspace._files_entries = [{"name": "notes.md", "path": "/tmp/notes.md", "size": 12, "source": "local"}]
+        workspace._filtered_files = list(workspace._files_entries)
+        workspace._files_list.addItem("notes.md")
+        workspace._files_list.setCurrentRow(0)
+        with patch("gui.v5.bridge.get_file_content", return_value={"text": "chat context", "status": "ok"}):
+            workspace._on_send_file_to_chat()
+        assert workspace._stack.currentIndex() == 1
+        assert "chat context" in workspace._chat_display.toPlainText()
+
+    def test_copy_selected_file_content(self, workspace):
+        workspace._files_entries = [{"name": "notes.md", "path": "/tmp/notes.md", "size": 12, "source": "local"}]
+        workspace._filtered_files = list(workspace._files_entries)
+        workspace._files_list.addItem("notes.md")
+        workspace._files_list.setCurrentRow(0)
+        with patch("gui.v5.bridge.get_file_content", return_value={"text": "copy me", "status": "ok"}), \
+             patch("gui.v5.bridge.do_copy_to_clipboard", return_value=True) as mock_copy:
+            workspace._on_copy_selected_file_content()
+        mock_copy.assert_called_once_with("copy me")
 
 
 # =============================================================================
@@ -208,8 +254,9 @@ class TestMemoryPanel:
         text = workspace._memory_content.toPlainText()
         assert "42" in text   # entities
         assert "100" in text  # relations
-        assert "256" in text  # translation memory entries
-        assert "30" in text   # glossary terms
+        assert "256" in workspace._memory_cards["translation_memory"].text()
+        assert "30" in workspace._memory_cards["glossary"].text()
+        assert "知识图谱 42" in workspace._memory_summary_label.text()
 
     def test_refresh_unavailable(self, workspace):
         """数据不可用时应显示 unavailable 状态"""
@@ -222,6 +269,40 @@ class TestMemoryPanel:
             workspace._refresh_memory()
         text = workspace._memory_content.toPlainText()
         assert "unavailable" in text
+
+    def test_memory_focus_switch_updates_detail(self, workspace):
+        stats = {
+            "knowledge_graph": {"entities": 42, "relations": 100, "status": "ok"},
+            "translation_memory": {"entries": 10, "status": "ok"},
+            "glossary": {"terms": 5, "status": "ok"},
+        }
+        with patch("gui.v5.bridge.get_memory_stats", return_value=stats):
+            workspace._refresh_memory()
+        workspace._memory_focus_combo.setCurrentIndex(
+            workspace._memory_focus_combo.findData("translation_memory")
+        )
+        assert "翻译记忆详情" in workspace._memory_content.toPlainText()
+
+    def test_memory_to_task_injects_summary(self, workspace):
+        workspace._memory_stats_cache = {
+            "knowledge_graph": {"entities": 3, "relations": 4, "status": "ok"},
+        }
+        workspace._memory_focus_combo.setCurrentIndex(
+            workspace._memory_focus_combo.findData("knowledge_graph")
+        )
+        workspace._on_memory_to_task()
+        assert "知识图谱详情" in workspace._task_input.toPlainText()
+
+    def test_copy_memory_summary(self, workspace):
+        workspace._memory_stats_cache = {
+            "glossary": {"terms": 8, "status": "ok"},
+        }
+        workspace._memory_focus_combo.setCurrentIndex(
+            workspace._memory_focus_combo.findData("glossary")
+        )
+        with patch("gui.v5.bridge.do_copy_to_clipboard", return_value=True) as mock_copy:
+            workspace._on_copy_memory_summary()
+        mock_copy.assert_called_once()
 
 
 # =============================================================================
@@ -276,3 +357,42 @@ class TestSettingsPanelJumps:
     def test_open_settings_advanced(self, workspace, mock_nav):
         mock_nav.open_settings("advanced")
         mock_nav.open_settings.assert_called_with("advanced")
+
+    def test_refresh_settings_summary_updates_cards(self, workspace):
+        with patch("gui.v5.bridge.get_config", return_value={
+            "provider_type": "cloud",
+            "cloud_model": "MiniMax-M1",
+        }), patch("gui.v5.bridge.get_appearance", return_value={
+            "theme": "dark", "font_size": 13, "language": "zh",
+        }), patch("gui.v5.bridge.get_shortcuts", return_value={
+            "shortcuts": {"explain": {"key_sequence": "Cmd+E"}}
+        }), patch("gui.v5.bridge.get_agent_runtime_config", return_value={
+            "default_backend": "vnext_provider",
+            "default_provider": "hermes_local",
+        }):
+            workspace._refresh_settings_summary()
+        assert "hermes_local" in workspace._settings_overview_label.text()
+        assert "MiniMax-M1" in workspace._settings_summary_labels["engine"].text()
+
+    def test_copy_settings_summary(self, workspace):
+        workspace._settings_overview_label.setText("overview")
+        for label in workspace._settings_summary_labels.values():
+            label.setText("summary")
+        with patch("gui.v5.bridge.do_copy_to_clipboard", return_value=True) as mock_copy:
+            workspace._on_copy_settings_summary()
+        mock_copy.assert_called_once()
+        assert "已复制" in workspace._settings_action_status.text()
+
+    def test_export_workspace_settings(self, workspace):
+        with patch("gui.v5.bridge.do_export_config", return_value={
+            "success": True,
+            "filename": "cfg.json",
+        }):
+            workspace._on_export_workspace_settings()
+        assert "cfg.json" in workspace._settings_action_status.text()
+
+    def test_reset_workspace_appearance(self, workspace):
+        with patch("gui.v5.bridge.do_reset_config", return_value={"success": True}), \
+             patch.object(workspace, "_refresh_settings_summary") as mock_refresh:
+            workspace._on_reset_workspace_appearance()
+        mock_refresh.assert_called_once()

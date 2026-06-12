@@ -28,6 +28,21 @@ def reset_worker_id_counter():
     yield
 
 
+@pytest.fixture(autouse=True)
+def force_self_agent_route():
+    """该测试文件默认验证 self_agent 路由，避免受全局默认 provider 影响。"""
+    from gui.v5.agent_runtime import AgentExecutionRoute
+
+    route = AgentExecutionRoute(
+        backend="self_agent",
+        provider="self_agent",
+        model="default",
+        routing_mode="test_override",
+    )
+    with patch("gui.v5.agent_worker.resolve_agent_route", return_value=route):
+        yield
+
+
 @pytest.fixture
 def mock_telemetry():
     """提供一个 mock 的 telemetry 实例，并自动 patch gui.v5.agent_worker.telemetry。"""
@@ -121,6 +136,8 @@ class TestV5AgentWorkerNormalStream:
         assert start_call["text_len"] == len("test prompt")
         assert start_call["context_source"] == "active_doc"
         assert start_call["worker_id"] == worker._wid
+        assert start_call["agent_backend"] == "self_agent"
+        assert start_call["provider"] == "self_agent"
 
         assert done_call is not None
         assert done_call["action"] == "explain"
@@ -128,6 +145,8 @@ class TestV5AgentWorkerNormalStream:
         assert done_call["chunks"] == 2
         assert done_call["output_len"] == 2
         assert done_call["worker_id"] == worker._wid
+        assert done_call["agent_backend"] == "self_agent"
+        assert done_call["provider"] == "self_agent"
 
     def test_started_signal_emitted(self, qapp, qtbot, mock_telemetry, mock_call_agent_pipeline_sync):
         """run() 开始时应发射 started_signal"""
@@ -309,7 +328,79 @@ class TestV5AgentWorkerErrorHandling:
 
 
 # =========================================
-# 4. stop() 取消逻辑测试
+# 4. fallback 逻辑测试
+# =========================================
+class TestV5AgentWorkerFallback:
+    """测试 vnext_provider 失败后的 fallback 行为"""
+
+    def test_timeout_fallbacks_to_self_agent(self, qapp, qtbot, mock_telemetry):
+        from gui.v5.agent_runtime import AgentExecutionRoute, AgentFallbackDecision
+        from gui.v5.agent_worker import V5AgentWorker
+
+        provider_route = AgentExecutionRoute(
+            backend="vnext_provider",
+            provider="hermes_local",
+            model="default",
+            routing_mode="default",
+        )
+        errors = []
+        finished = []
+
+        with patch("gui.v5.agent_worker.resolve_agent_route", return_value=provider_route), \
+             patch("gui.v5.agent_worker.resolve_fallback_decision", return_value=AgentFallbackDecision(True, "self_agent", "self_agent", "timeout")), \
+             patch.object(V5AgentWorker, "_run_vnext_provider", side_effect=RuntimeError("request timeout")), \
+             patch.object(V5AgentWorker, "_run_self_agent", return_value=("fallback ok", 1)):
+            worker = V5AgentWorker(prompt="test fallback", action_type="chat", session_id="sid-fallback")
+            worker.error_signal.connect(lambda text: errors.append(text))
+            worker.finished_signal.connect(lambda text: finished.append(text))
+            worker.run()
+
+        assert errors == []
+        assert finished == ["fallback ok"]
+        assert worker.get_execution_route().backend == "self_agent"
+
+        fallback_call = None
+        done_call = None
+        for call in mock_telemetry.emit.call_args_list:
+            args, kwargs = call
+            if args[0] == "V5_AGENT_FALLBACK":
+                fallback_call = kwargs
+            elif args[0] == "V5_AGENT_DONE":
+                done_call = kwargs
+
+        assert fallback_call is not None
+        assert fallback_call["reason"] == "timeout"
+        assert done_call["fallback_used"] is True
+        assert done_call["initial_provider"] == "hermes_local"
+        assert done_call["provider"] == "self_agent"
+
+    def test_no_fallback_keeps_error_path(self, qapp, qtbot, mock_telemetry):
+        from gui.v5.agent_runtime import AgentExecutionRoute, AgentFallbackDecision
+        from gui.v5.agent_worker import V5AgentWorker
+
+        provider_route = AgentExecutionRoute(
+            backend="vnext_provider",
+            provider="hermes_local",
+            model="default",
+            routing_mode="default",
+        )
+        errors = []
+
+        with patch("gui.v5.agent_worker.resolve_agent_route", return_value=provider_route), \
+             patch("gui.v5.agent_worker.resolve_fallback_decision", return_value=AgentFallbackDecision(False, "", "", "")), \
+             patch.object(V5AgentWorker, "_run_vnext_provider", side_effect=RuntimeError("protocol invalid")):
+            worker = V5AgentWorker(prompt="test no fallback", action_type="chat", session_id="sid-no-fallback")
+            worker.error_signal.connect(lambda text: errors.append(text))
+            worker.run()
+
+        assert len(errors) == 1
+        assert "protocol invalid" in errors[0]
+        fallback_events = [call for call in mock_telemetry.emit.call_args_list if call[0][0] == "V5_AGENT_FALLBACK"]
+        assert fallback_events == []
+
+
+# =========================================
+# 5. stop() 取消逻辑测试
 # =========================================
 class TestV5AgentWorkerStop:
     """测试 stop() 取消 Worker 的逻辑"""
@@ -505,7 +596,7 @@ class TestV5AgentWorkerParameterPassing:
 
         # Assert
         call_args = mock_call_agent_pipeline_sync.call_args
-        assert call_args.args[0] == "explain this"
+        assert call_args.kwargs["text"] == "explain this"
         assert call_args.kwargs["action_type"] == "explain"
         assert call_args.kwargs["session_id"] == "sess-1"
         assert call_args.kwargs["is_new_task"] is False

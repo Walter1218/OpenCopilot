@@ -291,6 +291,46 @@ def save_engine_config(provider_type: str, api_key: str = "", model: str = "",
         return False
 
 
+def get_agent_runtime_config() -> Dict[str, Any]:
+    """获取统一 Agent Runtime 配置"""
+    try:
+        from config_manager import ConfigManager
+        return ConfigManager.get_instance().get_agent_runtime()
+    except Exception as e:
+        logger.warning(f"get_agent_runtime_config: failed: {e}")
+        return {}
+
+
+def save_agent_runtime_config(
+    default_backend: str = "",
+    default_provider: str = "",
+    default_model: str = "",
+    capability_routes: Optional[Dict[str, Any]] = None,
+    fallback_policy: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """保存统一 Agent Runtime 配置"""
+    try:
+        from llm_provider import load_config, save_config as _save
+
+        config = load_config()
+        runtime = config.setdefault("agent_runtime", {})
+        if default_backend:
+            runtime["default_backend"] = default_backend
+        if default_provider:
+            runtime["default_provider"] = default_provider
+        if default_model:
+            runtime["default_model"] = default_model
+        if capability_routes is not None:
+            runtime["capability_routes"] = capability_routes
+        if fallback_policy is not None:
+            runtime["fallback_policy"] = fallback_policy
+        _save(config)
+        return True
+    except Exception as e:
+        logger.warning(f"save_agent_runtime_config: failed: {e}")
+        return False
+
+
 def test_llm_connection(provider_type: str, api_base: str = "",
                         api_key: str = "", model: str = "") -> Dict[str, Any]:
     """测试 LLM 连接（阻塞操作，建议在 QThread 中调用）"""

@@ -6,6 +6,7 @@ PPT 人机共创编辑器模块
 - 编辑大纲面板：幻灯片导航和编辑表单
 - PPT 预览面板：实时预览，与最终导出一致
 - AI 对话框：交互式修改幻灯片内容
+- 渲染指令系统：声明式渲染架构，支持 AI 指令驱动
 """
 
 from .cocreation_dialog import CoCreationDialog
@@ -23,6 +24,17 @@ from .pipeline import (
 )
 from .intent_router import IntentRouter
 from .storyline_view import StorylineView
+
+# 渲染指令系统
+from .render_command import (
+    RenderCommand, RenderGroup, RenderResult,
+    RenderCommandParser, QuickActionGenerator,
+    BatchOperationParser,
+    convert_render_command_to_slide_json,
+    parse_batch_operation
+)
+from .render_executor import RenderExecutor, RenderDispatcher
+from .render_prompt_generator import RenderPromptGenerator, generate_render_prompt
 
 __all__ = [
     'CoCreationDialog',
@@ -45,4 +57,17 @@ __all__ = [
     'FormatResult',
     'IntentRouter',
     'StorylineView',
+    # 渲染指令系统
+    'RenderCommand',
+    'RenderGroup',
+    'RenderResult',
+    'RenderCommandParser',
+    'QuickActionGenerator',
+    'BatchOperationParser',
+    'convert_render_command_to_slide_json',
+    'parse_batch_operation',
+    'RenderExecutor',
+    'RenderDispatcher',
+    'RenderPromptGenerator',
+    'generate_render_prompt',
 ]

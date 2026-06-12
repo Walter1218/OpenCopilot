@@ -1,16 +1,16 @@
 """ChatTabV5 — Chat Tab 界面壳
 
-布局: Context Panel (可折叠) → Conversation → Input + Send
+布局: Context Badge → Bubble Conversation → Input + Round Send
 """
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QTextEdit, QLineEdit, QComboBox,
+    QScrollArea, QFrame, QSizePolicy,
 )
 
 from gui.v5 import tokens as T
 from gui.v5.telemetry import telemetry
-from gui.v5 import bridge
 from gui.v5.agent_worker import V5AgentWorker
 
 
@@ -23,88 +23,73 @@ class ChatTabV5(QWidget):
         self._context_collapsed = True
         self._session_id = telemetry().new_session_id()
         self._llm_ctx = None  # LLM trace context
+        self._chunk_count = 0  # 当前对话 chunk 计数器
         self._message_count = 0
         self._agent_worker = None  # 当前运行的 Agent Worker
+        self._context_sources = []
         self._init_ui()
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 8, 0, 0)
-        layout.setSpacing(4)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(6)
 
-        # ── Context Panel (可折叠) ──
-        self._context_panel = QWidget()
-        ctx_layout = QVBoxLayout(self._context_panel)
-        ctx_layout.setContentsMargins(0, 0, 0, 0)
-        ctx_layout.setSpacing(2)
-
-        # 折叠按钮行
-        toggle_row = QHBoxLayout()
-        self._ctx_toggle_btn = QPushButton("Context ▸  0 sources")
-        self._ctx_toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._ctx_toggle_btn.setStyleSheet(self._toggle_btn_style())
-        self._ctx_toggle_btn.clicked.connect(self._toggle_context)
-        toggle_row.addWidget(self._ctx_toggle_btn)
-        toggle_row.addStretch()
-        ctx_layout.addLayout(toggle_row)
-
-        # 折叠内容（默认隐藏）
-        self._ctx_content = QLabel("暂无上下文来源")
-        self._ctx_content.setStyleSheet(
-            f"color: {T.TEXT_TERTIARY}; font-size: {T.FONT_CAPTION[0]}px; "
-            f"padding: 4px 8px; background: {T.BG_ELEVATED}; border-radius: 4px;"
+        # ── Context Badge（一行小标签）──
+        ctx_row = QHBoxLayout()
+        self._ctx_badge = QLabel("Context")
+        self._ctx_badge.setStyleSheet(
+            f"color: {T.TEXT_ACCENT}; background: rgba(77,166,255,18); "
+            f"border: 1px solid rgba(77,166,255,44); border-radius: 8px; "
+            f"padding: 2px 8px; font-size: 9px; font-weight: 600;"
         )
-        self._ctx_content.setWordWrap(True)
-        self._ctx_content.hide()
-        ctx_layout.addWidget(self._ctx_content)
+        ctx_row.addWidget(self._ctx_badge)
+        self._ctx_hint = QLabel("从 Work Tab 自动注入上下文")
+        self._ctx_hint.setStyleSheet(
+            f"color: {T.TEXT_TERTIARY}; font-size: {T.FONT_TINY[0]}px; "
+            f"background: transparent; border: none;"
+        )
+        ctx_row.addWidget(self._ctx_hint)
+        self._ctx_clear_btn = QPushButton("清空")
+        self._ctx_clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._ctx_clear_btn.setStyleSheet(self._toggle_btn_style())
+        self._ctx_clear_btn.clicked.connect(self._clear_context_sources)
+        self._ctx_clear_btn.setVisible(False)
+        ctx_row.addWidget(self._ctx_clear_btn)
+        ctx_row.addStretch()
+        layout.addLayout(ctx_row)
 
-        layout.addWidget(self._context_panel)
+        # ── 会话选择器（隐藏但保留功能）──
+        self._session_combo = QComboBox()
+        self._session_combo.setVisible(False)
+        self._session_combo.addItem("默认会话", self._session_id)
+        self._session_combo.currentIndexChanged.connect(self._on_session_changed)
+        layout.addWidget(self._session_combo)
 
-        # ── Conversation 显示区 ──
-        self._chat_display = QTextEdit()
-        self._chat_display.setReadOnly(True)
-        self._chat_display.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self._chat_display.setStyleSheet(f"""
-            QTextEdit {{
-                background-color: transparent;
-                color: {T.TEXT_PRIMARY};
-                font-size: {T.FONT_BODY[0]}px;
-                border: none; line-height: 1.6;
-            }}
-            QScrollBar:vertical {{
-                width: 6px; background: transparent;
-            }}
-            QScrollBar::handle:vertical {{
-                background: rgba(255, 255, 255, 60); border-radius: 3px;
-            }}
-        """)
-        layout.addWidget(self._chat_display, stretch=1)
+        # ── Bubble Conversation（滚动区 + 气泡布局）──
+        self._chat_scroll = QScrollArea()
+        self._chat_scroll.setWidgetResizable(True)
+        self._chat_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._chat_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._chat_scroll.setStyleSheet("QScrollArea { background: transparent; border: none; }")
+        self._chat_scroll.verticalScrollBar().setStyleSheet(
+            "QScrollBar:vertical { width: 6px; background: transparent; }"
+            "QScrollBar::handle:vertical { background: rgba(255,255,255,60); border-radius: 3px; }"
+        )
 
-        # ── 输入区 ──
+        self._bubble_container = QWidget()
+        self._bubble_layout = QVBoxLayout(self._bubble_container)
+        self._bubble_layout.setContentsMargins(0, 4, 0, 4)
+        self._bubble_layout.setSpacing(8)
+        self._bubble_layout.addStretch()  # 把气泡往上挤
+        self._chat_scroll.setWidget(self._bubble_container)
+        layout.addWidget(self._chat_scroll, stretch=1)
+
+        # ── 输入区（Input + 圆形 Send 按钮）──
         input_layout = QHBoxLayout()
         input_layout.setSpacing(6)
 
-        # 会话选择器
-        self._session_combo = QComboBox()
-        self._session_combo.setStyleSheet(f"""
-            QComboBox {{
-                background-color: {T.BG_ELEVATED};
-                color: {T.TEXT_SECONDARY};
-                border: 1px solid {T.STROKE_SUBTLE};
-                border-radius: 4px;
-                padding: 2px 6px;
-                font-size: {T.FONT_CAPTION[0]}px;
-                min-width: 80px;
-            }}
-            QComboBox::drop-down {{ border: none; width: 16px; }}
-        """)
-        self._session_combo.addItem("默认会话")
-        self._session_combo.setToolTip("选择会话")
-        self._session_combo.currentIndexChanged.connect(self._on_session_changed)
-        input_layout.addWidget(self._session_combo)
-
         self._chat_input = QLineEdit()
-        self._chat_input.setPlaceholderText("输入消息，按 Enter 发送...")
+        self._chat_input.setPlaceholderText("Follow up...")
         self._chat_input.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         self._chat_input.setStyleSheet(f"""
             QLineEdit {{
@@ -119,31 +104,31 @@ class ChatTabV5(QWidget):
         """)
         self._chat_input.returnPressed.connect(self._on_send)
 
-        self._send_btn = QPushButton("发送")
+        self._send_btn = QPushButton("▶")
         self._send_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._send_btn.setFixedSize(28, 28)
         self._send_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {T.ACCENT_CONTROL};
-                color: #000; border-radius: 6px;
-                padding: 6px 14px; font-weight: bold;
-                font-size: {T.FONT_BODY[0]}px;
+                color: #fff; border: none; border-radius: 14px;
+                font-size: 11px; font-weight: bold;
             }}
             QPushButton:hover {{ background-color: {T.ACCENT_HOVER}; }}
         """)
         self._send_btn.clicked.connect(self._on_send)
 
-        # 新建会话按钮
+        # 新建会话按钮（保留，但改为小图标）
         self._new_session_btn = QPushButton("+")
         self._new_session_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._new_session_btn.setToolTip("新建会话")
+        self._new_session_btn.setFixedSize(28, 28)
         self._new_session_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {T.BG_ELEVATED};
                 color: {T.TEXT_SECONDARY};
                 border: 1px solid {T.STROKE_SUBTLE};
                 border-radius: 4px;
-                padding: 2px 8px;
-                font-size: {T.FONT_BODY[0]}px; font-weight: bold;
+                font-size: 14px; font-weight: bold;
             }}
             QPushButton:hover {{
                 background-color: {T.BG_HOVER};
@@ -156,6 +141,7 @@ class ChatTabV5(QWidget):
         input_layout.addWidget(self._send_btn)
         input_layout.addWidget(self._new_session_btn)
         layout.addLayout(input_layout)
+        self._refresh_context_panel()
 
     # =========================================================================
     # 公共方法
@@ -169,13 +155,18 @@ class ChatTabV5(QWidget):
         t = telemetry()
         t.emit("V5_CHAT_INJECT", source=source, text_len=len(text),
                session_id=self._session_id)
-        self._chat_display.clear()
+        self._clear_bubbles()
         if text:
             preview = text[:150] + ("…" if len(text) > 150 else "")
             self.append_message(
                 "系统",
                 f"已将上下文带入，您可以继续追问。\n\n"
                 f"📄 当前上下文（{len(text)} 字符，来源: {source}）:\n{preview}"
+            )
+            self._upsert_context_source(
+                key=f"inject:{source}",
+                label=f"Work/{source}",
+                text=text,
             )
 
     def set_shared_text(self, text: str, source: str = "drag_drop"):
@@ -190,22 +181,86 @@ class ChatTabV5(QWidget):
                 f"📄 已接收共享内容（{len(text)} 字符，来源: {source}）:\n{preview}\n\n"
                 f"您可以直接在下方输入框提问，或继续对话。"
             )
+            self._upsert_context_source(
+                key=f"shared:{source}",
+                label=f"Shared/{source}",
+                text=text,
+            )
 
     def append_message(self, role: str, text: str):
-        """追加一条聊天消息"""
-        color_map = {
-            "你": T.TEXT_ACCENT,
-            "AI": T.STATUS_ONLINE,
-            "系统": T.TEXT_TERTIARY,
-        }
-        color = color_map.get(role, T.TEXT_SECONDARY)
-        safe_text = (text
-                     .replace('&', '&amp;')
-                     .replace('<', '&lt;')
-                     .replace('>', '&gt;')
-                     .replace('\n', '<br>'))
-        html = f'<b style="color:{color};">{role}:</b> {safe_text}'
-        self._chat_display.append(html)
+        """追加一条气泡消息"""
+        is_user = (role == "你")
+        is_system = (role == "系统")
+
+        # 气泡容器
+        bubble = QFrame()
+
+        if is_user:
+            # 用户气泡：右对齐，蓝色
+            wrapper = QHBoxLayout()
+            wrapper.addStretch()
+            bubble.setStyleSheet(
+                f"QFrame {{ background: {T.ACCENT_CONTROL}; border-radius: 10px; "
+                f"padding: 8px 12px; max-width: 280px; }}"
+            )
+            label = QLabel(text)
+            label.setWordWrap(True)
+            label.setStyleSheet(
+                f"color: #fff; font-size: {T.FONT_BODY[0]}px; "
+                "background: transparent; border: none;"
+            )
+            bubble_layout = QVBoxLayout(bubble)
+            bubble_layout.setContentsMargins(0, 0, 0, 0)
+            bubble_layout.setSpacing(0)
+            bubble_layout.addWidget(label)
+            wrapper.addWidget(bubble)
+            # 在 stretch 之前插入（stretch 始终在最后）
+            self._bubble_layout.insertLayout(
+                self._bubble_layout.count() - 1, wrapper
+            )
+        elif is_system:
+            # 系统消息：居中，灰色背景
+            bubble.setStyleSheet(
+                f"QFrame {{ background: rgba(77,166,255,12); "
+                f"border: 1px solid rgba(77,166,255,30); border-radius: 6px; "
+                f"padding: 6px 10px; }}"
+            )
+            label = QLabel(text)
+            label.setWordWrap(True)
+            label.setStyleSheet(
+                f"color: {T.TEXT_TERTIARY}; font-size: {T.FONT_CAPTION[0]}px; "
+                "background: transparent; border: none;"
+            )
+            bubble_layout = QVBoxLayout(bubble)
+            bubble_layout.setContentsMargins(0, 0, 0, 0)
+            bubble_layout.addWidget(label)
+            self._bubble_layout.insertWidget(
+                self._bubble_layout.count() - 1, bubble
+            )
+        else:
+            # AI 气泡：左对齐，灰色
+            bubble.setStyleSheet(
+                f"QFrame {{ background: {T.BG_ELEVATED}; "
+                f"border: 1px solid {T.STROKE_SUBTLE}; border-radius: 10px; "
+                f"padding: 8px 12px; max-width: 320px; }}"
+            )
+            label = QLabel(text)
+            label.setWordWrap(True)
+            label.setStyleSheet(
+                f"color: {T.TEXT_PRIMARY}; font-size: {T.FONT_BODY[0]}px; "
+                "background: transparent; border: none;"
+            )
+            bubble_layout = QVBoxLayout(bubble)
+            bubble_layout.setContentsMargins(0, 0, 0, 0)
+            bubble_layout.setSpacing(0)
+            bubble_layout.addWidget(label)
+            self._bubble_layout.insertWidget(
+                self._bubble_layout.count() - 1, bubble
+            )
+
+        # 保存最后一个气泡引用（用于 AI 流式更新）
+        self._last_bubble_label = label if hasattr(self, '_last_bubble_label') else None
+        self._last_bubble_label = label
 
     # =========================================================================
     # 事件
@@ -228,6 +283,7 @@ class ChatTabV5(QWidget):
 
         t = telemetry()
         self._message_count += 1
+        self._chunk_count = 0
         self._llm_ctx = t.llm_start(
             source_tab="CHAT",
             action_type="chat",
@@ -246,7 +302,7 @@ class ChatTabV5(QWidget):
         self.append_message("AI", "🔄 思考中...")
 
         # 通过 V5AgentWorker 调用 Agent Pipeline
-        self._send_btn.setText("停止")
+        self._send_btn.setText("■")
         self._agent_worker = V5AgentWorker(
             prompt=text,
             action_type="chat",
@@ -261,18 +317,27 @@ class ChatTabV5(QWidget):
         self._agent_worker.start()
 
     def _on_ai_chunk(self, text: str):
-        """AI 流式 chunk 回调 — 更新最后一条 AI 消息"""
+        """AI 流式 chunk 回调 — 更新最后一条 AI 消息 + 分块埋点"""
+        self._chunk_count += 1
         self._update_last_ai_message(text)
+        # 每 10 个 chunk 打一次链路埋点（避免每条都打）
+        if self._chunk_count % 10 == 0 and self._llm_ctx:
+            telemetry().llm_chunk(
+                self._llm_ctx,
+                source_tab="CHAT",
+                chunk_count=self._chunk_count,
+                output_len=len(text),
+            )
 
     def _on_ai_finished(self, full_text: str):
         """AI 完成回调"""
-        self._send_btn.setText("发送")
+        self._send_btn.setText("▶")
         self._safely_reset_worker()
         self._save_message("assistant", full_text)
         t = telemetry()
         if self._llm_ctx:
             t.llm_done(self._llm_ctx, source_tab="CHAT",
-                       chunk_count=0, output_len=len(full_text))
+                       chunk_count=self._chunk_count, output_len=len(full_text))
         else:
             t.emit("V5_CHAT_LLM_DONE", session_id=self._session_id,
                    output_len=len(full_text))
@@ -280,7 +345,7 @@ class ChatTabV5(QWidget):
 
     def _on_ai_error(self, error_msg: str):
         """AI 错误回调"""
-        self._send_btn.setText("发送")
+        self._send_btn.setText("▶")
         self._update_last_ai_message(f"❌ {error_msg}")
         self._safely_reset_worker()
         t = telemetry()
@@ -310,26 +375,9 @@ class ChatTabV5(QWidget):
                 worker.deleteLater()
 
     def _update_last_ai_message(self, text: str):
-        """增量更新最后一条 AI 消息的内容（避免全量重绘）"""
-        # 使用 QTextCursor 定位到最后，删除旧的 AI 占位内容，插入新文本
-        from PyQt6.QtGui import QTextCursor
-
-        cursor = self._chat_display.textCursor()
-        cursor.movePosition(QTextCursor.MoveOperation.End)
-
-        # 找到最后一条 AI 消息的位置（通过 HTML 特征定位）
-        # 策略：直接追加差异文本，利用 QTextEdit 的自动合并
-        # 更简单的方式：直接替换整个 AI 消息行
-        doc = self._chat_display.document()
-        block = doc.lastBlock()
-
-        # 删除最后一块（当前 AI 消息），重新插入
-        cursor.setPosition(block.position())
-        cursor.movePosition(QTextCursor.MoveOperation.End, QTextCursor.MoveMode.KeepAnchor)
-        cursor.removeSelectedText()
-
-        # 插入更新后的 AI 消息
-        self.append_message("AI", text)
+        """增量更新最后一条 AI 气泡的内容"""
+        if hasattr(self, '_last_bubble_label') and self._last_bubble_label:
+            self._last_bubble_label.setText(text)
 
     def _save_message(self, role: str, text: str):
         """保存消息到本地历史文件"""
@@ -370,16 +418,32 @@ class ChatTabV5(QWidget):
             print(f"[v5] ChatTab: 加载历史失败 → {e}")
         return []
 
+    def _clear_bubbles(self):
+        """清空所有气泡消息"""
+        while self._bubble_layout.count() > 1:  # 保留最后的 stretch
+            item = self._bubble_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                # 清理 wrapper layout 中的气泡
+                while item.layout().count():
+                    sub = item.layout().takeAt(0)
+                    if sub.widget():
+                        sub.widget().deleteLater()
+        self._last_bubble_label = None
+
     def _on_new_session(self):
         """新建会话"""
         self._session_id = telemetry().new_session_id()
         self._message_count = 0
-        self._chat_display.clear()
-        self._chat_display.setPlainText("新会话已开始。输入消息开始对话。\n")
-        # 添加到会话选择器
+        self._clear_bubbles()
+        # 添加到会话选择器（会触发 currentIndexChanged）
         session_name = f"会话 {self._session_combo.count() + 1}"
         self._session_combo.addItem(session_name, self._session_id)
         self._session_combo.setCurrentIndex(self._session_combo.count() - 1)
+        # ★ 在 combo 变更后再添加系统消息，避免被 session_changed 事件覆盖
+        self._clear_bubbles()
+        self.append_message("系统", "新会话已开始。输入消息开始对话。")
         telemetry().emit("V5_CHAT_NEW_SESSION", session_id=self._session_id)
         print(f"[v5] ChatTab: 新建会话 → {self._session_id[:8]}")
 
@@ -391,28 +455,54 @@ class ChatTabV5(QWidget):
         if session_data:
             self._session_id = session_data
         self._message_count = 0
-        self._chat_display.clear()
+        self._clear_bubbles()
         history = self._load_session_history(self._session_id)
         if history:
             for msg in history:
-                role_label = "你" if msg.get("role") == "user" else "AI"
-                self.append_message(role_label, msg.get("text", ""))
+                role = "你" if msg.get("role") == "user" else "AI"
+                self.append_message(role, msg.get("text", ""))
         else:
-            self._chat_display.setPlainText("会话历史为空。\n")
+            self.append_message("系统", "会话历史为空。")
         telemetry().emit("V5_CHAT_SWITCH_SESSION",
                          session_id=self._session_id,
                          message_count=len(history))
         print(f"[v5] ChatTab: 切换会话 → {self._session_id[:8]}, {len(history)} 条历史")
 
     def _toggle_context(self):
-        """折叠/展开 Context Panel"""
+        """折叠/展开 Context Panel（兼容旧调用）"""
         self._context_collapsed = not self._context_collapsed
-        t = telemetry()
-        t.emit("V5_CHAT_CTX_TOGGLE", collapsed=self._context_collapsed,
-               session_id=self._session_id)
-        self._ctx_content.setVisible(not self._context_collapsed)
-        arrow = "▾" if not self._context_collapsed else "▸"
-        self._ctx_toggle_btn.setText(f"Context {arrow}  0 sources")
+
+    def _upsert_context_source(self, key: str, label: str, text: str):
+        preview = text[:120] + ("…" if len(text) > 120 else "")
+        entry = {
+            "key": key,
+            "label": label,
+            "text": text,
+            "preview": preview,
+            "char_count": len(text),
+        }
+        self._context_sources = [
+            item for item in self._context_sources if item.get("key") != key
+        ]
+        self._context_sources.insert(0, entry)
+        self._refresh_context_panel()
+
+    def _refresh_context_panel(self):
+        count = len(self._context_sources)
+        self._ctx_clear_btn.setVisible(count > 0)
+        self._ctx_hint.setText(
+            f"{count} 个上下文来源" if count > 0 else "从 Work Tab 自动注入上下文"
+        )
+
+    def _clear_context_sources(self):
+        cleared = len(self._context_sources)
+        self._context_sources = []
+        self._refresh_context_panel()
+        telemetry().emit(
+            "V5_CHAT_CTX_CLEAR",
+            session_id=self._session_id,
+            cleared_count=cleared,
+        )
 
     # =========================================================================
     # 样式

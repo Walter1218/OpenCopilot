@@ -60,6 +60,18 @@ DEFAULT_WEB_SEARCH_CONFIG = {
     "limit": 3,
 }
 
+DEFAULT_AGENT_RUNTIME_CONFIG = {
+    "default_backend": "self_agent",
+    "default_provider": "self_agent",
+    "default_model": "default",
+    "capability_routes": {},
+    "fallback_policy": {
+        "enabled": False,
+        "on_timeout": "self_agent",
+        "on_protocol_error": "self_agent",
+    },
+}
+
 # action_type → persona 文件名映射（不含 .md）
 # 当 action_type 与 persona 文件名不同时在此配置
 DEFAULT_PERSONA_MAPPING = {
@@ -126,7 +138,7 @@ class ConfigManager:
         """热重载配置（外部调用，用于运行时更新）"""
         self._reload()
 
-    def _validate_and_clamp(self, key: str, value: Any, default: Any) -> Any:
+    def _validate_and_clamp(self, key: str, value: Any, _default: Any) -> Any:
         """校验参数并 clamp 到有效范围"""
         if key in VALID_RANGES:
             min_val, max_val = VALID_RANGES[key]
@@ -198,6 +210,46 @@ class ConfigManager:
     def get_web_search(self) -> Dict[str, Any]:
         """获取联网搜索配置"""
         return self._merge_with_defaults("web_search", DEFAULT_WEB_SEARCH_CONFIG, "web_search")
+
+    def get_agent_runtime(self) -> Dict[str, Any]:
+        """获取统一 Agent Runtime 路由配置"""
+        user_config = self._config.get("agent_runtime", {})
+        result = deepcopy(DEFAULT_AGENT_RUNTIME_CONFIG)
+        if not isinstance(user_config, dict):
+            return result
+
+        for key in ("default_backend", "default_provider", "default_model"):
+            value = user_config.get(key)
+            if isinstance(value, str) and value.strip():
+                result[key] = value.strip()
+
+        capability_routes = user_config.get("capability_routes")
+        if isinstance(capability_routes, dict):
+            normalized_routes = {}
+            for capability, route in capability_routes.items():
+                if not isinstance(route, dict):
+                    continue
+                normalized_route = {}
+                for route_key in ("backend", "provider", "model"):
+                    route_value = route.get(route_key)
+                    if isinstance(route_value, str) and route_value.strip():
+                        normalized_route[route_key] = route_value.strip()
+                if normalized_route:
+                    normalized_routes[str(capability)] = normalized_route
+            result["capability_routes"] = normalized_routes
+
+        fallback_policy = user_config.get("fallback_policy")
+        if isinstance(fallback_policy, dict):
+            merged_fallback = deepcopy(DEFAULT_AGENT_RUNTIME_CONFIG["fallback_policy"])
+            enabled = fallback_policy.get("enabled")
+            if isinstance(enabled, bool):
+                merged_fallback["enabled"] = enabled
+            for key in ("on_timeout", "on_protocol_error"):
+                if key in fallback_policy and isinstance(fallback_policy.get(key), str):
+                    merged_fallback[key] = fallback_policy.get(key, "").strip()
+            result["fallback_policy"] = merged_fallback
+
+        return result
 
     def get_persona_mapping(self) -> Dict[str, str]:
         """获取 action_type → persona 文件名映射

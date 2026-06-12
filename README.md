@@ -151,11 +151,49 @@ The v5 redesign is **partially shipped in code, not fully feature-complete**. Cu
 | Area | Already implemented in code | Still in progress |
 |------|-----------------------------|-------------------|
 | **Navigation** | `NavigationManager` centralizes Smart Copilot / Workspace / Studio / Settings lifecycle | More legacy windows still coexist in compatibility paths |
-| **Smart Copilot** | 3-Tab shell (`Work / Chat / Studio`), drag & drop sharing, direct Agent calls via `V5AgentWorker` | Further polish on markdown rendering, command palette, richer context chips |
-| **Work / Chat** | Core interaction loop is usable: context fetch, streaming AI output, session handling, cancel | More advanced contextual actions and richer session management |
+| **Smart Copilot** | 3-Tab shell (`Work / Chat / Studio`), drag & drop sharing, runtime-routed AI calls via `V5AgentWorker` | Further polish on markdown rendering, command palette, richer context chips |
+| **Work / Chat** | Core interaction loop is usable: context fetch, streaming AI output, session handling, cancel, context chips, send-to-Studio and action telemetry | Richer result rendering, command palette, deeper session references |
 | **Studio** | PPT co-creation is fully implemented: 4-Panel workbench, thumbnail strip, diff preview edit, AI chat flow, unified undo stack, export & fullscreen | ✅ Fully Implemented |
-| **Workspace** | Sidebar + 5-panel shell, settings entry, refresh hooks | Task / Chat / Files / Memory business logic is still largely placeholder-based |
-| **Settings** | Unified settings dialog with Engine / Appearance / Shortcuts / Advanced and bridge persistence | More validation, richer summaries, broader config coverage |
+| **Workspace** | Sidebar + 5-panel shell, real AI connected in `Workspace Chat`, Task templates/imports, recent file preview/actions, memory summaries, settings summaries and bridge-backed operations | Deeper file management and richer knowledge browser remain future polish |
+| **Settings** | Unified settings dialog with Engine / Appearance / Shortcuts / Advanced, bridge persistence and Workspace summary cards | More validation and broader config coverage |
+
+### Current Acceptance Baseline
+
+The main `V5 UI` AI paths have already passed production-grade functional validation:
+
+- Real AI connected: `Work Tab` primary actions, `Chat Tab` core dialogue, `Workspace Chat`, `Studio Tab`, and in-editor `Studio Window` co-creation
+- Not connected to real AI yet are mostly workflow surfaces or not-yet-shipped design items: `Workspace Files/Memory/Settings/Task`, `Work More`, `Skill Panel`, `Cmd+K`, and context-aware right-click skill menu
+- Full UI/AI regression baseline: `427 passed`
+- Real production validation: `27/27 PASS`
+
+The quality gate now has a documented quantitative baseline:
+
+- Score structure: `Reliability 30 + Quality 40 + UX 20 + Safety 10`
+- Hard gates: `protocol_error_rate = 0`, `json_parse_failure_rate = 0`, `think_leak_rate = 0`
+- Suggested release gate: overall `>= 4.3/5.0`, and `Explain / Code Review / PPT >= 4.5/5.0`
+
+See `docs/CURRENT_UI_AI_ACCEPTANCE_20260609.md` for the full acceptance matrix and scorecard.
+
+### Current Architecture Highlights
+
+The key story in the current implementation is not just "another agent option was added". The more important change is that **the UI and the agent execution layer are now structurally decoupled**:
+
+- **One fixed `V5 UI`**: `Work / Chat / Workspace Chat / Studio` keep a single user-facing entry instead of splitting into separate UIs for self-hosted vs third-party agents
+- **One runtime entry**: the UI no longer depends on concrete agent implementations directly; task execution is funneled through `V5AgentWorker`
+- **Protocol-first integration**: third-party agents now integrate through `/vnext/context/snapshots`, `/vnext/tasks`, and `/vnext/tasks/{id}/events`, with standardized task / event / result contracts
+- **Gateway / Adapter isolation**: provider-specific differences are handled inside `Agent Gateway` and `Provider Adapter`, instead of leaking third-party protocol details into the UI
+- **Configurable agent switching is already live**: `Settings -> Engine -> Agent Runtime` can now switch between `Self Agent` and `Third-Party Agent`
+- **`Hermes Local` is the current supported third-party path**: `Agent Model` now propagates all the way through `/vnext/tasks` into the Hermes run payload
+
+In practical terms, the current shape is now:
+
+`fixed UI -> unified runtime -> unified API contract -> gateway / adapter absorbs provider differences`
+
+That matters because:
+
+- self-agent evolution no longer requires rewriting the main UI entry
+- future third-party integrations can be added mostly in Runtime / Gateway / Adapter layers
+- UI, protocol, and provider implementations can now evolve independently with much lower coupling
 
 ---
 
@@ -206,6 +244,7 @@ The v5 codebase already includes a **fully implemented Studio PPT Co-creation Wo
 - 4-region shell: `Source`, `Outline`, `Preview`, and bottom AI area
 - Thumbnail strip with navigation support
 - WYSIWYG preview and diff preview editing
+- Advanced chart and native flowchart rendering support
 - Natural language AI dialogue for slide modifications
 - Unified Undo/Redo stack
 - Full pipeline for text/slides loading, PPT export, and fullscreen preview
@@ -315,9 +354,10 @@ OpenClaw's Pipeline + Agent Loop architecture solves three core problems in Agen
 
 **Current v5 UI integration note**:
 
-- `Work` and `Chat` already call the shared Agent Pipeline implementation directly through `gui/v5/agent_worker.py`
+- `Work`, `Chat`, and `Studio/PPT` all use the shared runtime entry in `gui/v5/agent_worker.py`
+- `V5AgentWorker` now resolves `agent_runtime` dynamically: default route is `/vnext/* -> hermes_local`, while `self_agent`, capability overrides, and fallback policy are configurable
 - non-AI UI actions go through `gui/v5/bridge.py`
-- `API Gateway (:8000)` remains the HTTP/OpenAPI surface and also hosts some v5 routes such as `/api/studio/*`
+- detailed runtime and startup behavior is maintained in `docs/STARTUP_GUIDE.md`
 
 ---
 
@@ -340,22 +380,37 @@ pip install -e .
 ### Launch
 
 ```bash
-# Terminal 1: Agent Pipeline (:18888) - recommended for health check / HTTP compatibility
-python3 asu_custom_agent.py
-
-# Terminal 2: Privileged Broker (:18889) - required for selection / active doc / apply-back
+# Terminal 1: Privileged Broker (:18889) - required for selection / active doc / apply-back
 bash start_broker.sh
 
-# Terminal 3: API Gateway (:8000) - optional but recommended for OpenAPI + HTTP routes + /api/studio/*
-python3 -m uvicorn smart_copilot_api:app --host 0.0.0.0 --port 8000 --reload
-
-# Terminal 4: UI
+# Terminal 2: UI
 bash scripts/start_ui.sh
+
+# Optional: preheat vnext API manually if you want stable API logs
+python3 -m uvicorn smart_copilot_api:app --host 127.0.0.1 --port 8010 --reload
 ```
 
 For a more detailed startup matrix, see [docs/STARTUP_GUIDE.md](docs/STARTUP_GUIDE.md).
 
 After launch, the v5 UI is opened through `smart_copilot.py` → `gui/main.py`. Smart Copilot / Workspace / Studio are shown by the v5 navigation layer.
+
+### Third-Party Agent Integration
+
+The UI is now fixed as one `V5 UI`, and third-party agents are integrated through `Settings -> Engine -> Agent Runtime`:
+
+- select `Third-Party Agent` in `Agent Mode`
+- choose the current built-in third-party provider preset in `Agent Provider`
+- configure `Agent Model`, which now propagates through `/vnext/tasks` into the Hermes run payload
+- use `Capability Routes` to decide which capabilities stay on default routing vs. the third-party path
+- use `Fallback Policy` to define automatic recovery when the third-party path fails
+
+The current config-switchable third-party path still supports only `Hermes Local`; the same settings panel can switch between the self agent and the third-party path. Adding a new provider still requires updating the runtime adapter, the UI preset, tests, and documentation together. See `docs/STARTUP_GUIDE.md` and `docs/AGENT_RUNTIME_TARGET_ARCHITECTURE.md`.
+
+Architecturally, the important point is not only that Hermes is supported. It is that:
+
+- the UI talks to a unified task/runtime layer instead of a provider-specific implementation
+- third-party agents are integrated through stable API contracts rather than ad-hoc UI bindings
+- this repo now has a credible foundation for adding more third-party agents without fragmenting the user experience
 
 ---
 
@@ -383,7 +438,7 @@ OpenCopilot/
 │   ├── providers/                #   LLM providers
 │   ├── observability/            #   Observability module
 │   └── shared/                   #   Shared utilities (prompt building/context normalization)
-├── api/                          # API Gateway (:8000)
+├── api/                          # API Gateway / vnext API (8010 preferred, 8000 fallback)
 │   ├── app.py                    #   Route factory
 │   └── routers/                  #   16+ independent route modules
 ├── gui/                          # PyQt6 desktop app
@@ -394,7 +449,7 @@ OpenCopilot/
 │   ├── workers/                  #   QThread Workers
 │   └── dialogs/                  #   Translation/Persona dialogs
 ├── widgets/                      # PyQt6 widgets (skill panel, settings dialog, etc.)
-├── asu_custom_agent.py           # Agent Pipeline service (:18888)
+├── asu_custom_agent.py           # Legacy/compat Agent service entry (:18888), not required for current v5 mainline
 ├── asu_broker/                   # Privileged Broker service (:18889)
 ├── coding_agent/                 # Coding agent implementation
 ├── context_manager/              # Context management system
@@ -403,7 +458,18 @@ OpenCopilot/
 ├── docs/                         # Documentation
 │   ├── UI_Redesign_Plan_v5.md    # v5.0 UI redesign plan
 │   ├── PPT_CoCreation_Design.md  # PPT co-creation design
-│   └── PPT_CoCreation_Iteration_Plan.md # PPT iteration plan
+│   ├── PPT_CoCreation_Iteration_Plan.md # PPT iteration plan
+│   ├── VNEXT_REBUILD_BLUEPRINT.md # vnext rebuild blueprint
+│   ├── VNEXT_UNIFIED_AGENT_API.md # vnext unified agent API contract
+│   ├── VNEXT_DOC_INDEX.md # vnext document index
+│   ├── VNEXT_MODULE_BOUNDARIES.md # vnext module boundaries and migration rules
+│   ├── VNEXT_DATA_MODEL.md # vnext data model and state machines
+│   ├── VNEXT_PHASE1_IMPLEMENTATION_PLAN.md # vnext phase-1 implementation plan
+│   ├── VNEXT_SMART_COPILOT_UI_SPEC.md # vnext Smart Copilot UI specification
+│   ├── VNEXT_AGENT_GATEWAY_DESIGN.md # vnext Agent Gateway and Provider Adapter design
+│   ├── VNEXT_MIGRATION_PLAYBOOK.md # vnext migration playbook
+│   ├── VNEXT_TEST_AND_ACCEPTANCE.md # vnext test and acceptance plan
+│   └── VNEXT_IMPLEMENTATION_BACKLOG.md # vnext implementation backlog
 ├── personas/                     # AI role files (*.md)
 ├── asu-ide-extension/            # IDE companion extension (VSCode/Trae/Cursor)
 ├── tests/                        # Tests (unit / e2e / ablation)
@@ -424,6 +490,17 @@ OpenCopilot/
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Development guide (module development, testing, adding Persona/Skill) |
 | [docs/STARTUP_GUIDE.md](docs/STARTUP_GUIDE.md) | Startup matrix for Agent / Broker / API Gateway / UI |
 | [docs/UI_Redesign_Plan_v5.md](docs/UI_Redesign_Plan_v5.md) | v5.0 UI redesign plan (3-Tab architecture, Workspace 2.0, unified settings) |
+| [docs/VNEXT_REBUILD_BLUEPRINT.md](docs/VNEXT_REBUILD_BLUEPRINT.md) | vnext rebuild blueprint focused on double-right-click Smart Copilot, API decoupling, and new-directory reconstruction |
+| [docs/VNEXT_UNIFIED_AGENT_API.md](docs/VNEXT_UNIFIED_AGENT_API.md) | vnext unified Agent API contract (Task / Event / Result / Apply / SSE) |
+| [docs/VNEXT_DOC_INDEX.md](docs/VNEXT_DOC_INDEX.md) | vnext document index with reading paths, document map, and review checkpoints |
+| [docs/VNEXT_MODULE_BOUNDARIES.md](docs/VNEXT_MODULE_BOUNDARIES.md) | vnext directory layout, dependency boundaries, and migration rules |
+| [docs/VNEXT_DATA_MODEL.md](docs/VNEXT_DATA_MODEL.md) | vnext data model and state machines for Task / Session / Context / Event / Apply |
+| [docs/VNEXT_PHASE1_IMPLEMENTATION_PLAN.md](docs/VNEXT_PHASE1_IMPLEMENTATION_PLAN.md) | vnext phase-1 implementation plan with sequence, deliverables, risks, and acceptance criteria |
+| [docs/VNEXT_SMART_COPILOT_UI_SPEC.md](docs/VNEXT_SMART_COPILOT_UI_SPEC.md) | vnext Smart Copilot UI specification (floating panel, state machine, component split) |
+| [docs/VNEXT_AGENT_GATEWAY_DESIGN.md](docs/VNEXT_AGENT_GATEWAY_DESIGN.md) | vnext Agent Gateway and Provider Adapter design (gateway roles, adapters, normalization strategies) |
+| [docs/VNEXT_MIGRATION_PLAYBOOK.md](docs/VNEXT_MIGRATION_PLAYBOOK.md) | vnext migration playbook (old-to-new mapping, cutover order, deletion strategy) |
+| [docs/VNEXT_TEST_AND_ACCEPTANCE.md](docs/VNEXT_TEST_AND_ACCEPTANCE.md) | vnext test and acceptance plan (contract tests, golden flows, cutover gates) |
+| [docs/VNEXT_IMPLEMENTATION_BACKLOG.md](docs/VNEXT_IMPLEMENTATION_BACKLOG.md) | vnext implementation backlog (epics, stories, priorities, dependencies) |
 
 ---
 

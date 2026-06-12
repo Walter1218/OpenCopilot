@@ -8,9 +8,17 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QFrame, QStackedWidget,
     QLineEdit, QComboBox, QCheckBox, QSlider,
-    QFormLayout, QWidget, QFileDialog, QMessageBox,
+    QFormLayout, QWidget, QFileDialog,
 )
 
+from gui.v5.agent_runtime import (
+    CAPABILITY_ROUTE_ACTIONS,
+    ROUTE_PRESET_DEFAULT,
+    ROUTE_PRESET_HERMES_LOCAL,
+    ROUTE_PRESET_SELF_AGENT,
+    build_route_from_preset,
+    infer_route_preset,
+)
 from gui.v5 import tokens as T
 from gui.v5.telemetry import telemetry
 from gui.v5 import bridge
@@ -148,21 +156,75 @@ class SettingsDialogV5(QDialog):
         api_base = self._engine_api_base.text().strip()
         api_key = self._engine_api_key.text().strip()
         model = self._engine_model.text().strip()
-        ok = bridge.save_engine_config(provider, api_key, model, api_base)
+        agent_backend = self._agent_runtime_backend.currentData()
+        agent_provider = self._agent_runtime_provider.currentData()
+        runtime_model = self._agent_runtime_model.text().strip()
+        capability_routes = self._collect_capability_routes()
+        fallback_policy = {
+            "enabled": self._fallback_enabled.isChecked(),
+            "on_timeout": self._fallback_timeout_route.currentData(),
+            "on_protocol_error": self._fallback_protocol_route.currentData(),
+        }
+
+        llm_ok = bridge.save_engine_config(provider, api_key, model, api_base)
+        runtime_ok = bridge.save_agent_runtime_config(
+            default_backend=agent_backend,
+            default_provider=agent_provider,
+            default_model=runtime_model or "default",
+            capability_routes=capability_routes,
+            fallback_policy=fallback_policy,
+        )
+        ok = llm_ok and runtime_ok
         if ok:
             self._engine_status.setText("● Saved")
             self._engine_status.setStyleSheet(
                 f"color: {T.STATUS_ONLINE}; font-size: {T.FONT_CAPTION[0]}px; "
                 "background: transparent; border: none;"
             )
-            telemetry().settings_event("V5_SET_ENGINE_SAVE", provider=provider)
-            print(f"[v5] Settings: 引擎配置已保存 (provider={provider})")
+            telemetry().settings_event(
+                "V5_SET_ENGINE_SAVE",
+                provider=provider,
+                agent_backend=agent_backend,
+                agent_provider=agent_provider,
+                capability_routes=len(capability_routes),
+                fallback_enabled=fallback_policy["enabled"],
+            )
+            print(
+                f"[v5] Settings: 引擎配置已保存 "
+                f"(provider={provider}, agent_backend={agent_backend}, "
+                f"agent_provider={agent_provider}, capability_routes={len(capability_routes)}, "
+                f"fallback_enabled={fallback_policy['enabled']})"
+            )
         else:
             self._engine_status.setText("● Save Failed")
             self._engine_status.setStyleSheet(
                 f"color: #FF5555; font-size: {T.FONT_CAPTION[0]}px; "
                 "background: transparent; border: none;"
             )
+
+    def _on_agent_runtime_backend_changed(self):
+        backend = self._agent_runtime_backend.currentData()
+        if backend == "self_agent":
+            index = self._agent_runtime_provider.findData("self_agent")
+            if index >= 0:
+                self._agent_runtime_provider.setCurrentIndex(index)
+            self._agent_runtime_provider.setEnabled(False)
+        else:
+            if self._agent_runtime_provider.currentData() == "self_agent":
+                index = self._agent_runtime_provider.findData("hermes_local")
+                if index >= 0:
+                    self._agent_runtime_provider.setCurrentIndex(index)
+            self._agent_runtime_provider.setEnabled(True)
+
+    def _collect_capability_routes(self) -> dict:
+        routes = {}
+        for action, _label in CAPABILITY_ROUTE_ACTIONS:
+            combo = self._capability_route_combos[action]
+            preset = combo.currentData()
+            route = build_route_from_preset(preset)
+            if route:
+                routes[action] = route
+        return routes
 
     def _on_test_connection(self):
         """测试 LLM 连接（异步）"""
@@ -280,6 +342,7 @@ class SettingsDialogV5(QDialog):
 
         # 加载当前配置
         config = bridge.get_config()
+        runtime_config = bridge.get_agent_runtime_config()
 
         # Backend 选择
         self._engine_backend = QComboBox()
@@ -314,6 +377,84 @@ class SettingsDialogV5(QDialog):
         self._engine_model.setText(config.get(f"{current_provider}_model", ""))
         self._engine_model.setStyleSheet(self._input_style())
         form.addRow(self._form_label("Model:"), self._engine_model)
+
+        runtime_divider = QLabel("Agent Runtime")
+        runtime_divider.setStyleSheet(self._sub_header_style())
+        form.addRow(runtime_divider, QLabel(""))
+
+        self._agent_runtime_backend = QComboBox()
+        self._agent_runtime_backend.addItem("Third-Party Agent", "vnext_provider")
+        self._agent_runtime_backend.addItem("Self Agent", "self_agent")
+        current_backend = runtime_config.get("default_backend", "vnext_provider")
+        backend_index = self._agent_runtime_backend.findData(current_backend)
+        self._agent_runtime_backend.setCurrentIndex(max(backend_index, 0))
+        self._agent_runtime_backend.setStyleSheet(self._combo_style())
+        form.addRow(self._form_label("Agent Mode:"), self._agent_runtime_backend)
+
+        self._agent_runtime_provider = QComboBox()
+        self._agent_runtime_provider.addItem("Hermes Local", "hermes_local")
+        self._agent_runtime_provider.addItem("Self Agent", "self_agent")
+        current_agent_provider = runtime_config.get("default_provider", "hermes_local")
+        provider_index = self._agent_runtime_provider.findData(current_agent_provider)
+        self._agent_runtime_provider.setCurrentIndex(max(provider_index, 0))
+        self._agent_runtime_provider.setStyleSheet(self._combo_style())
+        form.addRow(self._form_label("Agent Provider:"), self._agent_runtime_provider)
+
+        self._agent_runtime_model = QLineEdit()
+        self._agent_runtime_model.setPlaceholderText("default")
+        self._agent_runtime_model.setText(runtime_config.get("default_model", "default"))
+        self._agent_runtime_model.setStyleSheet(self._input_style())
+        form.addRow(self._form_label("Agent Model:"), self._agent_runtime_model)
+        self._agent_runtime_backend.currentIndexChanged.connect(self._on_agent_runtime_backend_changed)
+        self._on_agent_runtime_backend_changed()
+
+        capability_routes_divider = QLabel("Capability Routes")
+        capability_routes_divider.setStyleSheet(self._sub_header_style())
+        form.addRow(capability_routes_divider, QLabel(""))
+
+        runtime_routes = runtime_config.get("capability_routes", {})
+        self._capability_route_combos = {}
+        for action, label in CAPABILITY_ROUTE_ACTIONS:
+            combo = QComboBox()
+            combo.addItem("Follow Default", ROUTE_PRESET_DEFAULT)
+            combo.addItem("Self Agent", ROUTE_PRESET_SELF_AGENT)
+            combo.addItem("Hermes Local", ROUTE_PRESET_HERMES_LOCAL)
+            preset = infer_route_preset(runtime_routes.get(action))
+            preset_index = combo.findData(preset)
+            combo.setCurrentIndex(max(preset_index, 0))
+            combo.setStyleSheet(self._combo_style())
+            form.addRow(self._form_label(f"{label} Route:"), combo)
+            self._capability_route_combos[action] = combo
+
+        fallback_divider = QLabel("Fallback Policy")
+        fallback_divider.setStyleSheet(self._sub_header_style())
+        form.addRow(fallback_divider, QLabel(""))
+
+        fallback_policy = runtime_config.get("fallback_policy", {})
+        self._fallback_enabled = QCheckBox("Enable automatic fallback")
+        self._fallback_enabled.setChecked(bool(fallback_policy.get("enabled", False)))
+        self._fallback_enabled.setStyleSheet(
+            f"QCheckBox {{ color: {T.TEXT_PRIMARY}; font-size: {T.FONT_BODY[0]}px; }}"
+        )
+        form.addRow(self._form_label("Fallback:"), self._fallback_enabled)
+
+        self._fallback_timeout_route = QComboBox()
+        self._fallback_timeout_route.addItem("Disabled", "")
+        self._fallback_timeout_route.addItem("Self Agent", "self_agent")
+        timeout_target = fallback_policy.get("on_timeout", "self_agent")
+        timeout_index = self._fallback_timeout_route.findData(timeout_target)
+        self._fallback_timeout_route.setCurrentIndex(max(timeout_index, 0))
+        self._fallback_timeout_route.setStyleSheet(self._combo_style())
+        form.addRow(self._form_label("On Timeout:"), self._fallback_timeout_route)
+
+        self._fallback_protocol_route = QComboBox()
+        self._fallback_protocol_route.addItem("Disabled", "")
+        self._fallback_protocol_route.addItem("Self Agent", "self_agent")
+        protocol_target = fallback_policy.get("on_protocol_error", "self_agent")
+        protocol_index = self._fallback_protocol_route.findData(protocol_target)
+        self._fallback_protocol_route.setCurrentIndex(max(protocol_index, 0))
+        self._fallback_protocol_route.setStyleSheet(self._combo_style())
+        form.addRow(self._form_label("On Protocol Error:"), self._fallback_protocol_route)
 
         layout.addLayout(form)
 

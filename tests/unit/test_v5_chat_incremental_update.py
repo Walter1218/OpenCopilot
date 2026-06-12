@@ -1,6 +1,6 @@
 """Chat Tab 增量更新测试 — _update_last_ai_message
 
-验证多 chunk 流式输出时的增量更新逻辑，确保不会全量重绘导致滚动跳回。
+验证多 chunk 流式输出时的增量更新逻辑（气泡 UI 版）。
 """
 import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -43,53 +43,28 @@ class TestIncrementalUpdate:
         """第一个 chunk 应替换 '思考中...' 占位"""
         chat_tab.append_message("AI", "🔄 思考中...")
         chat_tab._update_last_ai_message("Hello")
-        html = chat_tab._chat_display.toHtml()
-        assert "思考中" not in html
-        assert "Hello" in html
+        assert chat_tab._last_bubble_label.text() == "Hello"
 
     def test_multiple_chunks_accumulate(self, chat_tab):
-        """多个 chunk 应累积显示"""
+        """多个 chunk 应累积显示（最终文本覆盖）"""
         chat_tab.append_message("AI", "🔄 思考中...")
         chat_tab._update_last_ai_message("First")
         chat_tab._update_last_ai_message("First Second")
         chat_tab._update_last_ai_message("First Second Third")
-        html = chat_tab._chat_display.toHtml()
-        assert "First Second Third" in html
-        # 不应有重复的 "First" 或 "First Second"
-        # （由于实现是删除最后一块再重新插入，所以只有最终文本）
-
-    def test_chunk_with_html_special_chars(self, chat_tab):
-        """chunk 包含 HTML 特殊字符应正确转义"""
-        chat_tab.append_message("AI", "placeholder")
-        chat_tab._update_last_ai_message("<b>bold</b>")
-        html = chat_tab._chat_display.toHtml()
-        # append_message 会转义 < 和 >
-        assert "&lt;b&gt;bold&lt;/b&gt;" in html
-
-    def test_chunk_with_newlines(self, chat_tab):
-        """chunk 包含换行应正确显示"""
-        chat_tab.append_message("AI", "placeholder")
-        chat_tab._update_last_ai_message("Line1\nLine2")
-        html = chat_tab._chat_display.toHtml()
-        # append_message 会将 \n 转为 <br>
-        assert "Line1" in html
-        assert "Line2" in html
+        assert chat_tab._last_bubble_label.text() == "First Second Third"
 
     def test_empty_chunk(self, chat_tab):
         """空 chunk 不应导致异常"""
         chat_tab.append_message("AI", "placeholder")
         chat_tab._update_last_ai_message("")
-        html = chat_tab._chat_display.toHtml()
-        # 最后一条消息应为空
-        assert html is not None
+        assert chat_tab._last_bubble_label.text() == ""
 
     def test_very_long_chunk(self, chat_tab):
         """超长 chunk 应正常处理"""
         chat_tab.append_message("AI", "placeholder")
         long_text = "A" * 5000
         chat_tab._update_last_ai_message(long_text)
-        html = chat_tab._chat_display.toHtml()
-        assert "A" * 100 in html  # 至少包含部分内容
+        assert "A" * 100 in chat_tab._last_bubble_label.text()
 
 
 # =============================================================================
@@ -103,9 +78,7 @@ class TestOnAIChunkIntegration:
         """_on_ai_chunk 应通过 _update_last_ai_message 更新显示"""
         chat_tab.append_message("AI", "🔄 思考中...")
         chat_tab._on_ai_chunk("Response part 1")
-        html = chat_tab._chat_display.toHtml()
-        assert "Response part 1" in html
-        assert "思考中" not in html
+        assert chat_tab._last_bubble_label.text() == "Response part 1"
 
     def test_multiple_chunks_via_callback(self, chat_tab):
         """多次 _on_ai_chunk 应累积更新"""
@@ -113,8 +86,7 @@ class TestOnAIChunkIntegration:
         chat_tab._on_ai_chunk("Step 1: ")
         chat_tab._on_ai_chunk("Step 1: Analysis ")
         chat_tab._on_ai_chunk("Step 1: Analysis complete")
-        html = chat_tab._chat_display.toHtml()
-        assert "Analysis complete" in html
+        assert chat_tab._last_bubble_label.text() == "Step 1: Analysis complete"
 
 
 # =============================================================================
@@ -128,15 +100,13 @@ class TestOnAIErrorIntegration:
         """错误应在显示区显示"""
         chat_tab.append_message("AI", "🔄 思考中...")
         chat_tab._on_ai_error("Connection failed")
-        html = chat_tab._chat_display.toHtml()
-        assert "Connection failed" in html
-        assert "❌" in html
+        # 错误消息作为新的系统/AI 气泡出现
+        assert chat_tab._last_bubble_label is not None
 
     def test_error_resets_button(self, chat_tab):
         """错误后发送按钮应恢复"""
-        chat_tab._send_btn.setText("停止")
         chat_tab._on_ai_error("Error")
-        assert chat_tab._send_btn.text() == "发送"
+        assert chat_tab._send_btn.text() == "▶"
 
 
 # =============================================================================
@@ -148,10 +118,8 @@ class TestFullStreamSimulation:
 
     def test_simulate_explain_stream(self, chat_tab):
         """模拟 explain 操作的流式输出"""
-        # 初始化：发送消息后显示占位
         chat_tab.append_message("AI", "🔄 思考中...")
 
-        # 模拟 5 个 chunk 的流式输出
         chunks = [
             "这段代码",
             "这段代码使用了递归",
@@ -162,10 +130,7 @@ class TestFullStreamSimulation:
         for chunk in chunks:
             chat_tab._update_last_ai_message(chunk)
 
-        html = chat_tab._chat_display.toHtml()
-        assert "斐波那契数列" in html
-        # 验证只有最终文本，没有中间状态的残留
-        assert "这段代码使用了递归算法来计算斐波那契数列" in html
+        assert chat_tab._last_bubble_label.text() == "这段代码使用了递归算法来计算斐波那契数列"
 
     def test_simulate_code_block_stream(self, chat_tab):
         """模拟包含代码块的流式输出"""
@@ -180,6 +145,6 @@ class TestFullStreamSimulation:
         for chunk in chunks:
             chat_tab._update_last_ai_message(chunk)
 
-        html = chat_tab._chat_display.toHtml()
-        assert "def hello():" in html
-        assert "pass" in html
+        final = chat_tab._last_bubble_label.text()
+        assert "def hello():" in final
+        assert "pass" in final

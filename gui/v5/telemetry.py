@@ -46,24 +46,30 @@ class V5Telemetry:
             **kwargs:   附加 context 字段 (action_id, text_len, etc.)
         """
         obs = self._get_obs()
+        payload = {
+            "ui_version": "v5",
+            "ui_surface": "desktop",
+            **kwargs,
+        }
+
         if obs is None:
             # 降级: PipelineObservability 未初始化时走 stderr
             import sys
             parts = [f"[V5] {event}"]
             if trace_id:
                 parts.append(f"trace={trace_id[:8]}")
-            parts.extend(f"{k}={v}" for k, v in kwargs.items())
+            parts.extend(f"{k}={v}" for k, v in payload.items())
             sys.stderr.write(" | ".join(parts) + "\n")
             return
 
         # 构造消息: "V5_SC_TAB_SWITCH | from=0 to=1 tab=Chat"
         msg_parts = [event]
-        msg_parts.extend(f"{k}={v}" for k, v in kwargs.items())
+        msg_parts.extend(f"{k}={v}" for k, v in payload.items())
         msg = " | ".join(msg_parts)
 
         # 将 trace_id 和附加数据序列化到 data_json
         extra = {"trace_id": trace_id} if trace_id else {}
-        extra.update(kwargs)
+        extra.update(payload)
         data_json = json.dumps(extra, ensure_ascii=False, default=str) if extra else ""
 
         obs._write_log(

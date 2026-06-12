@@ -29,6 +29,7 @@ from .evaluation_skill import EvaluationSkill
 from .file_skill import FileSkill
 from .format_skill import FormatSkill
 from .persona_skill import PersonaSkill
+from .content_convert_skill import ContentConvertSkill
 
 __all__ = [
     'SkillStatus',
@@ -58,5 +59,6 @@ __all__ = [
     'EvaluationSkill',
     'FileSkill',
     'FormatSkill',
-    'PersonaSkill'
+    'PersonaSkill',
+    'ContentConvertSkill',
 ]

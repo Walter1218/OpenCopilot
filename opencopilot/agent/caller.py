@@ -167,6 +167,7 @@ def _build_pipeline_context(
         "text": text,
         "context_source": context_source,
         "context_meta": context_meta or {},
+        "context_envelope": context_envelope or {},
     }
 
     ctx = PipelineContext(
@@ -183,7 +184,7 @@ def _build_pipeline_context(
         web_search_user_location=ws_config.get("user_location"),
     )
 
-    # context_envelope 通过 metadata 传递
+    # 兼容旧链路：metadata 中也保留一份，便于已有中间件/调试逻辑读取
     if context_envelope:
         ctx.metadata["context_envelope"] = context_envelope
 

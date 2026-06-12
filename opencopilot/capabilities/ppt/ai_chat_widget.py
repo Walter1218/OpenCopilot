@@ -89,6 +89,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QTimer
 from PyQt6.QtGui import QColor, QFont, QTextCursor, QKeyEvent
+from gui.v5.agent_runtime import resolve_agent_route
 
 # 导入新的UI组件
 from .suggestion_bubble import SuggestionBubble, SuggestionBubbleManager
@@ -174,7 +175,7 @@ class HealthChecker(QThread):
 
 
 class AIWorker(QThread):
-    """AI 处理线程（内嵌 Pipeline 模式）"""
+    """AI 处理线程（通过 vnext/Hermes 调用 PPT 共创能力）"""
 
     response_ready = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
@@ -185,49 +186,132 @@ class AIWorker(QThread):
         self.instruction = ""
         self.slides_data = []
         self.current_index = -1
+        self.original_text = ""
         self.session_id = ""
+        self._delegate_worker = None
 
-    def set_task(self, instruction: str, slides_data: list, current_index: int, session_id: str = ""):
+    def set_task(
+        self,
+        instruction: str,
+        slides_data: list,
+        current_index: int,
+        original_text: str = "",
+        session_id: str = "",
+    ):
         """设置任务"""
         self.instruction = instruction
         self.slides_data = slides_data
         self.current_index = current_index
+        self.original_text = original_text or ""
         self.session_id = session_id
 
     def run(self):
-        """执行任务 - 通过统一 Agent Pipeline 调用器"""
+        """执行任务 - 通过 V5AgentWorker 复用统一 Agent Runtime 路由"""
         try:
-            from opencopilot.agent.caller import call_agent_pipeline_sync
             from opencopilot.agent.observability import PipelineObservability
+            from gui.v5.agent_worker import V5AgentWorker
 
-            # 使用统一的 prompt 构建服务，context_source="ppt_editor" 会自动注入 PPT 编辑指令
             user_message = self._build_user_message()
             session_id = self.session_id or f"ppt_cocreation_{uuid.uuid4().hex[:8]}"
-            
-            obs = PipelineObservability.get_instance()
-            obs.gui_log(f"PPT Cocreation START | text_len={len(user_message)}",
-                        session_id=session_id, event="PPT_COCREATION_START")
+            current_slide = self.slides_data[self.current_index] if 0 <= self.current_index < len(self.slides_data) else {}
+            route = resolve_agent_route("chat")
 
-            full_text = ""
-            for chunk in call_agent_pipeline_sync(
-                text=user_message,
+            obs = PipelineObservability.get_instance()
+            obs.gui_log(
+                f"PPT Cocreation START | text_len={len(user_message)} | backend={route.agent_backend} | provider={route.provider}",
+                session_id=session_id,
+                event="PPT_COCREATION_START",
+                data_json=json.dumps({
+                    "agent_backend": route.agent_backend,
+                    "provider": route.provider,
+                    "routing_mode": route.routing_mode,
+                    "slides_count": len(self.slides_data),
+                    "current_index": self.current_index,
+                }, ensure_ascii=False),
+            )
+
+            finished_payloads = []
+            errors = []
+            self._delegate_worker = V5AgentWorker(
+                prompt=user_message,
                 action_type="chat",
                 session_id=session_id,
                 context_source="ppt_editor",
-            ):
-                full_text += chunk
+                context_meta={
+                    "ppt_cocreation": True,
+                    "slides_count": len(self.slides_data),
+                    "current_index": self.current_index,
+                    "current_slide_title": current_slide.get("title", ""),
+                    "current_slide_layout": current_slide.get("layout", ""),
+                    "original_text_len": len(self.original_text),
+                },
+                is_new_task=True,
+            )
+            self._delegate_worker.finished_signal.connect(lambda text: finished_payloads.append(text))
+            self._delegate_worker.error_signal.connect(lambda text: errors.append(text))
+            self._delegate_worker.run()
 
-            if full_text:
-                obs.gui_log(f"PPT Cocreation DONE | output_len={len(full_text)}",
-                            session_id=session_id, event="PPT_COCREATION_DONE")
+            if errors:
+                raise RuntimeError(errors[-1])
+
+            if finished_payloads and finished_payloads[-1]:
+                full_text = finished_payloads[-1]
+                obs.gui_log(
+                    f"PPT Cocreation DONE | output_len={len(full_text)} | backend={route.agent_backend} | provider={route.provider}",
+                    session_id=session_id,
+                    event="PPT_COCREATION_DONE",
+                    data_json=json.dumps({
+                        "agent_backend": route.agent_backend,
+                        "provider": route.provider,
+                        "routing_mode": route.routing_mode,
+                        "output_len": len(full_text),
+                    }, ensure_ascii=False),
+                )
                 self.response_ready.emit(full_text)
-            else:
-                obs.gui_log("PPT Cocreation EMPTY response",
-                            session_id=session_id, event="PPT_COCREATION_EMPTY", level="WARN")
-                self.error_occurred.emit("Agent 返回空响应，可能是模型配置问题")
+                return
+
+            obs.gui_log(
+                f"PPT Cocreation EMPTY response | backend={route.agent_backend} | provider={route.provider}",
+                session_id=session_id,
+                event="PPT_COCREATION_EMPTY",
+                level="WARN",
+                data_json=json.dumps({
+                    "agent_backend": route.agent_backend,
+                    "provider": route.provider,
+                    "routing_mode": route.routing_mode,
+                }, ensure_ascii=False),
+            )
+            self.error_occurred.emit("智能体返回空响应，可能是模型或路由配置问题")
 
         except Exception as e:
-            self.error_occurred.emit(f"调用 Agent Pipeline 失败: {str(e)}")
+            self.error_occurred.emit(f"{self._build_delegate_error_prefix()}失败: {str(e)}")
+        finally:
+            self._delegate_worker = None
+
+    @staticmethod
+    def _build_delegate_error_prefix() -> str:
+        """按当前路由返回更准确的错误前缀，兼容旧的 Hermes 口径。"""
+        try:
+            route = resolve_agent_route("chat")
+        except Exception:
+            route = None
+
+        provider = getattr(route, "provider", "")
+        backend = getattr(route, "backend", "")
+        if provider == "hermes_local":
+            return "调用 Hermes 共创链路"
+        if backend == "self_agent":
+            return "调用自研智能体共创链路"
+        return "调用共创链路"
+
+    def stop(self):
+        """停止当前共创请求，优先向底层执行链路传播取消信号"""
+        delegate = self._delegate_worker
+        if delegate is not None:
+            try:
+                delegate.stop()
+            except Exception:
+                pass
     
     # _build_system_prompt 已移除，PPT 编辑指令统一由 prompt_builder.py 的 CONTEXT_DESCRIPTIONS["ppt_editor"] 管理
     
@@ -254,9 +338,141 @@ class AIWorker(QThread):
             parts.append(f"\n后一页（第 {idx + 2} 页）摘要：{next_summary}")
         
         parts.append(f"\n用户指令：{self.instruction}")
-        parts.append("\n请优先使用局部修改模式，只返回修改指令 JSON（不要返回完整数据）：")
         
+        # 渲染指令格式说明（新格式）- 使用动态 Prompt 生成器
+        try:
+            from .render_prompt_generator import generate_render_prompt
+            prompt_section = generate_render_prompt(
+                instruction=self.instruction,
+                current_slide=current_slide,
+                original_text=self.original_text,
+                selected_text=""
+            )
+            parts.append(f"\n{prompt_section}")
+        except Exception:
+            # 回退到静态 Prompt
+            parts.append("""
+## 输出格式（推荐：渲染指令）
+
+返回 JSON 格式的渲染指令数组：
+
+```json
+{
+  "render_commands": [
+    {
+      "source_text": "原文片段（用于定位）",
+      "render_type": "chart",
+      "render_params": {
+        "chart_type": "bar",
+        "title": "图表标题"
+      },
+      "slide_index": -1,
+      "slot": "body"
+    }
+  ]
+}
+```
+
+支持的 render_type：
+- text: 纯文本（默认）
+- table: 表格（需提供 table_data）
+- chart: 图表（需指定 chart_type: bar/line/pie，提供 chart_data）
+- flowchart: 流程图（需提供 flowchart_data）
+- image_right/image_left: 图文混排
+
+关键约束：
+- 默认修改当前正在编辑的页，除非用户明确要求“新增一页/加一页/新建页面”
+- 如果是改标题/改 headline/结论型标题，必须输出到 `slot=title`
+- 如果返回 `slide_index`，当前页修改只能使用当前页索引或 `-1`
+
+## 旧格式（向后兼容）
+
+如果无法使用渲染指令格式，可以返回 JSON 操作序列：
+
+```json
+{
+  "action": "update",
+  "slide_index": 0,
+  "field": "title",
+  "value": "新标题"
+}
+```
+
+请优先使用渲染指令格式。
+""")
         return "\n".join(parts)
+
+    def _instruction_allows_new_slide(self) -> bool:
+        instruction = (self._last_instruction or self.instruction or "").lower()
+        keywords = ("新增一页", "加一页", "新建页面", "add a new slide", "new slide", "add slide")
+        return any(keyword in instruction for keyword in keywords)
+
+    def _instruction_requests_title_update(self) -> bool:
+        instruction = (self._last_instruction or self.instruction or "").lower()
+        keywords = ("标题", "headline", "title", "结论型标题", "结论式标题", "标题改", "headline")
+        return any(keyword in instruction for keyword in keywords)
+
+    def _normalize_slide_index(self, slide_index: int | None) -> int:
+        if slide_index is None:
+            return self.current_index
+        if slide_index < 0:
+            return self.current_index if not self._instruction_allows_new_slide() else slide_index
+        if not self._instruction_allows_new_slide() and slide_index != self.current_index:
+            return self.current_index
+        return slide_index
+
+    def _normalize_render_commands(self, commands: list):
+        wants_title = self._instruction_requests_title_update()
+        has_explicit_title = any(getattr(cmd, "slot", "") == "title" for cmd in commands)
+
+        for index, cmd in enumerate(commands):
+            cmd.slide_index = self._normalize_slide_index(getattr(cmd, "slide_index", None))
+            cmd.instruction = self._last_instruction
+
+            if wants_title and not has_explicit_title:
+                title_value = cmd.render_params.get("title")
+                text_value = cmd.render_params.get("text")
+                should_promote = bool(title_value)
+                if not should_promote and index == 0 and cmd.render_type == "text" and text_value:
+                    compact = str(text_value).strip()
+                    should_promote = len(compact) <= 80
+                    if should_promote:
+                        cmd.render_params["title"] = compact
+                if should_promote:
+                    cmd.slot = "title"
+                    has_explicit_title = True
+
+        return commands
+
+    def _collect_legacy_actions(self, json_objects: list[str]) -> list[dict]:
+        actions: list[dict] = []
+        for json_str in json_objects:
+            data = json.loads(json_str)
+            if isinstance(data, list):
+                actions.extend(item for item in data if isinstance(item, dict))
+            elif isinstance(data, dict):
+                actions.append(data)
+        return [self._normalize_legacy_action(action) for action in actions]
+
+    def _normalize_legacy_action(self, action: dict) -> dict:
+        normalized = copy.deepcopy(action)
+        action_type = normalized.get("action")
+
+        if action_type in {"update", "update_item", "add_item", "remove_item"}:
+            normalized["slide_index"] = self._normalize_slide_index(normalized.get("slide_index"))
+
+        if self._instruction_requests_title_update() and action_type == "update":
+            value = normalized.get("value")
+            field = normalized.get("field")
+            if (
+                field in {None, "", "text", "content", "subtitle"}
+                and isinstance(value, str)
+                and value.strip()
+            ):
+                normalized["field"] = "title"
+                normalized["value"] = value.strip()
+
+        return normalized
     
     def _summarize_slide(self, idx: int) -> str:
         """生成单页幻灯片摘要（token 友好）"""
@@ -296,6 +512,10 @@ class AICopilotChatWidget(QWidget):
         # 新增：智能建议和分析面板
         self.suggestion_manager = None
         self.analysis_manager = None
+        
+        # 渲染指令系统支持
+        self._render_dispatcher = None
+        self.original_text = ""  # 原文文本，用于渲染指令解析
         
         self._init_ui()
     
@@ -570,11 +790,23 @@ class AICopilotChatWidget(QWidget):
             self._analyze_current_slide()
     
     def _check_agent_health(self):
-        """异步检测 Agent Pipeline 状态"""
-        import asu_custom_agent
-        is_alive = hasattr(asu_custom_agent, 'pipeline') and asu_custom_agent.pipeline is not None
-        text = "🟢 Agent Pipeline 在线" if is_alive else "🔴 Agent Pipeline 未就绪"
-        self._on_health_result(is_alive, text)
+        """异步检测 Hermes/vnext 可用性"""
+        try:
+            from gui_next.smart_copilot.runtime.api_runtime import (
+                DEFAULT_BASE_URL,
+                FALLBACK_BASE_URL,
+                _health_check,
+                _vnext_check,
+            )
+
+            for candidate in (DEFAULT_BASE_URL, FALLBACK_BASE_URL):
+                if _health_check(candidate) and _vnext_check(candidate):
+                    self._on_health_result(True, f"🟢 Hermes/vnext 在线 ({candidate})")
+                    return
+        except Exception:
+            pass
+
+        self._on_health_result(False, "🔴 Hermes/vnext 未就绪")
     
     def _on_health_result(self, is_alive: bool, text: str):
         """更新状态指示灯"""
@@ -589,9 +821,72 @@ class AICopilotChatWidget(QWidget):
         self.slides_data = slides
         self.current_index = current_index
         
+        # 如果已有原文文本，初始化渲染指令调度器
+        if self.original_text and slides:
+            try:
+                from .render_executor import RenderDispatcher
+                self._render_dispatcher = RenderDispatcher(slides, self.original_text)
+                print(f"[v5] AICopilotChatWidget: 渲染指令调度器已初始化，原文长度={len(self.original_text)}")
+            except Exception as e:
+                print(f"[v5] AICopilotChatWidget: 渲染指令调度器初始化失败: {e}")
+                self._render_dispatcher = None
+        
         # 如果分析面板可见，自动分析当前幻灯片
         if self.analysis_panel.isVisible() and current_index >= 0:
             self._analyze_current_slide()
+    
+    def set_original_text(self, text: str):
+        """设置原文文本并初始化渲染指令调度器"""
+        self.original_text = text
+        
+        # 初始化渲染指令调度器
+        if text and self.slides_data:
+            try:
+                from .render_executor import RenderDispatcher
+                self._render_dispatcher = RenderDispatcher(self.slides_data, text)
+                print(f"[v5] AICopilotChatWidget: 渲染指令调度器已初始化，原文长度={len(text)}")
+            except Exception as e:
+                print(f"[v5] AICopilotChatWidget: 渲染指令调度器初始化失败: {e}")
+                self._render_dispatcher = None
+
+    def _run_hermes_ppt_request(
+        self,
+        *,
+        text: str,
+        action_type: str,
+        session_id: str,
+        event_name: str,
+    ) -> str:
+        """在 Studio 共创内同步执行一条统一 Agent Runtime 请求。"""
+        from gui.v5.agent_worker import V5AgentWorker
+
+        current_slide = self.slides_data[self.current_index] if 0 <= self.current_index < len(self.slides_data) else {}
+        finished_payloads = []
+        errors = []
+        worker = V5AgentWorker(
+            prompt=text,
+            action_type=action_type,
+            session_id=session_id,
+            context_source="ppt_editor",
+            context_meta={
+                "ppt_cocreation": True,
+                "slides_count": len(self.slides_data),
+                "current_index": self.current_index,
+                "current_slide_title": current_slide.get("title", ""),
+                "current_slide_layout": current_slide.get("layout", ""),
+                "original_text_len": len(self.original_text),
+                "source_text": self.original_text[:4000] if self.original_text else "",
+                "task": event_name,
+            },
+            is_new_task=True,
+        )
+        worker.finished_signal.connect(lambda content: finished_payloads.append(content))
+        worker.error_signal.connect(lambda content: errors.append(content))
+        worker.run()
+
+        if errors:
+            raise RuntimeError(errors[-1])
+        return finished_payloads[-1] if finished_payloads else ""
     
     def _analyze_current_slide(self):
         """分析当前幻灯片内容（TODO: 迁移到 Pipeline 模式）"""
@@ -609,9 +904,7 @@ class AICopilotChatWidget(QWidget):
         if not full_content:
             return
         
-        # TODO: PPT 分析 API 待迁移到 Pipeline 模式下的独立端点
         try:
-            from opencopilot.agent.caller import call_agent_pipeline_sync
             from opencopilot.agent.observability import PipelineObservability
             
             session_id = f"ppt_analyze_{self.current_index}"
@@ -619,16 +912,15 @@ class AICopilotChatWidget(QWidget):
             obs.gui_log(f"PPT Analyze START | slide={self.current_index} text_len={len(full_content)}",
                         session_id=session_id, event="PPT_ANALYZE_START")
             
-            result = ""
-            for chunk in call_agent_pipeline_sync(
+            result = self._run_hermes_ppt_request(
                 text=f"请分析以下PPT幻灯片内容：\n{full_content}",
                 action_type="ppt",
                 session_id=session_id,
-                context_source="ppt_editor",
-            ):
-                result += chunk
+                event_name="ppt_analyze",
+            )
             if result and self.analysis_manager:
-                obs.gui_log(f"PPT Analyze DONE | output_len={len(result)}",
+                route = resolve_agent_route("ppt")
+                obs.gui_log(f"PPT Analyze DONE | output_len={len(result)} | backend={route.agent_backend} | provider={route.provider}",
                             session_id=session_id, event="PPT_ANALYZE_DONE")
                 self.analysis_manager.update_analysis_debounced({"analysis": result})
         except Exception as e:
@@ -674,14 +966,20 @@ class AICopilotChatWidget(QWidget):
             except TypeError:
                 pass
             if self.worker.isRunning():
-                self.worker.quit()
+                self.worker.stop()
                 self.worker.wait(2000)
 
         # 创建 AI 工作线程
         self.worker = AIWorker(self.agent_url)
         self.worker.response_ready.connect(self._on_ai_response)
         self.worker.error_occurred.connect(self._on_ai_error)
-        self.worker.set_task(instruction, self.slides_data, self.current_index, self._session_id)
+        self.worker.set_task(
+            instruction,
+            self.slides_data,
+            self.current_index,
+            self.original_text,
+            self._session_id,
+        )
         self._last_instruction = instruction
         self.worker.start()
     
@@ -735,18 +1033,102 @@ class AICopilotChatWidget(QWidget):
             except TypeError:
                 pass
             if self.worker.isRunning():
-                self.worker.quit()
+                self.worker.stop()
                 self.worker.wait(2000)
         # 创建 AI 工作线程
         self.worker = AIWorker(self.agent_url)
         self.worker.response_ready.connect(self._on_ai_response)
         self.worker.error_occurred.connect(self._on_ai_error)
-        self.worker.set_task(instruction, self.slides_data, self.current_index, self._session_id)
+        self.worker.set_task(
+            instruction,
+            self.slides_data,
+            self.current_index,
+            self.original_text,
+            self._session_id,
+        )
         self._last_instruction = instruction  # 保存指令用于 undo 描述
         self.worker.start()
+
+    def _instruction_allows_new_slide(self) -> bool:
+        instruction = (self._last_instruction or "").lower()
+        keywords = ("新增一页", "加一页", "新建页面", "add a new slide", "new slide", "add slide")
+        return any(keyword in instruction for keyword in keywords)
+
+    def _instruction_requests_title_update(self) -> bool:
+        instruction = (self._last_instruction or "").lower()
+        keywords = ("标题", "headline", "title", "结论型标题", "结论式标题", "标题改")
+        return any(keyword in instruction for keyword in keywords)
+
+    def _normalize_slide_index(self, slide_index: int | None) -> int:
+        if slide_index is None:
+            return self.current_index
+        if slide_index < 0:
+            return self.current_index if not self._instruction_allows_new_slide() else slide_index
+        if not self._instruction_allows_new_slide() and slide_index != self.current_index:
+            return self.current_index
+        return slide_index
+
+    def _normalize_render_commands(self, commands: list):
+        wants_title = self._instruction_requests_title_update()
+        has_explicit_title = any(getattr(cmd, "slot", "") == "title" for cmd in commands)
+
+        for index, cmd in enumerate(commands):
+            cmd.slide_index = self._normalize_slide_index(getattr(cmd, "slide_index", None))
+            cmd.instruction = self._last_instruction
+
+            if wants_title and not has_explicit_title:
+                title_value = cmd.render_params.get("title")
+                text_value = cmd.render_params.get("text")
+                should_promote = bool(title_value)
+                if not should_promote and index == 0 and cmd.render_type == "text" and text_value:
+                    compact = str(text_value).strip()
+                    should_promote = len(compact) <= 80
+                    if should_promote:
+                        cmd.render_params["title"] = compact
+                if should_promote:
+                    cmd.slot = "title"
+                    has_explicit_title = True
+
+        return commands
+
+    def _collect_legacy_actions(self, json_objects: list[str]) -> list[dict]:
+        actions: list[dict] = []
+        for json_str in json_objects:
+            data = json.loads(json_str)
+            if isinstance(data, list):
+                actions.extend(item for item in data if isinstance(item, dict))
+            elif isinstance(data, dict):
+                actions.append(data)
+        return [self._normalize_legacy_action(action) for action in actions]
+
+    def _normalize_legacy_action(self, action: dict) -> dict:
+        normalized = copy.deepcopy(action)
+        action_type = normalized.get("action")
+
+        if action_type in {"update", "update_item", "add_item", "remove_item"}:
+            normalized["slide_index"] = self._normalize_slide_index(normalized.get("slide_index"))
+
+        if self._instruction_requests_title_update() and action_type == "update":
+            value = normalized.get("value")
+            field = normalized.get("field")
+            if (
+                field in {None, "", "text", "content", "subtitle"}
+                and isinstance(value, str)
+                and value.strip()
+            ):
+                normalized["field"] = "title"
+                normalized["value"] = value.strip()
+
+        return normalized
     
     def _on_ai_response(self, response: str):
-        """AI 响应 — 支持处理多个 JSON 动作"""
+        """AI 响应 — 支持渲染指令（新格式）和 JSON 动作（旧格式）
+        
+        处理优先级：
+        1. 批量操作（关键词触发）
+        2. 渲染指令（render_commands 格式）
+        3. JSON 操作序列（action 格式，向后兼容）
+        """
         try:
             # 埋点：记录 AI 响应
             from opencopilot.agent.observability import PipelineObservability
@@ -754,7 +1136,97 @@ class AICopilotChatWidget(QWidget):
             obs.gui_log(f"PPT_COCREATION_RESPONSE | response_len={len(response)} | preview={response[:100]}",
                         session_id=self._session_id, event="PPT_COCREATION_RESPONSE")
             
-            # 提取所有 JSON 对象（AI 可能返回多个操作指令）
+            # 0. 检查是否是批量操作
+            from .render_command import BatchOperationParser
+            if BatchOperationParser.is_batch_operation(self._last_instruction):
+                batch_commands = BatchOperationParser.parse_batch_operation(
+                    self._last_instruction, self.slides_data, self.original_text
+                )
+                if batch_commands and self._render_dispatcher:
+                    # 批量操作埋点
+                    obs.gui_log(
+                        f"BATCH_OPERATION | count={len(batch_commands)} instruction={self._last_instruction[:30]}",
+                        session_id=self._session_id,
+                        event="BATCH_OPERATION"
+                    )
+                    
+                    # 执行批量渲染
+                    results = self._render_dispatcher.dispatch_from_render_commands(
+                        batch_commands, self.current_index
+                    )
+                    
+                    success_count = sum(1 for r in results if r.success)
+                    if success_count > 0:
+                        self._push_undo_state(f"批量操作: {self._last_instruction[:30]}")
+                        self.slides_updated.emit(self.slides_data)
+                        
+                        obs.gui_log(
+                            f"BATCH_OPERATION_APPLIED | success={success_count} total={len(results)}",
+                            session_id=self._session_id,
+                            event="BATCH_OPERATION_APPLIED"
+                        )
+                        
+                        self._add_message(f"✅ 批量操作完成: {success_count} 项", is_user=False)
+                        
+                        # 触发建议气泡
+                        self._trigger_suggestions_for_current_slide()
+                        
+                        # 恢复输入
+                        self.input_edit.setEnabled(True)
+                        self.send_btn.setEnabled(True)
+                        return
+            
+            # 1. 优先尝试解析为渲染指令（新格式）
+            if self._render_dispatcher:
+                from .render_command import RenderCommandParser
+                
+                render_commands = RenderCommandParser.parse(response, self.original_text)
+                if render_commands:
+                    render_commands = self._normalize_render_commands(render_commands)
+                    
+                    # 埋点
+                    obs.gui_log(
+                        f"RENDER_COMMANDS_PARSED | count={len(render_commands)} types={[c.render_type for c in render_commands]}",
+                        session_id=self._session_id,
+                        event="RENDER_COMMANDS_PARSED"
+                    )
+                    
+                    # 执行渲染指令
+                    results = self._render_dispatcher.dispatch_from_render_commands(
+                        render_commands, self.current_index
+                    )
+                    
+                    # 应用结果
+                    success_count = sum(1 for r in results if r.success)
+                    if success_count > 0:
+                        self._push_undo_state(self._last_instruction[:40] if self._last_instruction else "AI 渲染")
+                        self.slides_updated.emit(self.slides_data)
+                        
+                        # 埋点
+                        obs.gui_log(
+                            f"RENDER_COMMANDS_APPLIED | success={success_count} total={len(results)}",
+                            session_id=self._session_id,
+                            event="RENDER_COMMANDS_APPLIED"
+                        )
+                        
+                        self._add_message(f"✅ 已应用 {success_count} 项渲染指令", is_user=False)
+                        
+                        # 触发建议气泡
+                        self._trigger_suggestions_for_current_slide()
+                        
+                        # 更新分析面板
+                        if self.analysis_panel.isVisible():
+                            self._analyze_current_slide()
+                        
+                        # 恢复输入
+                        self.input_edit.setEnabled(True)
+                        self.send_btn.setEnabled(True)
+                        return
+                    else:
+                        # 渲染指令执行失败，回退到旧格式
+                        pass
+            
+            # 2. 回退到旧格式（JSON 操作序列）
             json_objects = self._extract_all_json(response)
             if not json_objects:
                 raise ValueError("无法找到 JSON 数据")
@@ -769,9 +1241,8 @@ class AICopilotChatWidget(QWidget):
             success_msgs = []
             first_error = None
             
-            for json_str in json_objects:
+            for data in self._collect_legacy_actions(json_objects):
                 try:
-                    data = json.loads(json_str)
                     msg = self._apply_update(data)
                     success_msgs.append(msg)
                 except Exception as e:
@@ -906,26 +1377,23 @@ class AICopilotChatWidget(QWidget):
         
         try:
             from PyQt6.QtCore import QPoint
-            from opencopilot.agent.caller import call_agent_pipeline_sync
             from opencopilot.agent.observability import PipelineObservability
-            import json
             
             session_id = f"ppt_suggest_{self.current_index}"
             obs = PipelineObservability.get_instance()
             obs.gui_log(f"PPT Suggest START | slide={self.current_index} text_len={len(full_content)}",
                         session_id=session_id, event="PPT_SUGGEST_START")
             
-            result = ""
-            for chunk in call_agent_pipeline_sync(
+            result = self._run_hermes_ppt_request(
                 text=f"请为以下PPT幻灯片提供1-2条优化建议：\n{full_content}",
                 action_type="ppt",
                 session_id=session_id,
-                context_source="ppt_editor",
-            ):
-                result += chunk
+                event_name="ppt_suggest",
+            )
             
             if result.strip():
-                obs.gui_log(f"PPT Suggest DONE | output_len={len(result)}",
+                route = resolve_agent_route("ppt")
+                obs.gui_log(f"PPT Suggest DONE | output_len={len(result)} | backend={route.agent_backend} | provider={route.provider}",
                             session_id=session_id, event="PPT_SUGGEST_DONE")
                 suggestion = {"title": "AI优化建议", "content": result[:200]}
                 if not self.suggestion_manager:

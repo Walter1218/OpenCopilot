@@ -13,7 +13,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 
 @pytest.fixture(scope="module")
@@ -28,6 +28,7 @@ def qapp():
 @pytest.fixture
 def nav(qapp):
     """创建一个干净的 NavigationManager 实例"""
+    _ = qapp
     from gui.v5.navigation import NavigationManager
     return NavigationManager()
 
@@ -228,6 +229,18 @@ class TestShowWorkspace:
 class TestSmartCopilot:
     """Smart Copilot 显示/隐藏"""
 
+    def test_show_smart_copilot_uses_v5_ui(self, nav):
+        mock_popup = MagicMock()
+        mock_popup.width.return_value = 420
+        mock_popup.height.return_value = 320
+        with patch("gui.v5.smart_copilot.SmartCopilotV5", return_value=mock_popup):
+            nav.show_smart_copilot(100, 120, selected_text="hello")
+
+        assert nav._smart_copilot is mock_popup
+        mock_popup.set_selected_text.assert_called_once_with("hello")
+        mock_popup.show.assert_called_once()
+        mock_popup.raise_.assert_called_once()
+
     def test_hide_smart_copilot_when_none(self, nav):
         """Smart Copilot 不存在时 hide 不应报错"""
         nav.hide_smart_copilot()  # Should not raise
@@ -247,6 +260,12 @@ class TestSmartCopilot:
         nav._smart_copilot = mock_sc
         nav.hide_smart_copilot()
         mock_sc.hide.assert_not_called()
+
+    def test_cleanup_calls_popup_cleanup(self, nav):
+        mock_sc = MagicMock()
+        nav._smart_copilot = mock_sc
+        nav.cleanup()
+        mock_sc.cleanup.assert_not_called()
 
 
 # =============================================================================

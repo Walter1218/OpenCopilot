@@ -1,0 +1,25 @@
+{
+  "experiment": "Studio vs V5Plus 共创 A/B 实验",
+  "timestamp": "2026-06-12 02:02:57",
+  "hypothesis": "Studio 共创和 V5Plus 共创在统一 prompt + 渲染 + 后端后，输出应完全一致（prompt 级）或高度一致（LLM 输出级，≥80%）",
+  "architecture": {
+    "shared_prompt_builder": "gui/v5/ppt_prompt.py::build_ppt_generation_prompt",
+    "shared_parser": "gui/v5/ppt_prompt.py::parse_slides_from_text",
+    "shared_modify_prompt": "gui.v5.ppt_prompt::build_ppt_modify_prompt",
+    "shared_backend": "V5AgentWorker → self_agent → call_agent_pipeline_sync",
+    "context_source_diff": "仅 telemetry 元数据不同（studio vs v5plus_cocreation）"
+  },
+  "phase1_static_consistency": {
+    "status": "见 TestStaticConsistency 类（无需 LLM 调用）",
+    "expected": "100% 一致（相同函数、相同参数 → 相同输出）"
+  },
+  "phase2_generation_ab": {
+    "status": "需运行 TestLLM_ABGeneration",
+    "note": "由于 LLM 温度随机性，输出不会 100% 相同，但结构和布局应高度一致"
+  },
+  "phase3_modification_ab": {
+    "status": "需运行 TestLLM_ABModification",
+    "note": "指令修改 prompt 完全相同，LLM 输出应高度一致"
+  },
+  "conclusion": "如果所有 Phase 通过，说明 Studio 和 V5Plus 共创在统一后，除了 UI 交互差异外，底层 AI 能力完全一致。"
+}

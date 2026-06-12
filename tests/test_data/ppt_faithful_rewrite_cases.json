@@ -1,0 +1,145 @@
+{
+  "benchmark_name": "ppt_faithful_rewrite",
+  "version": "2026-06-11",
+  "description": "Benchmark cases for evaluating faithful rewrite ability in PPT co-creation. Focus on professionalization without factual drift.",
+  "dimensions": [
+    "fact_retention",
+    "structure_preservation",
+    "professional_expression",
+    "hallucination_control"
+  ],
+  "cases": [
+    {
+      "case_id": "fr_001",
+      "category": "F_polish",
+      "label": "数字与术语保留",
+      "doc_key": "business_proposal",
+      "current_index": 2,
+      "instruction": "润色当前页文案，让表达更专业，但必须保留所有数字、专业术语和价格信息，不能新增卖点，也不能调整条目顺序。",
+      "focus": ["fact_retention", "professional_expression"],
+      "hard_constraints": ["保留数字", "保留专业术语", "顺序不变", "不可新增事实"],
+      "expected_failure_patterns": ["价格被模糊", "条目顺序被重排", "新增原文没有的卖点"]
+    },
+    {
+      "case_id": "fr_002",
+      "category": "F_polish",
+      "label": "计划与结果区分",
+      "doc_key": "business_proposal",
+      "current_index": 4,
+      "instruction": "把当前页改写成更像董事会汇报的表达，但必须清楚区分“已完成”和“计划中”的事项，不能把融资计划写成已完成结果。",
+      "focus": ["fact_retention", "hallucination_control"],
+      "hard_constraints": ["计划不能写成结果", "融资状态必须忠实", "保留时间信息"],
+      "expected_failure_patterns": ["计划变已完成", "A轮写成已到账", "时间点丢失"]
+    },
+    {
+      "case_id": "fr_003",
+      "category": "F_polish",
+      "label": "因果关系保留",
+      "doc_key": "tech_report",
+      "current_index": 3,
+      "instruction": "把当前页每条文案压缩为一句正式表达，但必须保留原有因果关系和风险-结果对应关系，不能写成泛泛结论。",
+      "focus": ["fact_retention", "structure_preservation"],
+      "hard_constraints": ["保留因果关系", "逐条一句话", "不可写成空泛结论"],
+      "expected_failure_patterns": ["因果被抹平", "风险与影响脱钩", "多条合成一条总结"]
+    },
+    {
+      "case_id": "fr_004",
+      "category": "F_polish",
+      "label": "风险提示不可弱化",
+      "doc_key": "tech_report",
+      "current_index": 3,
+      "instruction": "把当前页改得更适合高层汇报，但必须保留所有风险提示和不确定性表达，不能为了更积极而弱化风险。",
+      "focus": ["fact_retention", "hallucination_control"],
+      "hard_constraints": ["风险提示保留", "不确定性保留", "不能改成乐观口号"],
+      "expected_failure_patterns": ["风险被删", "不确定性被正向包装", "语气过度乐观"]
+    },
+    {
+      "case_id": "fr_005",
+      "category": "F_polish",
+      "label": "顺序与粒度保持",
+      "doc_key": "business_proposal",
+      "current_index": 1,
+      "instruction": "润色当前页，使表达更简洁专业，但要保持原有条目数量和顺序，每条只允许改写措辞，不允许合并或拆分内容。",
+      "focus": ["structure_preservation", "professional_expression"],
+      "hard_constraints": ["条目数量不变", "顺序不变", "只改措辞"],
+      "expected_failure_patterns": ["条目合并", "条目拆分", "顺序调整"]
+    },
+    {
+      "case_id": "fr_006",
+      "category": "F_polish",
+      "label": "专有名词与英文缩写",
+      "doc_key": "tech_report",
+      "current_index": 2,
+      "instruction": "把当前页改成正式书面表达，但必须保留所有英文缩写、协议名和专有名词，不要替换成模糊同义词。",
+      "focus": ["fact_retention", "professional_expression"],
+      "hard_constraints": ["英文缩写保留", "协议名保留", "专有名词保留"],
+      "expected_failure_patterns": ["专有名词泛化", "缩写被误替换", "术语精度下降"]
+    },
+    {
+      "case_id": "fr_007",
+      "category": "F_polish",
+      "label": "对比关系保留",
+      "doc_key": "tech_report",
+      "current_index": 0,
+      "instruction": "润色当前页时保留所有对比关系和增长趋势表达，不能把‘从A增长到B’写成笼统的‘显著增长’。",
+      "focus": ["fact_retention", "hallucination_control"],
+      "hard_constraints": ["对比项保留", "增长区间保留", "不可模糊化"],
+      "expected_failure_patterns": ["增长区间被概括", "对比对象丢失", "显著提升类空话替代"]
+    },
+    {
+      "case_id": "fr_008",
+      "category": "F_polish",
+      "label": "范围与区间保留",
+      "doc_key": "business_proposal",
+      "current_index": 2,
+      "instruction": "把当前页文案改得更专业，但必须保留价格区间、年费区间和按次计费方式，不能把区间改成单点值。",
+      "focus": ["fact_retention", "hallucination_control"],
+      "hard_constraints": ["区间保留", "计费模式保留", "不可单点化"],
+      "expected_failure_patterns": ["区间被单点化", "计费模式丢失", "多个价格被压成一个价格"]
+    },
+    {
+      "case_id": "fr_009",
+      "category": "F_polish",
+      "label": "结论句但保事实锚点",
+      "doc_key": "business_proposal",
+      "current_index": 4,
+      "instruction": "把当前页每条文案改成更像结论句的表达，但每条都必须保留至少一个事实锚点，例如金额、时间、人数或明确状态。",
+      "focus": ["fact_retention", "professional_expression"],
+      "hard_constraints": ["每条至少一个事实锚点", "结论句式", "不能空泛"],
+      "expected_failure_patterns": ["结论句无事实锚点", "金额时间被删", "状态表述漂移"]
+    },
+    {
+      "case_id": "fr_010",
+      "category": "F_polish",
+      "label": "多约束忠实压缩",
+      "doc_key": "tech_report",
+      "current_index": 1,
+      "instruction": "将当前页压缩为更短的董事会汇报口吻，但必须同时保留市场规模、同比增速、中国市场占比变化和2026年预测，不能遗漏任何一个数值事实。",
+      "focus": ["fact_retention", "structure_preservation", "professional_expression"],
+      "hard_constraints": ["四类数值事实全部保留", "压缩但不漏事实", "董事会口吻"],
+      "expected_failure_patterns": ["遗漏某个数值", "只保留部分指标", "预测被删"]
+    },
+    {
+      "case_id": "fr_011",
+      "category": "F_polish",
+      "label": "负面信息保留",
+      "doc_key": "tech_report",
+      "current_index": 3,
+      "instruction": "把当前页润色成更专业的风险页，但必须保留所有负面信息，不允许为了更顺畅而删掉错误率、成本压力或人工审核限制。",
+      "focus": ["fact_retention", "hallucination_control"],
+      "hard_constraints": ["负面信息保留", "错误率保留", "成本与限制保留"],
+      "expected_failure_patterns": ["负面信息删减", "错误率数字丢失", "限制条件被弱化"]
+    },
+    {
+      "case_id": "fr_012",
+      "category": "F_polish",
+      "label": "组织名与角色保留",
+      "doc_key": "business_proposal",
+      "current_index": 4,
+      "instruction": "把当前页改写成更适合投资人阅读的表达，但必须保留团队规模、来源背景和融资轮次，不能把具体公司背景泛化成‘头部企业’。",
+      "focus": ["fact_retention", "professional_expression", "hallucination_control"],
+      "hard_constraints": ["团队规模保留", "来源背景保留", "融资轮次保留"],
+      "expected_failure_patterns": ["BAT被泛化", "团队人数丢失", "轮次表述漂移"]
+    }
+  ]
+}

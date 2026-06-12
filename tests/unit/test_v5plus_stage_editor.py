@@ -561,3 +561,235 @@ class TestRenderCommand:
         editor._on_ai_modify_finished(new_json)
         assert len(editor._slides_data) == 1
         assert editor._slides_data[0]["title"] == "S1"
+
+
+# =============================================================================
+# 自由拖拽定位
+# =============================================================================
+
+class TestFreeDrag:
+    """元素自由拖拽定位功能"""
+
+    from PyQt6.QtGui import QMouseEvent as _QME
+    from PyQt6.QtCore import QPointF as _QPF
+    _QMouseEvent = _QME
+    _QPointF = _QPF
+
+    @pytest.fixture
+    def renderer_with_slide(self):
+        """创建包含文本 items 的 SlideRenderer"""
+        from opencopilot.capabilities.ppt.preview_panel import SlideRenderer
+        from PyQt6.QtCore import QPointF
+        from PyQt6.QtGui import QMouseEvent
+        
+        renderer = SlideRenderer()
+        renderer.resize(1000, 562)  # 16:9 比例
+        slide = {
+            "title": "测试页",
+            "type": "content",
+            "layout": "text_only",
+            "items": [
+                {"text": "第一行内容", "level": 0, "content_type": "text"},
+                {"text": "第二行内容", "level": 0, "content_type": "text"},
+                {"text": "第三行内容", "level": 1, "content_type": "text"},
+            ]
+        }
+        renderer.set_slide(slide)
+        return renderer
+
+    def _make_mouse_event(self, event_type, pos, button=Qt.MouseButton.LeftButton):
+        """构造 QMouseEvent"""
+        return self._QMouseEvent(
+            event_type,
+            self._QPointF(pos[0], pos[1]),
+            self._QPointF(pos[0], pos[1]),
+            button,
+            button,
+            Qt.KeyboardModifier.NoModifier,
+        )
+
+    def _slide_to_widget(self, r, slide_x, slide_y):
+        """slide 坐标 → widget 坐标"""
+        return (
+            int(slide_x * r.scale_factor + r._offset_x),
+            int(slide_y * r.scale_factor + r._offset_y),
+        )
+
+    def test_drag_state_initialized(self, renderer_with_slide):
+        """拖拽状态初始化正确"""
+        r = renderer_with_slide
+        assert r._dragging is False
+        assert r._drag_source is None
+        assert r._drag_start_pos is None
+        assert r._drag_item_offset is None
+
+    def test_mouse_press_records_drag_source(self, renderer_with_slide):
+        """鼠标点击命中 item 时记录拖拽源"""
+        r = renderer_with_slide
+        # 强制计算 transform
+        r.repaint()
+        # item[0] 在默认布局下 y=180, indent=100, 用 slide 坐标 (200, 200) 点击
+        # 转 widget 坐标：wx = 200 * scale + offset_x
+        wx = int(200 * r.scale_factor + r._offset_x)
+        wy = int(200 * r.scale_factor + r._offset_y)
+        event = self._make_mouse_event(self._QMouseEvent.Type.MouseButtonPress, (wx, wy))
+        r.mousePressEvent(event)
+        assert r._drag_source == ("item", 0)
+        assert r._drag_start_pos is not None
+
+    def test_drag_threshold_activates_dragging(self, renderer_with_slide):
+        """鼠标移动超过 5px 阈值后激活拖拽"""
+        r = renderer_with_slide
+        r.repaint()
+        wx = int(200 * r.scale_factor + r._offset_x)
+        wy = int(200 * r.scale_factor + r._offset_y)
+        # 按下
+        press = self._make_mouse_event(self._QMouseEvent.Type.MouseButtonPress, (wx, wy))
+        r.mousePressEvent(press)
+        assert r._dragging is False
+        # 移动超过阈值
+        move = self._make_mouse_event(self._QMouseEvent.Type.MouseMove, (wx + 20, wy + 20))
+        r.mouseMoveEvent(move)
+        assert r._dragging is True
+        assert r._drag_pos is not None
+
+    def test_drag_updates_custom_coordinates(self, renderer_with_slide):
+        """拖拽过程中更新 item 的 custom_x/custom_y"""
+        r = renderer_with_slide
+        r.repaint()
+        items = r.current_slide['items']
+        # 初始无自定义坐标
+        assert items[0].get('custom_x') is None
+        assert items[0].get('custom_y') is None
+        # 点击 item[0]
+        wx = int(200 * r.scale_factor + r._offset_x)
+        wy = int(200 * r.scale_factor + r._offset_y)
+        press = self._make_mouse_event(self._QMouseEvent.Type.MouseButtonPress, (wx, wy))
+        r.mousePressEvent(press)
+        # 超过阈值激活拖拽
+        move1 = self._make_mouse_event(self._QMouseEvent.Type.MouseMove, (wx + 20, wy + 20))
+        r.mouseMoveEvent(move1)
+        assert r._dragging is True
+        # 拖拽到新位置
+        move2 = self._make_mouse_event(self._QMouseEvent.Type.MouseMove, (wx + 100, wy + 100))
+        r.mouseMoveEvent(move2)
+        # 验证坐标已更新
+        assert items[0].get('custom_x') is not None
+        assert items[0].get('custom_y') is not None
+        # 坐标应该与初始位置不同
+        assert items[0]['custom_x'] != 100  # 默认 indent
+
+    def test_drag_release_emits_signal(self, renderer_with_slide):
+        """拖拽释放后发射 item_moved 信号"""
+        r = renderer_with_slide
+        r.repaint()
+        # 收集信号
+        received = []
+        r.item_moved.connect(lambda idx, x, y: received.append((idx, x, y)))
+        # 点击 → 拖拽 → 释放
+        wx = int(200 * r.scale_factor + r._offset_x)
+        wy = int(200 * r.scale_factor + r._offset_y)
+        press = self._make_mouse_event(self._QMouseEvent.Type.MouseButtonPress, (wx, wy))
+        r.mousePressEvent(press)
+        move = self._make_mouse_event(self._QMouseEvent.Type.MouseMove, (wx + 20, wy + 20))
+        r.mouseMoveEvent(move)
+        move2 = self._make_mouse_event(self._QMouseEvent.Type.MouseMove, (wx + 100, wy + 50))
+        r.mouseMoveEvent(move2)
+        release = self._make_mouse_event(
+            self._QMouseEvent.Type.MouseButtonRelease, (wx + 100, wy + 50)
+        )
+        r.mouseReleaseEvent(release)
+        # 验证信号
+        assert len(received) == 1
+        idx, new_x, new_y = received[0]
+        assert idx == 0
+        assert isinstance(new_x, float)
+        assert isinstance(new_y, float)
+
+    def test_drag_reset_on_release(self, renderer_with_slide):
+        """释放后拖拽状态重置"""
+        r = renderer_with_slide
+        r.repaint()
+        wx = int(200 * r.scale_factor + r._offset_x)
+        wy = int(200 * r.scale_factor + r._offset_y)
+        press = self._make_mouse_event(self._QMouseEvent.Type.MouseButtonPress, (wx, wy))
+        r.mousePressEvent(press)
+        move = self._make_mouse_event(self._QMouseEvent.Type.MouseMove, (wx + 20, wy + 20))
+        r.mouseMoveEvent(move)
+        release = self._make_mouse_event(self._QMouseEvent.Type.MouseButtonRelease, (wx + 20, wy + 20))
+        r.mouseReleaseEvent(release)
+        assert r._dragging is False
+        assert r._drag_source is None
+        assert r._drag_item_offset is None
+
+    def test_drag_custom_position_persists_in_data(self, renderer_with_slide):
+        """拖拽后 custom_x/custom_y 保留在 slide 数据中"""
+        r = renderer_with_slide
+        r.repaint()
+        items = r.current_slide['items']
+        wx = int(200 * r.scale_factor + r._offset_x)
+        wy = int(200 * r.scale_factor + r._offset_y)
+        press = self._make_mouse_event(self._QMouseEvent.Type.MouseButtonPress, (wx, wy))
+        r.mousePressEvent(press)
+        move1 = self._make_mouse_event(self._QMouseEvent.Type.MouseMove, (wx + 20, wy + 20))
+        r.mouseMoveEvent(move1)
+        move2 = self._make_mouse_event(self._QMouseEvent.Type.MouseMove, (wx + 200, wy + 100))
+        r.mouseMoveEvent(move2)
+        # 验证数据持久化
+        assert 'custom_x' in items[0]
+        assert 'custom_y' in items[0]
+        # 坐标在合理范围内
+        assert 0 <= items[0]['custom_x'] <= r.SLIDE_WIDTH
+        assert 0 <= items[0]['custom_y'] <= r.SLIDE_HEIGHT
+
+    def test_reset_position_removes_custom_coords(self, renderer_with_slide):
+        """重置位置移除 custom_x/custom_y"""
+        r = renderer_with_slide
+        items = r.current_slide['items']
+        # 先设置自定义坐标
+        items[0]['custom_x'] = 500.0
+        items[0]['custom_y'] = 300.0
+        # 重置
+        r._on_reset_position(0)
+        assert 'custom_x' not in items[0]
+        assert 'custom_y' not in items[0]
+
+    def test_hit_test_respects_custom_position(self, renderer_with_slide):
+        """hit_test 在自定义位置处命中"""
+        r = renderer_with_slide
+        r.repaint()
+        items = r.current_slide['items']
+        # 设置自定义位置
+        items[0]['custom_x'] = 400.0
+        items[0]['custom_y'] = 300.0
+        # 在自定义位置中心点击
+        slide_x = 500.0  # 400 + 100 (within 1133 width)
+        slide_y = 320.0  # 300 + 20 (within 40 height)
+        wx = int(slide_x * r.scale_factor + r._offset_x)
+        wy = int(slide_y * r.scale_factor + r._offset_y)
+        hit_type, hit_idx = r._hit_test(self._QPointF(wx, wy))
+        assert hit_type == "item"
+        assert hit_idx == 0
+
+    def test_drag_constraints_within_slide(self, renderer_with_slide):
+        """拖拽坐标限制在幻灯片区域内"""
+        r = renderer_with_slide
+        r.repaint()
+        items = r.current_slide['items']
+        wx = int(200 * r.scale_factor + r._offset_x)
+        wy = int(200 * r.scale_factor + r._offset_y)
+        press = self._make_mouse_event(self._QMouseEvent.Type.MouseButtonPress, (wx, wy))
+        r.mousePressEvent(press)
+        move1 = self._make_mouse_event(self._QMouseEvent.Type.MouseMove, (wx + 20, wy + 20))
+        r.mouseMoveEvent(move1)
+        # 拖到右下角极远处
+        move2 = self._make_mouse_event(self._QMouseEvent.Type.MouseMove, (5000, 5000))
+        r.mouseMoveEvent(move2)
+        # 坐标应该被 clamp
+        assert items[0]['custom_x'] <= r.SLIDE_WIDTH - 350
+        assert items[0]['custom_y'] <= r.SLIDE_HEIGHT - 60
+        # 拖到左上角极远处
+        move3 = self._make_mouse_event(self._QMouseEvent.Type.MouseMove, (-100, -100))
+        r.mouseMoveEvent(move3)
+        assert items[0]['custom_x'] >= 50
+        assert items[0]['custom_y'] >= 50

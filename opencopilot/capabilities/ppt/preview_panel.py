@@ -43,6 +43,15 @@ class SlideRenderer(QWidget):
     # 拖放相关信号
     text_dropped = pyqtSignal(str, str, int)  # (文本, 元素类型, 元素索引)
     
+    # 元素拖拽重排信号
+    item_reorder_requested = pyqtSignal(int, int)  # (from_idx, to_idx)
+    
+    # 元素自由拖拽定位信号
+    item_moved = pyqtSignal(int, float, float)  # (item_idx, new_x, new_y)
+    
+    # 表格单元格编辑信号
+    table_cell_edit_requested = pyqtSignal(int, int, str)  # (row, col, current_value)
+    
     def __init__(self, parent=None):
         super().__init__(parent)
         self.current_slide = None
@@ -66,6 +75,13 @@ class SlideRenderer(QWidget):
         # 悬停状态
         self._hover_element = None  # (type, index) 或 None
         self._drop_target = None  # 拖放目标元素
+        
+        # 元素自由拖拽状态
+        self._drag_source = None       # (element_type, element_index) 拖拽起点
+        self._drag_start_pos = None    # QPointF 鼠标按下位置（widget 坐标）
+        self._dragging = False         # 是否正在拖拽
+        self._drag_pos = None          # QPointF 当前拖拽位置（widget 坐标）
+        self._drag_item_offset = None  # QPointF 鼠标点击处与 item 左上角的偏移（slide 坐标）
     
     def set_slide(self, slide_data: dict):
         """设置当前幻灯片数据"""
@@ -107,15 +123,14 @@ class SlideRenderer(QWidget):
             if 100 <= slide_x <= 1233 and 50 <= slide_y <= 170:
                 return ("title", -1)
             
-            # 检查是否是图表或表格
+            # 扫描所有 items 检查特殊类型（table/chart/flowchart）
             items = self.current_slide.get('items', [])
-            if items:
-                first_item = items[0]
-                content_type = first_item.get('content_type', 'text')
+            for item_idx, item in enumerate(items):
+                content_type = item.get('content_type', 'text')
                 
                 if content_type == 'table':
                     # 表格区域 (100, 200, table_width, table_height)
-                    table_data = first_item.get('table_data', {})
+                    table_data = item.get('table_data', {})
                     columns = table_data.get('columns', table_data.get('headers', []))  # 兼容两种格式
                     if columns:
                         col_width = min(200, (self.SLIDE_WIDTH - 200) // len(columns))
@@ -123,42 +138,58 @@ class SlideRenderer(QWidget):
                         rows = table_data.get('rows', [])
                         table_height = 45 * (1 + len(rows))
                         if 100 <= slide_x <= 100 + table_width and 200 <= slide_y <= 200 + table_height:
-                            return ("table", 0)
+                            # 计算具体单元格坐标
+                            cell_col = int((slide_x - 100) / col_width)
+                            # row_offset 0=header, 1+=data rows
+                            row_offset = int((slide_y - 200) / 45)
+                            cell_row = max(0, row_offset - 1)  # -1 跳过表头，最小为0
+                            cell_col = max(0, min(cell_col, len(columns) - 1))
+                            cell_row = max(0, min(cell_row, len(rows) - 1)) if rows else 0
+                            return ("table_cell", cell_row * 1000 + cell_col)
                 
                 elif content_type in ('chart', 'flowchart'):
                     # 图表区域 (150, 220, 1000, 450)
                     if 150 <= slide_x <= 1150 and 220 <= slide_y <= 670:
-                        return ("chart", 0)
+                        return ("chart", item_idx)
             
-            # 内容项区域
+            # 内容项区域（优先检查 custom_x/custom_y 自定义位置）
             y = 180
             layout_type = self.current_slide.get('layout', 'text_only')
             
-            if layout_type == 'three_columns':
-                # 三栏布局
-                col_width = 350
-                col_spacing = 30
-                start_x = 100
-                for i, item in enumerate(items[:3]):
-                    x = start_x + i * (col_width + col_spacing)
-                    if x <= slide_x <= x + col_width and 120 <= slide_y <= 600:
+            for i, item in enumerate(items):
+                ct = item.get('content_type', 'text')
+                if ct != 'text':
+                    continue
+                cx = item.get('custom_x')
+                cy = item.get('custom_y')
+                if cx is not None and cy is not None:
+                    # 自定义位置：检查以 (cx, cy) 为左上角的区域
+                    item_w = max(300, self.SLIDE_WIDTH - cx - 10)
+                    item_h = 50
+                    if cx <= slide_x <= cx + item_w and cy <= slide_y <= cy + item_h:
                         return ("item", i)
-            elif layout_type in ('image_right', 'image_left'):
-                # 图文混排
-                text_start_x = 100 if layout_type == 'image_right' else 483
-                text_end_x = 850 if layout_type == 'image_right' else 1233
-                for i, item in enumerate(items):
-                    if text_start_x <= slide_x <= text_end_x and y <= slide_y <= y + 40:
-                        return ("item", i)
-                    y += 50
-            else:
-                # 纯文本布局
-                for i, item in enumerate(items):
-                    level = item.get('level', 0)
-                    indent = 100 + level * 30
-                    if indent <= slide_x <= 1233 and y <= slide_y <= y + 40:
-                        return ("item", i)
-                    y += 50
+                else:
+                    # 默认布局位置
+                    if layout_type == 'three_columns':
+                        col_width = 350
+                        col_spacing = 30
+                        start_x = 100
+                        if i < 3:
+                            lx = start_x + i * (col_width + col_spacing)
+                            if lx <= slide_x <= lx + col_width and 120 <= slide_y <= 600:
+                                return ("item", i)
+                    elif layout_type in ('image_right', 'image_left'):
+                        text_start_x = 100 if layout_type == 'image_right' else 483
+                        text_end_x = 850 if layout_type == 'image_right' else 1233
+                        if text_start_x <= slide_x <= text_end_x and y <= slide_y <= y + 40:
+                            return ("item", i)
+                        y += 50
+                    else:
+                        level = item.get('level', 0)
+                        indent = 100 + level * 30
+                        if indent <= slide_x <= 1233 and y <= slide_y <= y + 40:
+                            return ("item", i)
+                        y += 50
         
         return (None, -1)
     
@@ -175,15 +206,40 @@ class SlideRenderer(QWidget):
             items = self.current_slide.get('items', [])
             if 0 <= element_index < len(items):
                 return items[element_index].get('text', '')
+        elif element_type == "table_cell":
+            row = element_index // 1000
+            col = element_index % 1000
+            items = self.current_slide.get('items', [])
+            for item in items:
+                if item.get('content_type') == 'table':
+                    table_data = item.get('table_data', {})
+                    rows = table_data.get('rows', [])
+                    if 0 <= row < len(rows) and 0 <= col < len(rows[row]):
+                        return str(rows[row][col])
         return ""
     
     def mousePressEvent(self, event):
-        """鼠标点击事件"""
+        """鼠标点击事件 — 记录拖拽起点和偏移量"""
         if event.button() == Qt.MouseButton.LeftButton:
             element_type, element_index = self._hit_test(event.position())
+            print(f"[SlideRenderer] mousePress: hit={element_type}[{element_index}], pos=({event.position().x():.0f},{event.position().y():.0f})")
             if element_type:
                 self.element_clicked.emit(element_type, element_index)
                 self._hover_element = (element_type, element_index)
+                # 记录拖拽起点（等待 mouseMoveEvent 超过阈值后才真正拖拽）
+                self._drag_source = (element_type, element_index)
+                self._drag_start_pos = event.position()
+                # 计算鼠标点击处与 item 左上角的偏移（slide 坐标）
+                if element_type == 'item' and self.current_slide:
+                    items = self.current_slide.get('items', [])
+                    if 0 <= element_index < len(items):
+                        item = items[element_index]
+                        slide_x = (event.position().x() - self._offset_x) / self.scale_factor
+                        slide_y = (event.position().y() - self._offset_y) / self.scale_factor
+                        item_x = item.get('custom_x', 100 + item.get('level', 0) * 30)
+                        item_y = item.get('custom_y', 180 + element_index * 50)
+                        self._drag_item_offset = QPointF(slide_x - item_x, slide_y - item_y)
+                        print(f"[SlideRenderer] drag offset: mouse=({slide_x:.0f},{slide_y:.0f}), item=({item_x:.0f},{item_y:.0f}), offset=({self._drag_item_offset.x():.0f},{self._drag_item_offset.y():.0f})")
                 self.update()
         super().mousePressEvent(event)
     
@@ -192,14 +248,56 @@ class SlideRenderer(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             element_type, element_index = self._hit_test(event.position())
             if element_type:
-                text = self._get_element_text(element_type, element_index)
-                self.edit_requested.emit(element_type, element_index, text)
+                if element_type == "table_cell":
+                    row = element_index // 1000
+                    col = element_index % 1000
+                    value = self._get_element_text("table_cell", element_index)
+                    self.table_cell_edit_requested.emit(row, col, value)
+                else:
+                    text = self._get_element_text(element_type, element_index)
+                    self.edit_requested.emit(element_type, element_index, text)
         super().mouseDoubleClickEvent(event)
     
     def mouseMoveEvent(self, event):
-        """鼠标移动事件 - 更新悬停状态"""
+        """鼠标移动事件 — 悬停高亮 + 自由拖拽"""
+        # 如果正在拖拽，更新元素位置
+        if self._dragging:
+            self._drag_pos = event.position()
+            # 将鼠标位置转换为 slide 坐标，减去偏移量得到 item 新位置
+            slide_x = (event.position().x() - self._offset_x) / self.scale_factor
+            slide_y = (event.position().y() - self._offset_y) / self.scale_factor
+            if self._drag_item_offset:
+                new_x = slide_x - self._drag_item_offset.x()
+                new_y = slide_y - self._drag_item_offset.y()
+                # 限制在幻灯片区域内
+                new_x = max(50, min(new_x, self.SLIDE_WIDTH - 350))
+                new_y = max(50, min(new_y, self.SLIDE_HEIGHT - 60))
+                # 实时更新 item 的 custom_x/custom_y
+                if self._drag_source and self.current_slide:
+                    idx = self._drag_source[1]
+                    items = self.current_slide.get('items', [])
+                    if 0 <= idx < len(items):
+                        items[idx]['custom_x'] = new_x
+                        items[idx]['custom_y'] = new_y
+            self.repaint()  # 同步重绘，避免 update() 被 Qt 合并吞掉
+            return
+        
+        # 正常悬停行为
         element_type, element_index = self._hit_test(event.position())
         new_hover = (element_type, element_index) if element_type else None
+        
+        # 检测是否达到拖拽阈值（5px）
+        if self._drag_source and self._drag_start_pos and not self._dragging:
+            delta = event.position() - self._drag_start_pos
+            dist = (delta.x() ** 2 + delta.y() ** 2) ** 0.5
+            if dist > 5:
+                print(f"[SlideRenderer] drag STARTED: dist={dist:.1f}px, source={self._drag_source}")
+                self._dragging = True
+                self._drag_pos = event.position()
+                self.setCursor(Qt.CursorShape.ClosedHandCursor)
+                self.grabMouse()  # 确保鼠标离开窗口时仍能接收事件
+                self.repaint()
+                return
         
         if new_hover != self._hover_element:
             self._hover_element = new_hover
@@ -208,11 +306,12 @@ class SlideRenderer(QWidget):
         super().mouseMoveEvent(event)
     
     def leaveEvent(self, event):
-        """鼠标离开事件"""
-        if self._hover_element:
-            self._hover_element = None
-            self.setCursor(Qt.CursorShape.ArrowCursor)
-            self.update()
+        """鼠标离开事件 — 拖拽中不取消，保持拖拽状态"""
+        if not self._dragging:
+            if self._hover_element:
+                self._hover_element = None
+                self.setCursor(Qt.CursorShape.ArrowCursor)
+                self.update()
         super().leaveEvent(event)
     
     def contextMenuEvent(self, event):
@@ -268,6 +367,15 @@ class SlideRenderer(QWidget):
             delete_action.triggered.connect(lambda: self._on_delete_item(element_index))
             menu.addAction(delete_action)
             
+            # 检查是否有自定义位置，显示重置选项
+            items = self.current_slide.get('items', []) if self.current_slide else []
+            if 0 <= element_index < len(items):
+                item = items[element_index]
+                if item.get('custom_x') is not None or item.get('custom_y') is not None:
+                    reset_action = QAction("↩️ 重置位置", self)
+                    reset_action.triggered.connect(lambda: self._on_reset_position(element_index))
+                    menu.addAction(reset_action)
+            
             menu.addSeparator()
         
         elif element_type in ("chart", "table"):
@@ -279,6 +387,17 @@ class SlideRenderer(QWidget):
             convert_action.triggered.connect(lambda: self._on_convert_to_text(element_index))
             menu.addAction(convert_action)
             
+            menu.addSeparator()
+        
+        elif element_type == "table_cell":
+            row = element_index // 1000
+            col = element_index % 1000
+            value = self._get_element_text("table_cell", element_index)
+            edit_action = QAction(f"✏️ 编辑单元格 ({row+1},{col+1})", self)
+            edit_action.triggered.connect(
+                lambda: self.table_cell_edit_requested.emit(row, col, value)
+            )
+            menu.addAction(edit_action)
             menu.addSeparator()
         
         # 通用操作
@@ -369,6 +488,68 @@ class SlideRenderer(QWidget):
                 }
             
             self.update()
+    
+    def _on_reset_position(self, item_index: int):
+        """重置元素到默认布局位置"""
+        if not self.current_slide:
+            return
+        items = self.current_slide.get('items', [])
+        if 0 <= item_index < len(items):
+            items[item_index].pop('custom_x', None)
+            items[item_index].pop('custom_y', None)
+            print(f"[SlideRenderer] position reset: idx={item_index}")
+            self.update()
+    
+    def mouseReleaseEvent(self, event):
+        """鼠标释放 — 完成自由拖拽"""
+        print(f"[SlideRenderer] mouseRelease: dragging={self._dragging}, source={self._drag_source}")
+        if self._dragging and self._drag_source and event.button() == Qt.MouseButton.LeftButton:
+            element_type, element_index = self._drag_source
+            if element_type == 'item' and self.current_slide:
+                items = self.current_slide.get('items', [])
+                if 0 <= element_index < len(items):
+                    item = items[element_index]
+                    new_x = item.get('custom_x')
+                    new_y = item.get('custom_y')
+                    if new_x is not None and new_y is not None:
+                        print(f"[SlideRenderer] item moved: idx={element_index}, pos=({new_x:.0f},{new_y:.0f})")
+                        self.item_moved.emit(element_index, new_x, new_y)
+            self._reset_drag_state()
+            return
+        
+        self._reset_drag_state()
+        super().mouseReleaseEvent(event)
+    
+    def _reset_drag_state(self):
+        """重置所有拖拽状态"""
+        self._drag_source = None
+        self._drag_start_pos = None
+        self._dragging = False
+        self._drag_pos = None
+        self._drag_item_offset = None
+        self.releaseMouse()  # 释放鼠标抓取
+        self.setCursor(Qt.CursorShape.ArrowCursor)
+        self.update()
+    
+    def _get_item_y_range(self, item_idx: int) -> tuple:
+        """获取 item 在幻灯片坐标系中的 y 范围 (y_top, y_bottom)"""
+        if not self.current_slide:
+            return (0, 0)
+        layout_type = self.current_slide.get('layout', 'text_only')
+        items = self.current_slide.get('items', [])
+        
+        if layout_type == 'three_columns':
+            y_top = 120
+            y_bottom = 600
+            return (y_top, y_bottom)
+        elif layout_type in ('image_right', 'image_left'):
+            y_top = 180 + item_idx * 50
+            y_bottom = y_top + 40
+            return (y_top, y_bottom)
+        else:
+            y_top = 180 + item_idx * 50
+            y_bottom = y_top + 40
+            return (y_top, y_bottom)
     
     # 拖放事件处理
     def dragEnterEvent(self, event):
@@ -513,6 +694,10 @@ class SlideRenderer(QWidget):
         # 绘制拖放目标高亮效果
         if self._drop_target:
             self._draw_drop_target_highlight(painter, self._drop_target[0], self._drop_target[1])
+        
+        # 绘制拖拽重排的视觉反馈（ghost + 插入线）
+        if self._dragging and self._drag_source and self._drag_pos:
+            self._draw_drag_feedback(painter)
     
     def _draw_drop_target_highlight(self, painter: QPainter, element_type: str, element_index: int):
         """绘制拖放目标高亮效果"""
@@ -540,6 +725,36 @@ class SlideRenderer(QWidget):
                 y = 180 + element_index * 50
                 indent = 100
                 painter.drawRoundedRect(QRectF(indent - 5, y - 5, 1133 - indent + 10, 50), 4, 4)
+        
+        painter.restore()
+    
+    def _draw_drag_feedback(self, painter: QPainter):
+        """绘制自由拖拽的视觉反馈（ghost 元素跟随鼠标）"""
+        painter.save()
+        
+        if not self._drag_source or not self._drag_pos:
+            print(f"[SlideRenderer] _draw_drag_feedback SKIP: source={self._drag_source}, pos={self._drag_pos}")
+            painter.restore()
+            return
+        
+        element_type, element_index = self._drag_source
+        
+        if element_type == 'item' and self.current_slide:
+            items = self.current_slide.get('items', [])
+            if 0 <= element_index < len(items):
+                item = items[element_index]
+                # ghost 位置就是当前 item 的 custom_x/custom_y（已在 mouseMoveEvent 中实时更新）
+                gx = item.get('custom_x', 100)
+                gy = item.get('custom_y', 180)
+                
+                print(f"[SlideRenderer] _draw_drag_feedback: ghost at ({gx:.0f},{gy:.0f})")
+                
+                # 绘制半透明 ghost 背景
+                ghost_color = QColor(0, 123, 255, 40)
+                ghost_border = QColor(0, 123, 255, 120)
+                painter.setPen(QPen(ghost_border, 2, Qt.PenStyle.DashLine))
+                painter.setBrush(ghost_color)
+                painter.drawRoundedRect(QRectF(gx - 5, gy - 5, 1143, 50), 6, 6)
         
         painter.restore()
     
@@ -599,6 +814,10 @@ class SlideRenderer(QWidget):
             painter.drawRoundedRect(QRectF(145, 215, 1010, 460), 4, 4)
         
         elif element_type == "table":
+            painter.drawRoundedRect(QRectF(95, 195, self.SLIDE_WIDTH - 200, 300), 4, 4)
+        
+        elif element_type == "table_cell":
+            # 单元格高亮已在 _draw_table 中处理，这里绘制外层表格高亮
             painter.drawRoundedRect(QRectF(95, 195, self.SLIDE_WIDTH - 200, 300), 4, 4)
         
         # 恢复画笔状态
@@ -732,7 +951,7 @@ class SlideRenderer(QWidget):
             self._draw_text_only(painter, items)
     
     def _draw_text_only(self, painter: QPainter, items: list):
-        """绘制纯文本布局"""
+        """绘制纯文本布局（支持 custom_x/custom_y 自由定位）"""
         y = 180
         
         for item in items:
@@ -751,13 +970,26 @@ class SlideRenderer(QWidget):
                 painter.setFont(font)
                 painter.setPen(self.title_color if level == 0 else self.text_color)
                 
-                indent = 100 + level * 30
+                # 优先使用自定义坐标
+                cx = item.get('custom_x')
+                cy = item.get('custom_y')
+                if cx is not None and cy is not None:
+                    draw_x = float(cx)
+                    draw_y = float(cy)
+                else:
+                    indent = 100 + level * 30
+                    draw_x = indent
+                    draw_y = y
+                
+                # 确保文字区域最小宽度 300px，不超出幻灯片右边界
+                text_w = max(300, self.SLIDE_WIDTH - draw_x - 10)
                 painter.drawText(
-                    QRectF(indent, y, 1133 - indent, 40),
+                    QRectF(draw_x, draw_y, text_w, 40),
                     Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                     text
                 )
-                y += 50
+                if cx is None:
+                    y += 50  # 只有默认布局才递增 y
             
             elif content_type == 'image':
                 # 图片占位
@@ -1155,6 +1387,18 @@ class SlideRenderer(QWidget):
         for i in range(1, len(columns)):
             line_x = x_start + i * col_width
             painter.drawLine(line_x, y_start, line_x, y_start + row_height * (1 + len(rows)))
+        
+        # 绘制悬停单元格高亮
+        if self._hover_element and self._hover_element[0] == 'table_cell':
+            encoded = self._hover_element[1]
+            h_row = encoded // 1000
+            h_col = encoded % 1000
+            if 0 <= h_row < len(rows) and 0 <= h_col < len(columns):
+                cell_x = x_start + h_col * col_width
+                cell_y = y_start + (h_row + 1) * row_height  # +1 跳过表头
+                painter.setPen(QPen(QColor(0, 123, 255, 180), 2))
+                painter.setBrush(QColor(0, 123, 255, 25))
+                painter.drawRect(cell_x, cell_y, col_width, row_height)
     
     def _draw_chart(self, painter: QPainter, chart_data: dict, chart_type: str):
         """绘制图表"""

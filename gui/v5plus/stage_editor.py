@@ -6,12 +6,57 @@
 AI 部分通过 V5AgentWorker 走标准 Agent Pipeline 协议。
 """
 import logging
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QMimeData, QPointF
+from PyQt6.QtGui import QDrag
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QTextEdit, QLineEdit, QFrame,
     QSplitter, QScrollArea, QSizePolicy, QProgressBar,
 )
+
+
+class DraggableLabel(QLabel):
+    """支持拖拽的 QLabel — 拖拽超过 5px 阈值时启动 QDrag
+    
+    携带 application/x-sourcetext 自定义 MIME 格式，
+    SlideRenderer.dragEnterEvent 已支持此格式。
+    """
+    drag_started = pyqtSignal(str)  # 拖拽开始时发射文本内容
+
+    def __init__(self, text: str = "", parent=None):
+        super().__init__(text, parent)
+        self._drag_start_pos = None
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_start_pos = event.position()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._drag_start_pos and event.buttons() & Qt.MouseButton.LeftButton:
+            delta = event.position() - self._drag_start_pos
+            if (delta.x() ** 2 + delta.y() ** 2) ** 0.5 > 5:
+                self._start_drag()
+                return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_start_pos = None
+        super().mouseReleaseEvent(event)
+
+    def _start_drag(self):
+        """启动 QDrag"""
+        text = self.text()
+        if not text:
+            return
+        drag = QDrag(self)
+        mime = QMimeData()
+        mime.setText(text)
+        mime.setData("application/x-sourcetext", text.encode("utf-8"))
+        drag.setMimeData(mime)
+        self.drag_started.emit(text)
+        drag.exec(Qt.DropAction.CopyAction)
+        self._drag_start_pos = None
 
 from gui.v5plus import tokens_plus as T
 from gui.v5.telemetry import telemetry
@@ -202,6 +247,9 @@ class StageEditorWidget(QWidget):
         self._preview_renderer.element_clicked.connect(self._on_element_clicked)
         self._preview_renderer.edit_requested.connect(self._on_edit_requested)
         self._preview_renderer.text_dropped.connect(self._on_text_dropped)
+        self._preview_renderer.item_reorder_requested.connect(self._on_item_reorder)
+        self._preview_renderer.item_moved.connect(self._on_item_moved)
+        self._preview_renderer.table_cell_edit_requested.connect(self._on_table_cell_edit)
         layout.addWidget(self._preview_renderer, stretch=1)
 
         # InlineEditor（内联编辑器，悬浮在 renderer 上方）
@@ -604,6 +652,21 @@ class StageEditorWidget(QWidget):
                     slide["items"][elem_index] = {"text": new_text}
                 changed = True
 
+        elif elem_type == "table_cell":
+            # 更新表格单元格
+            t_row = elem_index // 1000
+            t_col = elem_index % 1000
+            for item in slide.get("items", []):
+                if item.get("content_type") == "table":
+                    table_data = item.get("table_data", {})
+                    rows = table_data.get("rows", [])
+                    if 0 <= t_row < len(rows) and 0 <= t_col < len(rows[t_row]):
+                        old_val = str(rows[t_row][t_col])
+                        if old_val != new_text:
+                            rows[t_row][t_col] = new_text
+                            changed = True
+                    break
+
         if changed:
             self._update_preview(self._current_slide)
             self._update_thumb(self._current_slide)
@@ -639,6 +702,105 @@ class StageEditorWidget(QWidget):
         )
         logger.info("Stage 3: text dropped on %s[%d] (slide %d)",
                      elem_type, elem_index, self._current_slide)
+
+    def _on_item_reorder(self, from_idx: int, to_idx: int):
+        """元素拖拽重排（slide 内 items 顺序调整）"""
+        if not self._slides_data or self._current_slide >= len(self._slides_data):
+            return
+        slide = self._slides_data[self._current_slide]
+        items = slide.get("items", [])
+        if not (0 <= from_idx < len(items) and 0 <= to_idx <= len(items)):
+            return
+        if from_idx == to_idx or from_idx == to_idx - 1:
+            return  # 无需移动
+
+        # 执行重排
+        item = items.pop(from_idx)
+        # 调整插入位置：pop 之后，如果 to_idx > from_idx，需要减 1
+        insert_at = to_idx if to_idx < from_idx else to_idx - 1
+        items.insert(insert_at, item)
+
+        self._update_preview(self._current_slide)
+        self._update_thumb(self._current_slide)
+        telemetry().emit(
+            "V5PLUS_STAGE3_ITEM_REORDER",
+            session_id=self._session_id,
+            slide_index=self._current_slide,
+            from_idx=from_idx,
+            to_idx=to_idx,
+        )
+        print(f"[V5Plus] item reorder: {from_idx} → {insert_at} (slide {self._current_slide})")
+
+    def _on_item_moved(self, item_idx: int, new_x: float, new_y: float):
+        """元素自由拖拽定位完成"""
+        if not self._slides_data or self._current_slide >= len(self._slides_data):
+            return
+        slide = self._slides_data[self._current_slide]
+        items = slide.get("items", [])
+        if not (0 <= item_idx < len(items)):
+            return
+        # custom_x/custom_y 已在 SlideRenderer.mouseMoveEvent 中实时更新
+        # 这里只需埋点和刷新缩略图
+        self._update_preview(self._current_slide)
+        self._update_thumb(self._current_slide)
+        telemetry().emit(
+            "V5PLUS_STAGE3_ITEM_MOVED",
+            session_id=self._session_id,
+            slide_index=self._current_slide,
+            item_idx=item_idx,
+            new_x=round(new_x),
+            new_y=round(new_y),
+        )
+        print(f"[V5Plus] item moved: idx={item_idx}, pos=({new_x:.0f},{new_y:.0f}) (slide {self._current_slide})")
+
+    def _on_table_cell_edit(self, row: int, col: int, value: str):
+        """表格单元格双击编辑"""
+        if not self._slides_data or self._current_slide >= len(self._slides_data):
+            return
+
+        # 计算单元格在 renderer widget 中的坐标
+        renderer = self._preview_renderer
+        sf = renderer.scale_factor
+        ox = renderer._offset_x
+        oy = renderer._offset_y
+        x_start, y_start, row_height = 100, 200, 45
+
+        # 查找 table item 获取 col_width
+        slide = self._slides_data[self._current_slide]
+        col_width = 200  # 默认
+        for item in slide.get('items', []):
+            if item.get('content_type') == 'table':
+                cols = item.get('table_data', {}).get('columns',
+                        item.get('table_data', {}).get('headers', []))
+                if cols:
+                    col_width = min(200, (renderer.SLIDE_WIDTH - 200) // len(cols))
+                break
+
+        cell_x = ox + (x_start + col * col_width) * sf
+        cell_y = oy + (y_start + (row + 1) * row_height) * sf
+        cell_w = col_width * sf
+        cell_h = row_height * sf
+
+        from PyQt6.QtCore import QRectF
+        rect = QRectF(cell_x, cell_y, cell_w, cell_h)
+
+        # 设置 InlineEditor 定位到单元格
+        self._inline_editor.element_type = "table_cell"
+        self._inline_editor.element_index = row * 1000 + col
+        self._inline_editor.setText(value)
+        self._inline_editor.setGeometry(rect.toRect())
+        self._inline_editor.show()
+        self._inline_editor.setFocus()
+        self._inline_editor.selectAll()
+
+        # 暂存单元格坐标，编辑完成后更新
+        self._editing_table_cell = (row, col)
+        telemetry().emit(
+            "V5PLUS_STAGE3_TABLE_CELL_EDIT",
+            session_id=self._session_id,
+            slide_index=self._current_slide,
+            row=row, col=col,
+        )
 
     def _on_layout_change(self, layout_key: str):
         """版式切换 → 更新数据 + 刷新预览"""
@@ -761,10 +923,10 @@ class StageEditorWidget(QWidget):
             paragraphs = [p.strip() for p in text.split("\n") if p.strip()]
 
         slide_count = len(self._slides_data)
-        total_paras = min(20, max(len(paragraphs), 1))  # ★ 用实际段落数而非 slide_count
+        total_paras = max(len(paragraphs), 1)
         self._paragraph_slide_map.clear()
         mapped_count = 0
-        for i, para in enumerate(paragraphs[:20]):  # 最多显示 20 段
+        for i, para in enumerate(paragraphs):  # 显示所有段落
             # 计算该段落对应的 slide_index
             if slide_count > 0:
                 si = min(int(i * slide_count / max(total_paras, 1)), slide_count - 1)
@@ -845,13 +1007,21 @@ class StageEditorWidget(QWidget):
             """)
         text_row.addWidget(tag_label)
 
-        # 段落文本（截断显示）
-        display_text = text[:120] + ("..." if len(text) > 120 else "")
-        para_label = QLabel(display_text)
+        # 段落文本（完整显示，支持拖拽到 SlideRenderer）
+        display_text = text
+        para_label = DraggableLabel(display_text)
         para_label.setWordWrap(True)
+        para_label.setCursor(Qt.CursorShape.OpenHandCursor)
+        para_label.setToolTip("可拖拽到左侧 PPT 预览区")
         para_label.setStyleSheet(
             f"color: {T.TEXT_PRIMARY}; font-size: {T.FONT_BODY[0]}px; "
             f"background: transparent; border: none;"
+        )
+        # 拖拽时发射埋点
+        para_label.drag_started.connect(
+            lambda t, idx=index: telemetry().emit(
+                "V5PLUS_STAGE3_PARA_DRAG", session_id=self._session_id, para_index=idx
+            )
         )
         text_row.addWidget(para_label, stretch=1)
         layout.addLayout(text_row)

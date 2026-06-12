@@ -1,6 +1,6 @@
 # PPT 共创工作台 — 端到端交互设计方案
 
-> 版本：v2.3 | 交互稿：`canvases/ppt-cocreation-e2e-flow.canvas.tsx` + `canvases/opencopilot-ui-interaction-20260609.canvas.tsx`
+> 版本：v2.4 | 2026-06-12 | 交互稿：`canvases/ppt-cocreation-e2e-flow.canvas.tsx` + `canvases/opencopilot-ui-interaction-20260609.canvas.tsx`
 >
 > 本文档替代旧版"三阶段"描述，以 3 阶段精简流程为基准。旧版 `PPT_CoCreation_Design.md` 中的架构、数据结构、演进路线图仍有效，本文聚焦**交互流程与布局设计**。
 
@@ -228,7 +228,11 @@ Agent 对输入文本进行**纯正则驱动**的结构分析（不调用 LLM，
 
 #### 幻灯片预览（主区域）
 - 16:9 白色画布，居中显示
-- **Click-to-Edit**：标题/要点区域显示蓝色虚线边框，双击进入编辑
+- **Click-to-Edit**：标题/要点区域显示蓝色虚线边框，双击进入 InlineEditor 内联编辑
+- **自由拖拽定位**：按住任意文本元素可自由拖拽到幻灯片画布任意位置（custom_x/custom_y 坐标），拖拽过程中实时显示 ghost 半透明反馈，释放后元素停留在新位置
+- **表格单元格编辑**：双击表格单元格可独立编辑该单元格内容
+- **右键菜单**：编辑内容、删除、重置位置（已自定义坐标的元素可一键回到默认布局）
+- **跨面板拖拽**：原文面板的段落可拖拽到 PPT 预览区添加为新内容
 - 底部显示当前页码（如 `3 / 6`）
 
 #### AI Diff Overlay（浮层）

@@ -70,7 +70,9 @@ class SlideRenderer(QWidget):
     def set_slide(self, slide_data: dict):
         """设置当前幻灯片数据"""
         self.current_slide = slide_data
-        self.update()
+        # 使用 repaint() 而非 update()，确保同步触发 paintEvent
+        # 避免在信号链路中 update() 被 Qt 事件循环延迟或吞掉
+        self.repaint()
     
     def _hit_test(self, pos) -> tuple:
         """检测点击位置对应的元素
@@ -114,7 +116,7 @@ class SlideRenderer(QWidget):
                 if content_type == 'table':
                     # 表格区域 (100, 200, table_width, table_height)
                     table_data = first_item.get('table_data', {})
-                    columns = table_data.get('columns', [])
+                    columns = table_data.get('columns', table_data.get('headers', []))  # 兼容两种格式
                     if columns:
                         col_width = min(200, (self.SLIDE_WIDTH - 200) // len(columns))
                         table_width = col_width * len(columns)
@@ -465,6 +467,13 @@ class SlideRenderer(QWidget):
         if not self.current_slide:
             return
         
+        # 追踪 paintEvent 调用
+        items = self.current_slide.get('items', [])
+        item_types = [it.get('content_type', 'text') for it in items]
+        slide_type = self.current_slide.get('type', 'content')
+        print(f"[SlideRenderer] paintEvent: type={slide_type}, items={len(items)}, types={item_types}, "
+              f"size={self.width()}x{self.height()}")
+        
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
@@ -655,27 +664,35 @@ class SlideRenderer(QWidget):
             )
         
         # 检查是否有特殊内容类型（表格/图表/流程图）
+        # 扫描所有 items，而非只看 items[0]，避免 text 排在前面时遮盖富内容
         items = self.current_slide.get('items', [])
         
-        # 检查第一个 item 是否为特殊类型
-        if items:
-            first_item = items[0]
-            content_type = first_item.get('content_type', 'text')
+        # 优先在所有 items 中寻找特殊类型
+        special_item = None
+        for item in items:
+            ct = item.get('content_type', 'text')
+            if ct in ('table', 'chart', 'flowchart'):
+                special_item = item
+                break
+        
+        if special_item:
+            content_type = special_item['content_type']
+            print(f"[SlideRenderer] _draw_content_slide: found special type={content_type}, layout={layout_type}")
             
             if content_type == 'table':
-                table_data = first_item.get('table_data', {})
-                if table_data.get('columns'):  # 有表格数据才绘制
+                table_data = special_item.get('table_data', {})
+                if table_data.get('columns') or table_data.get('headers'):  # 兼容两种格式
                     self._draw_table(painter, table_data)
                     return
             elif content_type == 'chart':
-                chart_data = first_item.get('chart_data', {})
+                chart_data = special_item.get('chart_data', {})
                 if chart_data.get('labels') and chart_data.get('datasets'):
                     self._draw_chart(painter, chart_data,
-                                   first_item.get('chart_type', 'bar'))
+                                   special_item.get('chart_type', 'bar'))
                     return
             elif content_type == 'flowchart':
-                flowchart_data = first_item.get('flowchart_data', {})
-                if flowchart_data.get('steps'):
+                flowchart_data = special_item.get('flowchart_data', {})
+                if flowchart_data.get('steps') or flowchart_data.get('nodes'):  # 兼容两种格式
                     self._draw_flowchart(painter, flowchart_data)
                     return
                 else:
@@ -686,7 +703,7 @@ class SlideRenderer(QWidget):
         # 布局级回退：layout 字段指定了特殊类型但 items 中无 content_type
         if layout_type == 'table' and items:
             table_data = items[0].get('table_data', {})
-            if table_data.get('columns'):
+            if table_data.get('columns') or table_data.get('headers'):  # 兼容两种格式
                 self._draw_table(painter, table_data)
                 return
         elif layout_type == 'chart' and items:
@@ -696,7 +713,7 @@ class SlideRenderer(QWidget):
                 return
         elif layout_type == 'flowchart' and items:
             flowchart_data = items[0].get('flowchart_data', {})
-            if flowchart_data.get('steps'):
+            if flowchart_data.get('steps') or flowchart_data.get('nodes'):  # 兼容两种格式
                 self._draw_flowchart(painter, flowchart_data)
                 return
             else:
@@ -905,6 +922,28 @@ class SlideRenderer(QWidget):
         支持 horizontal 和 vertical 布局。
         """
         steps = flowchart_data.get("steps", [])
+        # 兼容 LLM 返回 nodes/edges 格式
+        if not steps and flowchart_data.get("nodes"):
+            nodes = flowchart_data["nodes"]
+            edges = flowchart_data.get("edges", [])
+            node_map = {n.get("id", ""): n.get("label", "") for n in nodes}
+            has_incoming = {e["to"] for e in edges}
+            roots = [n.get("id", "") for n in nodes if n.get("id") not in has_incoming]
+            from collections import deque
+            adj = {}
+            for e in edges:
+                adj.setdefault(e["from"], []).append(e["to"])
+            start = roots[0] if roots else (nodes[0].get("id", "") if nodes else "")
+            visited = set()
+            queue = deque([start])
+            while queue:
+                nid = queue.popleft()
+                if nid in visited:
+                    continue
+                visited.add(nid)
+                steps.append(node_map.get(nid, nid))
+                for child in adj.get(nid, []):
+                    queue.append(child)
         layout = flowchart_data.get("layout", "horizontal")
         fc_title = flowchart_data.get("title", "")
         
@@ -1045,7 +1084,7 @@ class SlideRenderer(QWidget):
     
     def _draw_table(self, painter: QPainter, table_data: dict):
         """绘制表格"""
-        columns = table_data.get("columns", [])
+        columns = table_data.get("columns", table_data.get("headers", []))  # 兼容两种格式
         rows = table_data.get("rows", [])
         
         if not columns:

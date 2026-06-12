@@ -1,0 +1,334 @@
+{
+  "opencopilot/broker/core": [
+    {
+      "target": "opencopilot",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "opencopilot/capabilities/tools": [
+    {
+      "target": "knowledge_graph",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "opencopilot/capabilities/skill": [
+    {
+      "target": "coding_agent",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "opencopilot",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "knowledge_graph",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "opencopilot/capabilities/knowledge": [
+    {
+      "target": "knowledge_graph",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "opencopilot/capabilities/coding/handlers": [
+    {
+      "target": "platform",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "opencopilot/capabilities/ppt": [
+    {
+      "target": "gui",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "opencopilot",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "gui_next",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "opencopilot/agent": [
+    {
+      "target": "platform",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "opencopilot",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "opencopilot/safety/planner": [
+    {
+      "target": "opencopilot",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "opencopilot/evaluation": [
+    {
+      "target": "opencopilot",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "tests": [
+    {
+      "target": "opencopilot",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "tests/unit": [
+    {
+      "target": "agents_next",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "gui",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "gui_next",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "platform_next",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "opencopilot",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "tests",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "dialogs",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "stores_next",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "tests/e2e": [
+    {
+      "target": "gui",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "gui_next",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "opencopilot",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "dialogs",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "knowledge_graph",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "platform_next/api/unified": [
+    {
+      "target": "stores_next",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "platform_next",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "platform_next/gateway/agent_gateway": [
+    {
+      "target": "agents_next",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "stores_next",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "platform_next/gateway/broker_gateway": [
+    {
+      "target": "stores_next",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "agents_next/providers/hermes_local": [
+    {
+      "target": "stores_next",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "platform_next",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "agents_next/providers/self_hosted": [
+    {
+      "target": "opencopilot",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "stores_next",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "platform_next",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "scripts": [
+    {
+      "target": "gui",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "opencopilot",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "gui": [
+    {
+      "target": "widgets",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "opencopilot",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "core",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "gui/v5plus": [
+    {
+      "target": "gui",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "opencopilot",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "gui/v5": [
+    {
+      "target": "gui",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "opencopilot",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "gui_next",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "core",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "gui/workers": [
+    {
+      "target": "opencopilot",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "api/routers": [
+    {
+      "target": "knowledge_graph",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "opencopilot",
+      "type": "import",
+      "weight": 1
+    },
+    {
+      "target": "core",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "dialogs": [
+    {
+      "target": "opencopilot",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "gui_next/smart_copilot/shell": [
+    {
+      "target": "gui",
+      "type": "import",
+      "weight": 1
+    }
+  ],
+  "widgets": [
+    {
+      "target": "opencopilot",
+      "type": "import",
+      "weight": 1
+    }
+  ]
+}

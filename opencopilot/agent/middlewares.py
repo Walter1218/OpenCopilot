@@ -299,9 +299,11 @@ class SessionSetupMiddleware(BaseMiddleware):
         context_source = str(ctx.request.get("context_source", "")).lower()
         text = ctx.text or ""
         return (
-            context_source == "ppt_editor"
+            context_source in ("ppt_editor", "v5plus_stage3")
             or ("PPT 总共" in text and "当前幻灯片数据" in text)
+            or ("修改当前 PPT 大纲" in text and "当前幻灯片数据" in text)
         )
+
 
 
 class SecurityGuardMiddleware(BaseMiddleware):
@@ -488,7 +490,7 @@ class PlannerMiddleware(BaseMiddleware):
             return
 
         try:
-            if self._is_complex_task(ctx.text) or self._is_ppt_editor_request(ctx):
+            if self._is_complex_task(ctx.text) or SessionSetupMiddleware._is_ppt_editor_request(ctx):
                 answer_first = self._should_answer_first(ctx)
                 _t1 = time.time()
                 plan = await self._planner.create_plan(
@@ -545,7 +547,7 @@ class PlannerMiddleware(BaseMiddleware):
         return score >= 2
 
     def _should_answer_first(self, ctx: PipelineContext) -> bool:
-        if self._is_ppt_editor_request(ctx):
+        if SessionSetupMiddleware._is_ppt_editor_request(ctx):
             return True
 
         if ctx.action_type not in self._answer_first_types:
@@ -564,17 +566,6 @@ class PlannerMiddleware(BaseMiddleware):
             "审查", "改进建议", "示例代码", "重构", "总结", "分析",
         ]
         return any(keyword in text_lower for keyword in deliverable_intents)
-
-    @staticmethod
-    def _is_ppt_editor_request(ctx: PipelineContext) -> bool:
-        if os.getenv("OPEN_COPILOT_DISABLE_PPT_DIRECT_EDIT_GUARD", "0").strip().lower() in {"1", "true", "on"}:
-            return False
-        context_source = str(ctx.request.get("context_source", "")).lower()
-        text = ctx.text or ""
-        return (
-            context_source == "ppt_editor"
-            or ("PPT 总共" in text and "当前幻灯片数据" in text)
-        )
 
     def _format_plan_for_system(self, plan: dict) -> str:
         lines = ["\n\n[Task Plan - Auto-generated]"]

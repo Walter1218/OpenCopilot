@@ -43,6 +43,7 @@ class StageEditorWidget(QWidget):
         self._paragraph_slide_map = []  # 每个段落对应的 slide_index
         self._ai_worker = None  # 当前 AI worker 引用
         self._render_dispatcher = None  # 渲染指令调度器
+        self._last_instruction = ""  # 最近一次用户指令（用于批量操作检测）
         self._init_ui()
 
     def _init_ui(self):
@@ -443,8 +444,15 @@ class StageEditorWidget(QWidget):
     # 公共方法
     # =========================================================================
 
-    def load_data(self, text: str, strategy_config: dict, slides_data: list = None):
-        """加载数据（Stage 2 提交后调用）"""
+    def load_data(self, text: str, strategy_config: dict, slides_data: list = None,
+                   preserve_slide: bool = False):
+        """加载数据（Stage 2 提交后调用）
+
+        Args:
+            preserve_slide: True 时保留当前幻灯片位置（AI 修改后刷新用），
+                           False 时重置到第一页（首次加载用）
+        """
+        saved_slide = self._current_slide if preserve_slide else 0
         self._text = text
         self._strategy_config = strategy_config
         self._slides_data = slides_data or []
@@ -461,7 +469,7 @@ class StageEditorWidget(QWidget):
 
         # ★ 先加载幻灯片（确保 _slides_data 已更新）→ 再加载原文（构建正确的映射标签）
         if self._slides_data:
-            self._load_slides(self._slides_data)
+            self._load_slides(self._slides_data, saved_slide)
             print(f"[v5plus] Stage3: loaded {len(self._slides_data)} slides")
         else:
             self._show_loading_state()
@@ -470,9 +478,9 @@ class StageEditorWidget(QWidget):
         # 加载原文到右侧面板（依赖 self._slides_data 构建映射标签）
         self._load_source_text(text)
 
-        # 初始高亮第一页对应的原文段落
+        # 高亮当前幻灯片对应的原文段落
         if self._slides_data:
-            self._highlight_source_paragraphs(0)
+            self._highlight_source_paragraphs(self._current_slide)
 
         self._slide_counter.setText(f"幻灯片: {len(self._slides_data)}")
         logger.info("Stage 3: loaded %d chars, strategy=%s, %d slides",
@@ -556,9 +564,10 @@ class StageEditorWidget(QWidget):
         """双击元素触发内联编辑"""
         if not self._slides_data or self._current_slide >= len(self._slides_data):
             return
-        # InlineEditor 弹出编辑框
+        # InlineEditor 弹出编辑框（rect() 返回 QRect，需转为 QRectF）
+        from PyQt6.QtCore import QRectF
         self._inline_editor.start_editing(elem_type, elem_index, text,
-                                           self._preview_renderer.rect())
+                                           QRectF(self._preview_renderer.rect()))
         telemetry().emit(
             "V5PLUS_STAGE3_EDIT_COMMIT",
             session_id=self._session_id,
@@ -680,6 +689,7 @@ class StageEditorWidget(QWidget):
         if not instruction:
             return
 
+        self._last_instruction = instruction
         telemetry().emit(
             "V5PLUS_STAGE3_AI_SEND",
             session_id=self._session_id,
@@ -692,8 +702,12 @@ class StageEditorWidget(QWidget):
             self._ai_input.clear()
             return
 
-        # 使用共享 prompt 构建器（与 Studio 一致）
-        ai_prompt = build_ppt_modify_prompt(instruction, self._slides_data)
+        # 使用共享 prompt 构建器（与 Studio 一致，render_commands 格式）
+        ai_prompt = build_ppt_modify_prompt(
+            instruction, self._slides_data,
+            current_slide_index=self._current_slide,
+            original_text=self._text,
+        )
 
         self._ai_input.clear()
         self._start_ai_worker(
@@ -873,9 +887,20 @@ class StageEditorWidget(QWidget):
     def _update_preview(self, slide_index: int):
         """更新预览区内容（通过 SlideRenderer 可视化渲染）"""
         if not self._slides_data or slide_index >= len(self._slides_data):
+            print(f"[V5Plus] _update_preview SKIP: slides={len(self._slides_data) if self._slides_data else 0}, idx={slide_index}")
             return
 
         slide = self._slides_data[slide_index]
+        items = slide.get('items', [])
+        item_types = [it.get('content_type', 'text') for it in items]
+        print(f"[V5Plus] _update_preview: slide={slide_index}, items={len(items)}, types={item_types}")
+        telemetry().emit(
+            "V5PLUS_STAGE3_PREVIEW_UPDATE",
+            session_id=self._session_id,
+            slide_index=slide_index,
+            items_count=len(items),
+            item_types=item_types,
+        )
 
         # 使用 Studio 的 SlideRenderer 进行可视化渲染
         # 自动处理 chart/flowchart/table/three_columns/image_right 等全部 layout 类型
@@ -968,6 +993,11 @@ class StageEditorWidget(QWidget):
         print(f"[V5Plus] AI worker ERROR — {error_msg}")
         logger.error("Stage 3: AI worker error: %s", error_msg)
         self._safely_reset_worker()
+        # 用户可见的错误反馈
+        if hasattr(self, '_ai_input') and self._ai_input:
+            self._ai_input.setPlaceholderText(
+                f"⚠️ AI 错误: {error_msg[:60]}"
+            )
 
     def _safely_reset_worker(self):
         """安全清理 AI worker 引用"""
@@ -983,12 +1013,42 @@ class StageEditorWidget(QWidget):
                 worker.deleteLater()
 
     def _on_ai_modify_finished(self, full_text: str):
-        """AI 修改指令完成：优先渲染指令解析，回退 JSON 解析"""
+        """AI 修改指令完成：批量操作 → 渲染指令 → JSON 解析（三级降级）"""
+        from opencopilot.capabilities.ppt.render_command import BatchOperationParser
+
+        # 0. 检查是否是批量操作
+        if self._last_instruction and BatchOperationParser.is_batch_operation(self._last_instruction):
+            batch_commands = BatchOperationParser.parse_batch_operation(
+                self._last_instruction, self._slides_data, self._text
+            )
+            if batch_commands and self._render_dispatcher:
+                results = self._render_dispatcher.dispatch_from_render_commands(
+                    batch_commands, self._current_slide
+                )
+                success_count = sum(1 for r in results if r.success)
+                if success_count > 0:
+                    print(f"[V5Plus] AI modify: batch operation applied ({success_count}/{len(results)} operations)")
+                    telemetry().emit(
+                        "V5PLUS_STAGE3_BATCH_APPLIED",
+                        session_id=self._session_id,
+                        success=success_count,
+                        total=len(results),
+                    )
+                    self.load_data(self._text, self._strategy_config, self._slides_data,
+                                    preserve_slide=True)
+                    return
+
         # 1. 优先尝试渲染指令解析
         if self._render_dispatcher:
             try:
                 render_commands = RenderCommandParser.parse(full_text, self._text)
                 if render_commands:
+                    # 设置默认 slide_index 和 instruction（与 Studio 一致）
+                    for cmd in render_commands:
+                        if cmd.slide_index < 0:
+                            cmd.slide_index = self._current_slide
+                        cmd.instruction = self._last_instruction
+
                     print(f"[V5Plus] AI modify: parsed {len(render_commands)} render commands")
                     telemetry().emit(
                         "V5PLUS_STAGE3_RENDER_COMMANDS",
@@ -999,27 +1059,61 @@ class StageEditorWidget(QWidget):
                     results = self._render_dispatcher.dispatch_from_render_commands(
                         render_commands, self._current_slide
                     )
-                    if results:
-                        self.load_data(self._text, self._strategy_config, self._slides_data)
-                        print(f"[V5Plus] AI modify: render commands applied ({len(results)} operations)")
+                    success_count = sum(1 for r in results if r.success)
+                    print(f"[V5Plus] dispatch result: {success_count}/{len(results)} success, slide={self._current_slide}, "
+                          f"items_before={len(self._slides_data[self._current_slide].get('items', []))}")
+                    if success_count > 0:
+                        items_after = len(self._slides_data[self._current_slide].get('items', []))
+                        print(f"[V5Plus] items_after={items_after}, calling load_data(preserve_slide=True)")
+                        telemetry().emit(
+                            "V5PLUS_STAGE3_LOAD_DATA_BEFORE",
+                            session_id=self._session_id,
+                            current_slide=self._current_slide,
+                            items_count=items_after,
+                        )
+                        self.load_data(self._text, self._strategy_config, self._slides_data,
+                                        preserve_slide=True)
+                        telemetry().emit(
+                            "V5PLUS_STAGE3_LOAD_DATA_AFTER",
+                            session_id=self._session_id,
+                            current_slide=self._current_slide,
+                            slides_count=len(self._slides_data),
+                        )
+                        print(f"[V5Plus] load_data done, current_slide={self._current_slide}")
                         return
+                    else:
+                        print("[V5Plus] WARNING: dispatch reported 0 success, falling through to JSON")
             except Exception as e:
                 logger.warning("Stage 3: render command parse failed, fallback to JSON: %s", e)
+                print(f"[V5Plus] render command EXCEPTION: {e}")
 
         # 2. 回退到 JSON 解析
         slides = self._parse_slides_from_text(full_text)
         if slides:
             print(f"[V5Plus] AI modify: parsed {len(slides)} slides, reloading")
-            self.load_data(self._text, self._strategy_config, slides)
+            self.load_data(self._text, self._strategy_config, slides, preserve_slide=True)
         else:
             print("[V5Plus] AI modify: failed to parse slides from response")
+            logger.error("Stage 3: AI modify failed to parse response (%d chars): %s",
+                        len(full_text), full_text[:200])
+            telemetry().emit(
+                "V5PLUS_STAGE3_PARSE_FAILED",
+                session_id=self._session_id,
+                response_len=len(full_text),
+                preview=full_text[:200],
+            )
+            # 用户可见的错误反馈
+            if hasattr(self, '_ai_input') and self._ai_input:
+                self._ai_input.setPlaceholderText(
+                    "⚠️ AI 响应解析失败，请重试或换个指令"
+                )
 
     def _on_reextract_finished(self, full_text: str):
         """重新提炼完成：解析新 slides 并重新加载"""
         slides = self._parse_slides_from_text(full_text)
         if slides:
             print(f"[V5Plus] Re-extract: parsed {len(slides)} slides, reloading")
-            self.load_data(self._text, self._strategy_config, slides)
+            self.load_data(self._text, self._strategy_config, slides, preserve_slide=True)
         else:
             print("[V5Plus] Re-extract: failed to parse slides from response")
 
@@ -1028,14 +1122,16 @@ class StageEditorWidget(QWidget):
         """从 AI 输出文本中解析 JSON slides（代理到共享模块）"""
         return parse_slides_from_text(text)
 
-    def _load_slides(self, slides: list):
+    def _load_slides(self, slides: list, target_slide: int = 0):
         """加载幻灯片数据 → 更新缩略图 + 预览"""
         self._slides_data = slides
 
         # 隐藏加载/错误 overlay
         self._status_overlay.setVisible(False)
+        self._status_overlay.setGeometry(self._preview_renderer.rect())
+        self._status_overlay.raise_()
 
-        # 清空缩略图
+        # 清空缩略图（立即销毁旧 widget，避免 deleteLater 延迟干扰）
         while self._thumb_layout.count():
             item = self._thumb_layout.takeAt(0)
             if item.widget():
@@ -1048,10 +1144,10 @@ class StageEditorWidget(QWidget):
 
         self._thumb_layout.addStretch()
 
-        # 显示第一页
+        # 显示目标幻灯片（AI 修改后保留原位，首次加载显示第一页）
         if slides:
-            self._current_slide = 0
-            self._update_preview(0)
+            self._current_slide = max(0, min(target_slide, len(slides) - 1))
+            self._update_preview(self._current_slide)
 
         self._slide_counter.setText(f"幻灯片: {len(slides)}")
 

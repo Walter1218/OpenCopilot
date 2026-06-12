@@ -101,7 +101,7 @@ class RenderPromptGenerator:
                 "render_params": {
                     "title": "方案对比",
                     "table_data": {
-                        "headers": ["维度", "方案A", "方案B"],
+                        "columns": ["维度", "方案A", "方案B"],
                         "rows": [
                             ["成本", "低", "高"],
                             ["周期", "长", "短"]
@@ -115,7 +115,7 @@ class RenderPromptGenerator:
                 "render_params": {
                     "title": "团队成员",
                     "table_data": {
-                        "headers": ["姓名", "角色"],
+                        "columns": ["姓名", "角色"],
                         "rows": [
                             ["张三", "前端"],
                             ["李四", "后端"],
@@ -132,19 +132,7 @@ class RenderPromptGenerator:
                 "render_params": {
                     "title": "开发流程",
                     "flowchart_data": {
-                        "nodes": [
-                            {"id": "1", "label": "需求分析", "type": "start"},
-                            {"id": "2", "label": "架构设计", "type": "process"},
-                            {"id": "3", "label": "编码实现", "type": "process"},
-                            {"id": "4", "label": "测试验证", "type": "process"},
-                            {"id": "5", "label": "部署上线", "type": "end"}
-                        ],
-                        "edges": [
-                            {"from": "1", "to": "2"},
-                            {"from": "2", "to": "3"},
-                            {"from": "3", "to": "4"},
-                            {"from": "4", "to": "5"}
-                        ]
+                        "steps": ["需求分析", "架构设计", "编码实现", "测试验证", "部署上线"]
                     }
                 }
             }
@@ -277,8 +265,8 @@ class RenderPromptGenerator:
 1. source_text 必须是原文中的完整片段
 2. render_type 必须是以下之一：chart, table, flowchart, text
 3. chart 类型需要提供 chart_type（bar/line/pie）和 chart_data
-4. table 类型需要提供 table_data（含 headers 和 rows）
-5. flowchart 类型需要提供 flowchart_data（含 nodes 和 edges）
+4. table 类型需要提供 table_data（含 columns 和 rows）
+5. flowchart 类型需要提供 flowchart_data（含 steps，为字符串数组）
 6. 默认只修改当前正在编辑的页，除非用户明确要求新增页面；此时 slide_index 必须使用当前页索引或 -1
 7. 如果用户要求修改标题、headline 或结论型标题，必须输出 slot=title，并将标题文本放在 render_params.title
 8. 改写/润色时，每条输出必须保留原文中的事实锚点（数字、金额、百分比、时间、专有名词）

@@ -80,6 +80,8 @@
 - `faithful_rewrite` 模式可正确加载固定数据集
 - 当前可稳定构造 `12` 个固定样本，首尾 case 为 `fr_001 ~ fr_012`
 - 新增专项相关文件当前无诊断报错
+- 已生成首版正式基线报告：`output/ppt_faithful_rewrite_v0_baseline_20260611.md`
+- 已生成原始 benchmark 快照：`output/ppt_faithful_rewrite_v0_raw_20260611.md`
 
 这说明：
 
@@ -206,8 +208,7 @@ python tests/e2e/test_ppt_cocreation_quality_benchmark.py
 
 当前虽然已经具备进入迭代的条件，但还需要明确以下边界：
 
-- 当前已完成的是“最小可执行验证”，不是所有 case 的正式基线归档
-- 后续应补一份 `faithful_rewrite` 专项首版基线报告，作为后续所有 prompt 对比的 `v0 baseline`
+- 当前已经补齐 `faithful_rewrite` 专项首版基线报告，后续所有 prompt 对比默认以 `output/ppt_faithful_rewrite_v0_baseline_20260611.md` 为 `v0 baseline`
 - 当前自动指标已能做代理判断，但后续仍建议补充更专项的自动指标：
   - `fact_anchor_coverage`
   - `structure_keep_rate`
@@ -226,7 +227,7 @@ python tests/e2e/test_ppt_cocreation_quality_benchmark.py
 最推荐的下一步不是继续泛泛讨论，而是直接进入第一轮专项 prompt 迭代：
 
 1. 先定义 `v1 -> v2` 只改一类约束
-2. 产出首份 `faithful_rewrite` 基线报告
+2. 以 `v0 baseline` 为对照启动首轮前后对比
 3. 做同一批 `12` 个 case 的前后对比
 4. 按准入门槛判断是否保留
 

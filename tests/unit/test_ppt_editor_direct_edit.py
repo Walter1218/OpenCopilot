@@ -130,4 +130,26 @@ def test_ppt_editor_guard_can_be_disabled(monkeypatch):
     )
 
     assert SessionSetupMiddleware._is_ppt_editor_request(ctx) is False
-    assert PlannerMiddleware._is_ppt_editor_request(ctx) is False
+    # PlannerMiddleware 不再有独立的 _is_ppt_editor_request，统一用 SessionSetupMiddleware
+    assert SessionSetupMiddleware._is_ppt_editor_request(ctx) is False
+
+
+def test_v5plus_stage3_recognized_as_ppt_editor():
+    """V5Plus 共创模式 context_source=v5plus_stage3 应被识别为 PPT 编辑请求"""
+    ctx = PipelineContext(
+        request={"context_source": "v5plus_stage3", "context_meta": {}},
+        session_id="v5plus-test",
+        text="请根据以下指令修改当前 PPT 大纲。\n\n当前幻灯片数据: []",
+        action_type="ppt",
+    )
+    assert SessionSetupMiddleware._is_ppt_editor_request(ctx) is True
+
+
+def test_v5plus_prompt_text_also_recognized():
+    """即使 context_source 不匹配，prompt 中包含 PPT 修改关键字也应识别"""
+    ctx = PipelineContext(
+        request={"context_source": "unknown"},
+        session_id="text-test",
+        text="请根据以下指令修改当前 PPT 大纲。\n当前幻灯片数据: []",
+    )
+    assert SessionSetupMiddleware._is_ppt_editor_request(ctx) is True

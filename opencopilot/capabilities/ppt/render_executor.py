@@ -207,14 +207,20 @@ class RenderExecutor:
         else:
             if command.render_type in ("image_right", "image_left", "image_top"):
                 slide["layout"] = command.render_type
-            # 默认更新 items
+            # 生成 item 数据
             item_data = self._render_to_item(command)
-            slide.setdefault("items", []).append(item_data)
+            items = slide.setdefault("items", [])
+            # 特殊类型（table/chart/flowchart）插入到 items 最前面，
+            # 因为 SlideRenderer._draw_content_slide 只检查 items[0] 的 content_type
+            if item_data.get("content_type") in ("table", "chart", "flowchart"):
+                items.insert(0, item_data)
+            else:
+                items.append(item_data)
         
         return slide
     
     def _render_to_item(self, command: RenderCommand) -> Dict[str, Any]:
-        """将渲染指令转换为 item 数据"""
+        """将渲染指令转换为 item 数据（自动规范化 LLM 输出格式）"""
         if command.render_type == "chart":
             return {
                 "content_type": "chart",
@@ -225,13 +231,17 @@ class RenderExecutor:
         elif command.render_type == "table":
             return {
                 "content_type": "table",
-                "table_data": command.render_params.get("table_data", {}),
+                "table_data": self._normalize_table_data(
+                    command.render_params.get("table_data", {})
+                ),
                 "text": command.source_text
             }
         elif command.render_type == "flowchart":
             return {
                 "content_type": "flowchart",
-                "flowchart_data": command.render_params.get("flowchart_data", {}),
+                "flowchart_data": self._normalize_flowchart_data(
+                    command.render_params.get("flowchart_data", {})
+                ),
                 "text": command.source_text
             }
         elif command.render_type == "quote":
@@ -273,6 +283,55 @@ class RenderExecutor:
                 "content_type": "text",
                 "text": command.render_params.get("text", command.source_text)
             }
+    
+    @staticmethod
+    def _normalize_table_data(data: dict) -> dict:
+        """规范化 table_data：LLM 可能返回 headers 而非 columns"""
+        if not data:
+            return data
+        if "columns" not in data and "headers" in data:
+            data["columns"] = data.pop("headers")
+        return data
+    
+    @staticmethod
+    def _normalize_flowchart_data(data: dict) -> dict:
+        """规范化 flowchart_data：LLM 可能返回 nodes/edges 而非 steps"""
+        if not data:
+            return data
+        if "steps" not in data and "nodes" in data:
+            nodes = data.get("nodes", [])
+            edges = data.get("edges", [])
+            # 构建邻接表
+            adj: Dict[str, list] = {}
+            node_map: Dict[str, str] = {}
+            for n in nodes:
+                nid = n.get("id", "")
+                node_map[nid] = n.get("label", nid)
+            for e in edges:
+                adj.setdefault(e["from"], []).append(e)
+            # 找根节点（无入边的节点）
+            has_incoming = {e["to"] for e in edges}
+            roots = [n.get("id", "") for n in nodes if n.get("id") not in has_incoming]
+            start = roots[0] if roots else (nodes[0].get("id", "") if nodes else "")
+            # BFS 生成 steps
+            steps = []
+            visited = set()
+            queue = [start]
+            while queue:
+                nid = queue.pop(0)
+                if nid in visited:
+                    continue
+                visited.add(nid)
+                label = node_map.get(nid, nid)
+                # 检查边标签
+                for e in adj.get(nid, []):
+                    edge_label = e.get("label", "")
+                    if edge_label:
+                        label = f"{label} → ({edge_label})"
+                    queue.append(e["to"])
+                steps.append(label)
+            data["steps"] = steps
+        return data
     
     def _log_render_event(
         self,

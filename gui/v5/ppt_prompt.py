@@ -71,27 +71,85 @@ def build_ppt_generation_prompt(
     return prompt
 
 
-def build_ppt_modify_prompt(instruction: str, slides_data: list) -> str:
-    """构建 PPT 修改指令 prompt
+def build_ppt_modify_prompt(instruction: str, slides_data: list,
+                              current_slide_index: int = -1,
+                              original_text: str = "") -> str:
+    """构建 PPT 修改指令 prompt（与 Studio 一致，使用 render_commands 格式）
 
     Args:
         instruction: 用户修改指令（如 "把标题改短"、"转成流程图"）
         slides_data: 当前幻灯片数据
+        current_slide_index: 当前正在编辑的幻灯片索引（-1 表示未指定）
+        original_text: 原始文档文本（用于 source_range 定位）
     """
-    current_json = json.dumps(slides_data, ensure_ascii=False, indent=2)
-    return (
-        f"请根据以下指令修改当前 PPT 大纲。\n\n"
-        f"用户指令: {instruction}\n\n"
-        f"要求:\n"
-        f"1. 严格输出纯 JSON 格式\n"
-        f"2. 输出格式为 {{\"title\": \"标题\", \"slides\": [...]}}\n"
-        f"3. 每个 slide 包含 type, layout, title, items, source_excerpt\n"
-        f"4. layout 可选: center / text_only / image_right / image_left / "
-        f"three_columns / chart / flowchart / table\n"
-        f"5. 特殊布局数据结构与生成时一致\n"
-        f"6. 根据指令内容智能调整 layout\n\n"
-        f"当前幻灯片数据:\n{current_json}"
-    )
+    total = len(slides_data)
+    idx = max(0, current_slide_index) if current_slide_index >= 0 else 0
+    current_slide = slides_data[idx] if slides_data and idx < total else {}
+
+    # 上下文信息（与 Studio 一致）
+    parts = [f"PPT 共 {total} 页，当前第 {idx + 1} 页。"]
+
+    # 相邻幻灯片摘要
+    if idx > 0:
+        prev = slides_data[idx - 1]
+        parts.append(f"\n前一页（第 {idx} 页）摘要：{prev.get('title', '')}")
+    if idx < total - 1:
+        nxt = slides_data[idx + 1]
+        parts.append(f"\n后一页（第 {idx + 2} 页）摘要：{nxt.get('title', '')}")
+
+    parts.append(f"\n当前幻灯片：\n```json\n{json.dumps(current_slide, ensure_ascii=False, indent=2)}\n```")
+    parts.append(f"\n用户指令：{instruction}")
+
+    # 渲染指令格式说明（与 Studio 一致，使用动态 Prompt 生成器）
+    try:
+        from opencopilot.capabilities.ppt.render_prompt_generator import generate_render_prompt
+        prompt_section = generate_render_prompt(
+            instruction=instruction,
+            current_slide=current_slide,
+            original_text=original_text,
+            selected_text=""
+        )
+        parts.append(f"\n{prompt_section}")
+    except Exception:
+        # 回退到静态 Prompt
+        parts.append(_STATIC_RENDER_PROMPT_TEMPLATE)
+
+    return "\n".join(parts)
+
+
+# 静态回退模板（当 render_prompt_generator 不可用时）
+_STATIC_RENDER_PROMPT_TEMPLATE = """
+## 输出格式（推荐：渲染指令）
+
+返回 JSON 格式的渲染指令数组：
+
+```json
+{
+  "render_commands": [
+    {
+      "source_text": "原文片段（用于定位）",
+      "render_type": "chart",
+      "render_params": {
+        "chart_type": "bar",
+        "title": "图表标题",
+        "chart_data": {"labels": ["标签1", "标签2"], "values": [10, 20]}
+      },
+      "slide_index": -1,
+      "slot": "body"
+    }
+  ]
+}
+```
+
+支持的 render_type：
+- text: 纯文本（默认）
+- table: 表格（需提供 table_data，含 columns 和 rows）
+- chart: 图表（需指定 chart_type: bar/line/pie，提供 chart_data）
+- flowchart: 流程图（需提供 flowchart_data，含 steps 为字符串数组）
+- image_right/image_left: 图文混排
+
+重要：默认只修改当前正在编辑的页，除非用户明确要求新增页面。
+"""
 
 
 def build_ppt_reextract_prompt(instruction: str, text: str) -> str:

@@ -646,6 +646,8 @@ class SlideRenderer(QWidget):
     def paintEvent(self, event):
         """绘制幻灯片"""
         if not self.current_slide:
+            # 绘制默认欢迎幻灯片
+            self._draw_welcome_slide()
             return
         
         # 追踪 paintEvent 调用
@@ -822,6 +824,82 @@ class SlideRenderer(QWidget):
         
         # 恢复画笔状态
         painter.restore()
+    
+    def _draw_welcome_slide(self):
+        """绘制默认欢迎幻灯片（当没有幻灯片数据时显示）"""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        
+        # 计算缩放比例
+        widget_width = self.width()
+        widget_height = self.height()
+        scale_x = widget_width / self.SLIDE_WIDTH
+        scale_y = widget_height / self.SLIDE_HEIGHT
+        scale_factor = min(scale_x, scale_y)
+        
+        # 计算居中偏移
+        offset_x = (widget_width - self.SLIDE_WIDTH * scale_factor) / 2
+        offset_y = (widget_height - self.SLIDE_HEIGHT * scale_factor) / 2
+        
+        # 应用变换
+        painter.translate(offset_x, offset_y)
+        painter.scale(scale_factor, scale_factor)
+        
+        # 绘制背景
+        painter.fillRect(0, 0, self.SLIDE_WIDTH, self.SLIDE_HEIGHT, self.bg_color)
+        
+        # 绘制底部装饰条
+        painter.fillRect(0, self.SLIDE_HEIGHT - 10, self.SLIDE_WIDTH, 10, self.accent_color)
+        
+        # 绘制右侧装饰三角（与封面幻灯片风格一致）
+        painter.setPen(Qt.PenStyle.NoPen)
+        
+        painter.setBrush(QColor(235, 240, 248))
+        painter.drawPolygon([
+            QPointF(self.SLIDE_WIDTH - 500, 0),
+            QPointF(self.SLIDE_WIDTH, 0),
+            QPointF(self.SLIDE_WIDTH, self.SLIDE_HEIGHT)
+        ])
+        
+        painter.setBrush(self.accent_color)
+        painter.drawPolygon([
+            QPointF(self.SLIDE_WIDTH - 350, 0),
+            QPointF(self.SLIDE_WIDTH, 0),
+            QPointF(self.SLIDE_WIDTH, self.SLIDE_HEIGHT)
+        ])
+        
+        # 绘制标题
+        title_font = QFont("Helvetica Neue", 44, QFont.Weight.Bold)
+        painter.setFont(title_font)
+        painter.setPen(self.title_color)
+        painter.drawText(
+            QRectF(100, 250, 800, 100),
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            "OpenCopilot PPT 共创工作台"
+        )
+        
+        # 绘制副标题
+        subtitle_font = QFont("Helvetica Neue", 24)
+        painter.setFont(subtitle_font)
+        painter.setPen(QColor(100, 100, 110))
+        painter.drawText(
+            QRectF(100, 380, 800, 60),
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            "欢迎使用 — 请上传文档或输入主题开始创建"
+        )
+        
+        # 绘制提示信息
+        hint_font = QFont("Helvetica Neue", 16)
+        painter.setFont(hint_font)
+        painter.setPen(QColor(150, 150, 160))
+        painter.drawText(
+            QRectF(100, 460, 800, 40),
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+            "点击左侧 AI 助手开始对话，或使用右侧工具栏"
+        )
+        
+        painter.end()
     
     def _draw_title_slide(self, painter: QPainter):
         """绘制封面幻灯片"""

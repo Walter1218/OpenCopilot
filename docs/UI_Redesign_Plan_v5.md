@@ -1,6 +1,8 @@
 # OpenCopilot v5.0 改版方案与当前落地对照
 
 > 版本 v5.2 | 2026-06-09 | Work Tab 6 大视觉区域全部实现 + 埋点体系增强
+>
+> **最新版本**：v5.3 精简版交互设计已发布，详见 [`UI_Interaction_Redesign_v5.3.md`](./UI_Interaction_Redesign_v5.3.md)
 
 ---
 
@@ -1081,6 +1083,7 @@ Step 2c: 点击卡片本身（非按钮区域）
 
 ---
 
-> **文档版本**：v5.1  
+> **文档版本**：v5.2  
 > **更新日期**：2026-06-09  
-> **设计稿参考**：smart-copilot-redesign.canvas / agent-workspace-redesign.canvas / settings-skills-redesign.canvas / ppt-cocreation-e2e-flow.canvas / opencopilot-ui-interaction-20260609.canvas
+> **设计稿参考**：smart-copilot-redesign.canvas / agent-workspace-redesign.canvas / settings-skills-redesign.canvas / ppt-cocreation-e2e-flow.canvas / opencopilot-ui-interaction-20260609.canvas / opencopilot-interaction-redesign.canvas.tsx  
+> **最新精简版**：v5.3 精简版交互设计，详见 [`UI_Interaction_Redesign_v5.3.md`](./UI_Interaction_Redesign_v5.3.md)

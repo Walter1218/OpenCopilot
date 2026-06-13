@@ -571,9 +571,111 @@ export default function InteractionRedesign() {
                       <Card size="sm">
                         <CardBody>
                           <Stack gap={16}>
-                            <Text weight="bold">
-                              {["封面", "核心结论", "三大支撑", "数据对比", "执行计划", "Q&A"][selSlide]}
-                            </Text>
+                            {/* 模拟PPT幻灯片 */}
+                            <div style={{
+                              background: "white",
+                              borderRadius: tokens.radius.md,
+                              padding: "24px",
+                              border: "1px solid " + tokens.stroke.tertiary,
+                              minHeight: "200px",
+                              position: "relative",
+                            }}>
+                              {/* 幻灯片内容 */}
+                              {selSlide === 0 && (
+                                <Stack gap={16}>
+                                  <div style={{
+                                    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                                    borderRadius: tokens.radius.sm,
+                                    padding: "32px 24px",
+                                    color: "white",
+                                    textAlign: "center",
+                                  }}>
+                                    <Text style={{ fontSize: "24px", fontWeight: "bold", color: "white" }}>
+                                      2026 智能体技术发展报告
+                                    </Text>
+                                    <Text style={{ fontSize: "14px", color: "rgba(255,255,255,0.8)", marginTop: "8px" }}>
+                                      AI 驱动的未来
+                                    </Text>
+                                  </div>
+                                  <Text size="small" tone="secondary" style={{ textAlign: "center" }}>
+                                    点击标题可编辑 | 拖拽元素可调整位置
+                                  </Text>
+                                </Stack>
+                              )}
+                              
+                              {selSlide === 1 && (
+                                <Stack gap={16}>
+                                  <Text weight="bold" style={{ fontSize: "18px", color: tokens.text.primary }}>
+                                    核心结论
+                                  </Text>
+                                  <Stack gap={8}>
+                                    {[
+                                      "智能体技术进入规模化应用阶段",
+                                      "多模态感知成为核心竞争力",
+                                      "端侧部署大幅降低延迟",
+                                    ].map((item, i) => (
+                                      <Row key={i} gap={8} align="center" style={{
+                                        padding: "10px 12px",
+                                        background: tokens.bg.elevated,
+                                        borderRadius: tokens.radius.sm,
+                                        borderLeft: "3px solid " + tokens.fill.primary,
+                                      }}>
+                                        <Text size="small" style={{ flex: 1 }}>{item}</Text>
+                                      </Row>
+                                    ))}
+                                  </Stack>
+                                </Stack>
+                              )}
+                              
+                              {selSlide === 2 && (
+                                <Stack gap={16}>
+                                  <Text weight="bold" style={{ fontSize: "18px", color: tokens.text.primary }}>
+                                    三大支撑
+                                  </Text>
+                                  <Grid columns={3} gap={12}>
+                                    {["技术突破", "产业落地", "生态建设"].map((title, i) => (
+                                      <Card key={i} size="sm" style={{
+                                        padding: "16px",
+                                        background: tokens.bg.elevated,
+                                        borderRadius: tokens.radius.sm,
+                                        textAlign: "center",
+                                      }}>
+                                        <Stack gap={8}>
+                                          <div style={{
+                                            width: "32px",
+                                            height: "32px",
+                                            borderRadius: "50%",
+                                            background: tokens.fill.primary,
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            margin: "0 auto",
+                                          }}>
+                                            <Text style={{ color: "white", fontSize: "14px", fontWeight: "bold" }}>
+                                              {i + 1}
+                                            </Text>
+                                          </div>
+                                          <Text weight="semibold" size="small">{title}</Text>
+                                        </Stack>
+                                      </Card>
+                                    ))}
+                                  </Grid>
+                                </Stack>
+                              )}
+                              
+                              {/* 底部装饰条 */}
+                              <div style={{
+                                position: "absolute",
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                height: "4px",
+                                background: "linear-gradient(90deg, #667eea 0%, #764ba2 100%)",
+                                borderRadius: "0 0 " + tokens.radius.md + " " + tokens.radius.md,
+                              }} />
+                            </div>
+                            
+                            {/* 幻灯片导航 */}
                             <Row gap={6}>
                               {[0,1,2,3,4,5].map(i => (
                                 <Tag 
@@ -585,16 +687,23 @@ export default function InteractionRedesign() {
                                     padding: "6px 14px",
                                     borderRadius: tokens.radius.sm,
                                     cursor: "pointer",
+                                    background: selSlide === i ? tokens.fill.primary : tokens.bg.elevated,
+                                    color: selSlide === i ? "white" : tokens.text.primary,
                                   }}
                                 >
                                   {String(i+1)}
                                 </Tag>
                               ))}
                             </Row>
+                            
+                            {/* AI建议 */}
                             {!aiDiffAccepted && selSlide === 0 && (
                               <Callout tone="info">
                                 <Stack gap={12}>
                                   <Text size="small" weight="semibold">AI 建议修改标题</Text>
+                                  <Text size="small" tone="secondary">
+                                    建议将标题改为「2026智能体技术白皮书」更具专业性
+                                  </Text>
                                   <Row gap={8}>
                                     <Button variant="primary" size="sm" onClick={() => setAiDiffAccepted(true)}>
                                       接受
@@ -609,9 +718,22 @@ export default function InteractionRedesign() {
                           </Stack>
                         </CardBody>
                       </Card>
+                      
+                      {/* 版式选择器 */}
+                      <Text size="small" tone="secondary">选择版式：</Text>
                       <Row gap={6} wrap>
-                        {["center", "text", "3-col", "chart", "timeline"].map(l => (
-                          <Tag key={l} size="sm">
+                        {["居中", "文本", "三栏", "图表", "时间线"].map((l, i) => (
+                          <Tag 
+                            key={l} 
+                            size="sm"
+                            style={{
+                              padding: "6px 12px",
+                              borderRadius: tokens.radius.sm,
+                              cursor: "pointer",
+                              background: i === 0 ? tokens.fill.secondary : tokens.bg.elevated,
+                              color: i === 0 ? "white" : tokens.text.primary,
+                            }}
+                          >
                             {l}
                           </Tag>
                         ))}

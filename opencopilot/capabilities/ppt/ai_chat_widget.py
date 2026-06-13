@@ -504,6 +504,11 @@ class AICopilotChatWidget(QWidget):
         self._session_id = f"ppt_cocreation_{uuid.uuid4().hex[:8]}"  # 稳定会话 ID，支持多轮对话
         self._last_instruction = ""  # 保存最近一次用户指令，用于 undo 描述
         
+        # 指令历史记录
+        self._command_history = []  # [str, ...] 保存用户输入的指令历史
+        self._max_command_history = 20  # 最多保存 20 条历史
+        self._history_panel_visible = False  # 历史面板是否可见
+        
         # Undo/Redo 操作栈
         self._undo_stack = []       # [(slides_data_deepcopy, description), ...]
         self._redo_stack = []       # [(slides_data_deepcopy, description), ...]
@@ -706,6 +711,26 @@ class AICopilotChatWidget(QWidget):
         input_layout = QHBoxLayout()
         input_layout.setSpacing(8)
         
+        # 历史按钮
+        self.history_btn = QPushButton("📋")
+        self.history_btn.setFixedSize(36, 36)
+        self.history_btn.setToolTip("查看指令历史")
+        self.history_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3c3c3c;
+                color: #888;
+                border: none;
+                border-radius: 18px;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background-color: #4a4a4a;
+                color: #d4d4d4;
+            }
+        """)
+        self.history_btn.clicked.connect(self._toggle_history_panel)
+        input_layout.addWidget(self.history_btn)
+        
         self.input_edit = QLineEdit()
         self.input_edit.setPlaceholderText("输入指令，如：把第2页的标题改为'核心优势'...")
         self.input_edit.setStyleSheet("""
@@ -747,6 +772,67 @@ class AICopilotChatWidget(QWidget):
         
         chat_layout.addLayout(input_layout)
         
+        # 历史面板（初始隐藏）
+        self.history_panel = QFrame()
+        self.history_panel.setStyleSheet("""
+            QFrame {
+                background-color: #2d2d2d;
+                border: 1px solid #3c3c3c;
+                border-radius: 6px;
+            }
+        """)
+        self.history_panel.setVisible(False)
+        history_layout = QVBoxLayout(self.history_panel)
+        history_layout.setContentsMargins(8, 8, 8, 8)
+        history_layout.setSpacing(4)
+        
+        # 历史面板标题
+        history_header = QHBoxLayout()
+        history_title = QLabel("📝 指令历史")
+        history_title.setStyleSheet("color: #e0e0e0; font-size: 12px; font-weight: bold;")
+        history_header.addWidget(history_title)
+        history_header.addStretch()
+        
+        # 清空历史按钮
+        clear_history_btn = QPushButton("清空")
+        clear_history_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #888;
+                border: none;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                color: #f44336;
+            }
+        """)
+        clear_history_btn.clicked.connect(self._clear_command_history)
+        history_header.addWidget(clear_history_btn)
+        history_layout.addLayout(history_header)
+        
+        # 历史列表滚动区域
+        self.history_scroll = QScrollArea()
+        self.history_scroll.setWidgetResizable(True)
+        self.history_scroll.setMaximumHeight(200)
+        self.history_scroll.setStyleSheet("""
+            QScrollArea {
+                background-color: #1e1e1e;
+                border: 1px solid #3c3c3c;
+                border-radius: 4px;
+            }
+        """)
+        
+        self.history_container = QWidget()
+        self.history_list_layout = QVBoxLayout(self.history_container)
+        self.history_list_layout.setContentsMargins(4, 4, 4, 4)
+        self.history_list_layout.setSpacing(4)
+        self.history_list_layout.addStretch()
+        
+        self.history_scroll.setWidget(self.history_container)
+        history_layout.addWidget(self.history_scroll)
+        
+        chat_layout.addWidget(self.history_panel)
+        
         # 将聊天区域添加到splitter
         self.main_splitter.addWidget(self.chat_area)
         
@@ -778,6 +864,80 @@ class AICopilotChatWidget(QWidget):
         is_visible = self.chat_area.isVisible()
         self.chat_area.setVisible(not is_visible)
         self.toggle_btn.setText("▲" if not is_visible else "▼")
+    
+    def _toggle_history_panel(self):
+        """显示/隐藏指令历史面板"""
+        self._history_panel_visible = not self._history_panel_visible
+        self.history_panel.setVisible(self._history_panel_visible)
+        
+        # 如果显示面板，刷新历史列表
+        if self._history_panel_visible:
+            self._refresh_history_list()
+    
+    def _refresh_history_list(self):
+        """刷新历史指令列表"""
+        # 清空现有列表（保留 stretch）
+        while self.history_list_layout.count() > 1:
+            item = self.history_list_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        # 添加历史指令
+        if not self._command_history:
+            empty_label = QLabel("暂无指令历史")
+            empty_label.setStyleSheet("color: #888; font-size: 11px; padding: 8px;")
+            self.history_list_layout.insertWidget(0, empty_label)
+        else:
+            # 从最新到最旧显示
+            for i, cmd in enumerate(reversed(self._command_history)):
+                btn = QPushButton(cmd)
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #3c3c3c;
+                        color: #d4d4d4;
+                        border: 1px solid #555;
+                        border-radius: 4px;
+                        padding: 6px 8px;
+                        font-size: 12px;
+                        text-align: left;
+                    }
+                    QPushButton:hover {
+                        background-color: #4a4a4a;
+                        border-color: #007acc;
+                    }
+                """)
+                btn.setCursor(Qt.CursorShape.PointingHandCursor)
+                btn.clicked.connect(lambda checked, c=cmd: self._use_history_command(c))
+                self.history_list_layout.insertWidget(0, btn)
+    
+    def _use_history_command(self, command: str):
+        """使用历史指令"""
+        self.input_edit.setText(command)
+        self.input_edit.setFocus()
+        # 隐藏历史面板
+        self._history_panel_visible = False
+        self.history_panel.setVisible(False)
+    
+    def _clear_command_history(self):
+        """清空指令历史"""
+        self._command_history.clear()
+        self._refresh_history_list()
+    
+    def _add_to_history(self, command: str):
+        """添加指令到历史记录"""
+        if not command or not command.strip():
+            return
+        
+        # 避免重复添加相同的连续指令
+        if self._command_history and self._command_history[-1] == command:
+            return
+        
+        # 添加到历史
+        self._command_history.append(command)
+        
+        # 限制历史数量
+        if len(self._command_history) > self._max_command_history:
+            self._command_history = self._command_history[-self._max_command_history:]
     
     def _toggle_analysis_panel(self):
         """显示/隐藏内容分析面板"""
@@ -948,6 +1108,8 @@ class AICopilotChatWidget(QWidget):
         """程序化发送指令（供外部组件调用，如 SourcePanel 重新生成）"""
         if not instruction:
             return
+        # 添加到指令历史
+        self._add_to_history(instruction)
         # 添加用户消息（标记来源）
         self._add_message(f"🔄 {instruction[:100]}{'...' if len(instruction) > 100 else ''}", is_user=True)
 
@@ -1013,6 +1175,9 @@ class AICopilotChatWidget(QWidget):
         obs = PipelineObservability.get_instance()
         obs.gui_log(f"PPT_COCREATION_SEND | instruction_len={len(instruction)} | slide_count={len(self.slides_data)} | current_index={self.current_index}",
                     session_id=self._session_id, event="PPT_COCREATION_SEND")
+        
+        # 添加到指令历史
+        self._add_to_history(instruction)
         
         # 添加用户消息
         self._add_message(instruction, is_user=True)

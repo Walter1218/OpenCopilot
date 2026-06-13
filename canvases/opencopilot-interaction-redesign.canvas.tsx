@@ -301,6 +301,7 @@ export default function InteractionRedesign() {
                         </Stack>
                       </CardBody></Card>
                       <Row gap={6} align="center">
+                        <Button variant="ghost">📋</Button>
                         <Text tone="secondary" style={{ flex: 1 }}>输入指令：改标题、调版式...</Text>
                         <Button variant="primary">发送</Button>
                       </Row>
@@ -343,7 +344,7 @@ export default function InteractionRedesign() {
           <Grid columns={3} gap={12}>
             <Card size="sm"><CardBody><Stack gap={4}><Text weight="semibold">1. IDE式窗口</Text><Text size="small" tone="secondary">Stage 1:45x50% | Stage 2:60x60% | Stage 3:80x80%</Text></Stack></CardBody></Card>
             <Card size="sm"><CardBody><Stack gap={4}><Text weight="semibold">2. Stage 2 推荐生成</Text><Text size="small" tone="secondary">文档分析 + 推荐策略（默认金字塔）。</Text></Stack></CardBody></Card>
-            <Card size="sm"><CardBody><Stack gap={4}><Text weight="semibold">3. Stage 3 编辑导出</Text><Text size="small" tone="secondary">60/40 布局：中间 PPT + 右侧原文。Click-to-Edit + AI Diff。</Text></Stack></CardBody></Card>
+            <Card size="sm"><CardBody><Stack gap={4}><Text weight="semibold">3. Stage 3 编辑导出</Text><Text size="small" tone="secondary">60/40 布局：中间 PPT + 右侧原文。Click-to-Edit + AI Diff + 指令历史栏。</Text></Stack></CardBody></Card>
           </Grid>
         </Stack>
       )}
